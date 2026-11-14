@@ -161,6 +161,8 @@ def main():
         ck.with_suffix(".tmp").replace(ck)
         ck.with_suffix(".json").write_text(json.dumps(st["curve"]))
         net.export(ck.with_suffix(".npz"))
+        (OUT / "snap").mkdir(exist_ok=True)
+        net.export(OUT / "snap" / f"{a.name}-{version()}-{st['ep']:06d}.npz")
 
 
 if __name__ == "__main__":

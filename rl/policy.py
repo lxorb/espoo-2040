@@ -84,7 +84,7 @@ def joint(J, A, C, B):
 
 
 class Policy:
-    def __init__(self, path=WEIGHTS, check=False, maintain=2):
+    def __init__(self, path=WEIGHTS, check=False, maintain=None):
         self.W, self.check, self.maintain = dict(np.load(path)), check, maintain
 
     def __call__(self, st, projects, mask, forecast=None, k=4, years=15):

@@ -97,9 +97,15 @@ def main():
             sd = {k: v.numpy().copy() for k, v in net.state_dict().items()}
             row["net"] = [r[1] for r in pool.map(play, seeds, [sd] * len(seeds), ["net"] * len(seeds))]
             row["mean_net"] = float(np.nanmean(row["net"]))
+            (OUT / "snap").mkdir(exist_ok=True)
+            net.export(OUT / "snap" / f"{a.name}-{version()}-{row['episodes']:06d}.npz")
+            if row["mean_net"] + min(row["net"]) > st.get("best", -9):
+                st["best"] = row["mean_net"] + min(row["net"])
+                torch.save(dict(net=net.state_dict()), ck.with_name(f"{a.name}best-{version()}.pt"))
+                net.export(ck.with_name(f"{a.name}best-{version()}.npz"))
         st["curve"].append(row)
         print(json.dumps({k: v for k, v in row.items() if k != "net"}), flush=True)
-        torch.save(dict(net=net.state_dict(), opt=opt.state_dict(), curve=st["curve"]), ck)
+        torch.save(dict(net=net.state_dict(), opt=opt.state_dict(), curve=st["curve"], best=st.get("best", -9)), ck)
         ck.with_suffix(".json").write_text(json.dumps(st["curve"]))
 
 

@@ -25,7 +25,7 @@ def simple(name, seed, npz=None):
     menu = list(c.menu)
     proj = [dict(id=k, **{f: c.cat[k].get(f, 0) for f in ("kind", "cost", "years", "opex")}) for k in menu]
     J, pol = joints(len(menu)), Policy(npz, name == "deploycheck", 2 if name == "deploy2" else None) if name.startswith("deploy") else None
-    n, foot = len(c.s["osm"]), [footprint(c, c.cat[k]) for k in menu]
+    foot = [footprint(c, c.cat[k]) for k in menu]
     while not c.done:
         t, acts = c.state()["step"], []
         if t < c.years and name != "nothing":
