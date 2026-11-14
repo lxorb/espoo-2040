@@ -226,7 +226,7 @@ def catalogue():
 if __name__ == "__main__":
     Roads().apply_file(str(PBF), locations=True)
     cat = catalogue()
-    (ROOT / "data" / "catalogue.json").write_text(json.dumps(cat, ensure_ascii=False, indent=1))
+    (ROOT / "data" / "catalogue.json").write_text("[\n" + ",\n".join(json.dumps(p, ensure_ascii=False) for p in cat) + "\n]\n")
     for p in cat:
         print(f"{p['id']:28s} {p['kind']:9s} {p['cost']:8.1f} {p['years']} {sum(len(m['osm']) for m in p.get('mod', []) + [p.get('toll', {'osm': []})])}")
     print(len(cat), round(sum(p["cost"] for p in cat)))

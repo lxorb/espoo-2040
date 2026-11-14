@@ -22,7 +22,6 @@ grpo = [
     "torch>=2.15.0",
     "transformers>=5.23.0",
 ]
-micro = ["eclipse-sumo", "sumolib", "traci"]
 rl = ["torch"]
 
 [tool.uv.sources]

@@ -1,6 +1,5 @@
 data/raw/
 viz/data/
-micro/out/
 runs/
 jobs/
 .venv/
@@ -16,3 +15,11 @@ task/tests/data/
 task/solution/policy.py
 task/solution/policy.npz
 task/solution/places.json
+paper/main.aux
+paper/main.bbl
+paper/main.blg
+paper/main.fdb_latexmk
+paper/main.fls
+paper/main.log
+paper/main.out
+paper/textonly.pdf
