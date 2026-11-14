@@ -1,16 +1,17 @@
 #!/bin/bash
 MODEL=${MODEL:-openai/gpt-6.1-sol}
 cd "$(dirname "$0")"
-s=task/environment/server
-rm -rf $s/sim $s/data
-mkdir -p $s/sim $s/data/out
-cp sim/*.py $s/sim/
-cp sim/norms.json $s/sim/ 2>/dev/null
-cp data/out/{net,zones}.json data/out/{od,truck,pt}.npy $s/data/out/
-cp data/catalogue.json $s/data/
-cp task/tests/test.sh $s/
+for s in task/environment/server task/tests; do
+  rm -rf $s/sim $s/data
+  mkdir -p $s/sim $s/data/out
+  cp sim/*.py $s/sim/
+  cp sim/norms.json $s/sim/ 2>/dev/null
+  cp data/out/{net,zones}.json data/out/{od,truck,pt}.npy $s/data/out/
+  cp data/catalogue.json $s/data/
+done
+cp rl/policy.py rl/policy.npz task/solution/ 2>/dev/null
 [ "$1" = sync ] && exit
-id=$(date +%m%d-%H%M)
+id=$(date +%m%d-%H%M)-s${SEED:-0}
 h() { harbor run -y -p task --job-name "$id-$1" "${@:2}"; }
 h reference -a oracle
 h agent -a opencode -m "$MODEL" -k 3 -n 3
@@ -29,5 +30,6 @@ for p in sorted(Path("jobs").glob(f"{sys.argv[1]}-*/*/result.json"), key=lambda 
     log = p.parent / "verifier" / "run.json"
     if log.exists():
         Path(f"runs/{who}-{p.parent.name}.json").write_text(json.dumps({**json.loads(log.read_text()), "who": who}))
-    print(f"{who:10} {reward}")
+    out = (p.parent / "verifier" / "test-stdout.txt").read_text().splitlines()[0] if log.exists() else ""
+    print(f"{who:10} {reward}  {out}")
 PY

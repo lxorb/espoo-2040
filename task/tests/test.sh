@@ -13,13 +13,15 @@ try:
     for a in st["plan"]:
         if not c.done:
             c.step(a)
+    seen = [x["delay"] for x in c.recs]
     while not c.done:
         c.step()
     res = c.result()
     r = c.score()
     r = float(res["saving"] / res["nothing"] if r is None else r)
     log = c.log()
-    print(json.dumps(res))
+    off = max([abs(a - b) / max(abs(b), 1) for a, b in zip(seen, st["seen"])], default=0)
+    print(json.dumps({**res, "replay_off": off}))
 except Exception as e:
     print(f"error {e!r}")
 r = min(1.0, max(0.0, r)) if math.isfinite(r) else 0.0
