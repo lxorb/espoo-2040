@@ -46,6 +46,7 @@ carMat.onBeforeCompile = s => {
 export class Cars {
   constructor(scene) {
     this.max = MAX;
+    this.spawn = 1;
     this.t = 0;
     this.meshes = ['car', 'van', 'truck', 'bus', 'moto'].map(t => {
       const [hi, lo, len] = vehicle(t), m = new THREE.InstancedMesh(hi, carMat, MAX);
@@ -73,7 +74,7 @@ export class Cars {
       m.setMatrixAt(c, o.matrix);
       m.setColorAt(c, m.userData.paint[(id * 7919) % m.userData.paint.length]);
     };
-    for (const n of nets) if (px < 2.25) this.macro(n, rect, dt, put); else if (n.carState) n.carState.mac = [];
+    for (const n of nets) if (px < 2.25) this.macro(n, rect, dt, put, 1 / px > this.spawn); else if (n.carState) n.carState.mac = [];
     if (px < 2.25) this.streets(tiles, rect, put);
     this.meshes.forEach((m, k) => {
       m.count = count[k];
@@ -86,8 +87,8 @@ export class Cars {
     for (const m of this.meshes) m.visible = mode === 'cars';
   }
 
-  macro(net, [x0, y0, x1, y1], dt, put) {
-    const S = net.carState ||= { mac: [] }, L = net.links, n = L.length, e = [0, 0, 0, 0];
+  macro(net, rect, dt, put, still) {
+    const S = net.carState ||= { mac: [] }, L = net.links, n = L.length, e = [0, 0, 0, 0], [x0, y0, x1, y1] = rect;
     if (L !== S.L) {
       const twin = new Set(L.map(l => l.a + ',' + l.b));
       S.L = L; S.mac = S.mac.filter(c => c.i < n); S.out = [];
@@ -95,27 +96,45 @@ export class Cars {
       S.cum = L.map(l => lengths(l.geom));
       S.two = L.map(l => twin.has(l.b + ',' + l.a));
     }
+    const R = S.R, ov = R ? Math.max(Math.min(R[2], x1) - Math.max(R[0], x0), 0) * Math.max(Math.min(R[3], y1) - Math.max(R[1], y0), 0) / ((x1 - x0) * (y1 - y0) || 1) : 0;
+    const fill = still && ov < 0.5, g = still ? Math.max(0.25 * Math.max(x1 - x0, y1 - y0), 150) : 100;
+    S.R = still ? rect : null;
+    const inV = c => still && !fill && c.x > x0 - 10 && c.x < x1 + 10 && c.y > y0 - 10 && c.y < y1 + 10;
     const vis = new Uint8Array(n), want = new Float32Array(n), on = new Map(), len = i => S.cum[i][S.cum[i].length - 1];
     let sum = 0;
     for (let i = 0; i < n; i++) {
       const b = net.box[i];
-      if (!net.keep(...L[i].geom[L[i].geom.length >> 1]) || b[0] > x1 + 100 || b[2] < x0 - 100 || b[1] > y1 + 100 || b[3] < y0 - 100 || !(net.flow[i] > 0)) continue;
+      if (!net.keep(...L[i].geom[L[i].geom.length >> 1]) || b[0] > x1 + g || b[2] < x0 - g || b[1] > y1 + g || b[3] < y0 - g || !(net.flow[i] > 0)) continue;
       vis[i] = 1;
       sum += want[i] = Math.min(net.flow[i] * len(i) / Math.max(net.speed[i], 0.5) / 3600, len(i) * Math.max(L[i].lanes, 1) / 8);
     }
     const k = Math.min(1, this.max / Math.max(sum, 1));
-    const next = i => {
-      const o = (S.out[L[i].b] || []).filter(j => vis[j]), tot = o.reduce((a, j) => a + net.flow[j], 0);
-      let r = Math.random() * tot;
-      return o.find(j => (r -= net.flow[j]) < 0) ?? -1;
+    const next = (i, force) => {
+      const all = S.out[L[i].b] || [];
+      let o = all.filter(j => vis[j]);
+      if (!o.length && force) o = all.filter(j => L[j].b !== L[i].a).length ? all.filter(j => L[j].b !== L[i].a) : all;
+      const w = j => net.flow[j] + 1;
+      let r = Math.random() * o.reduce((a, j) => a + w(j), 0);
+      return o.find(j => (r -= w(j)) < 0) ?? -1;
+    };
+    const place = c => {
+      const l = L[c.i], m = Math.max(l.lanes, 1), j = Math.min(c.r * m | 0, m - 1), off = (j + 0.5 - (S.two[c.i] ? 0 : m / 2)) * 3.3;
+      along(l.geom, S.cum[c.i], c.s, e);
+      c.x = e[0] + e[3] * off; c.y = e[1] - e[2] * off; c.h = Math.atan2(e[3], e[2]);
     };
     S.mac = S.mac.filter(c => {
-      if (!vis[c.i]) return false;
-      c.s += net.speed[c.i] * dt;
-      while (c.s > len(c.i)) { c.s -= len(c.i); c.i = next(c.i); if (c.i < 0) return false; }
+      const seen = inV(c);
+      if (!vis[c.i] && !seen) return false;
+      c.s += Math.max(net.speed[c.i], 2) * dt;
+      while (c.s > len(c.i)) {
+        const j = next(c.i, seen);
+        if (j < 0) { if (!seen) return false; c.s = len(c.i); break; }
+        c.s -= len(c.i); c.i = j;
+      }
+      place(c);
       const l = on.get(c.i) || [];
       on.set(c.i, l);
-      if (l.length > Math.floor(want[c.i] * k + hash(c.i)) + 1) return false;
+      if (!inV(c) && l.length > Math.floor(want[c.i] * k + hash(c.i)) + 1) return false;
       l.push(c);
       return true;
     });
@@ -127,14 +146,12 @@ export class Cars {
       const c = { i, s: Math.random() * len(i), r: Math.random(), id: Math.random() * 1e6 | 0 };
       const lane = c.r * L[i].lanes | 0;
       if (l.some(d => (d.r * L[i].lanes | 0) === lane && Math.abs(d.s - c.s) < 12)) continue;
+      place(c);
+      if (inV(c)) continue;
       c.type = MIX.findIndex(m => hash(c.id) < m);
       S.mac.push(c); budget--;
     }
-    for (const c of S.mac) {
-      const l = L[c.i], m = Math.max(l.lanes, 1), j = Math.min(c.r * m | 0, m - 1), off = (j + 0.5 - (S.two[c.i] ? 0 : m / 2)) * 3.3;
-      along(l.geom, S.cum[c.i], c.s, e);
-      if (net.keep(e[0], e[1])) put(c.type, e[0] + e[3] * off, e[1] - e[2] * off, Math.atan2(e[3], e[2]), c.id);
-    }
+    for (const c of S.mac) if (net.keep(c.x, c.y)) put(c.type, c.x, c.y, c.h, c.id);
   }
 
   streets(tiles, [x0, y0, x1, y1], put) {

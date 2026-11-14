@@ -431,6 +431,7 @@ settings([
   knob('gd', 'ground detail', 'toggle', 0, true, v => { opt.gd = +v; }),
   knob('dz', 'detail zoom', 'range', [0.5, 4, 0.1], 1, v => { opt.dz = v; }),
   knob('cars', 'max cars', 'range', [0, 20000, 500], 20000, v => { opt.cars = v; }),
+  knob('cz', 'car spawn zoom', 'range', [0.3, 5, 0.1], 1, v => { cars.spawn = v; }),
   knob('walk', 'pedestrians', 'range', [0, 1, 0.1], 1, v => { near.walkers.density = v; near.key = ''; }),
   knob('trees', 'trees', 'range', [0, 1, 0.1], 1, v => { looks.trees.value = v; near.key = ''; }),
   knob('hr', 'heat radius', 'range', [0.25, 3, 0.05], 1, v => { flowOpt.radius = v; }),
