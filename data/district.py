@@ -18,12 +18,14 @@ from shapely import constrained_delaunay_triangles
 from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 from data.geo import ROOT, VIZ
+from data.hype import HYPE_NW, HYPE_SE, HYPE_SW, PARKING
 
 RAW, TEX, OUT = ROOT / "data/raw/district", ROOT / "data/district", ROOT / "viz/assets"
 WFS = "https://kartat.espoo.fi/teklaogcweb/wfs.ashx"
 WMS = "https://kartat.espoo.fi/teklaogcweb/wms.ashx"
 C = np.array([-1511.7, 1239.2])
-NEAR, FAR, SKIP = 600, 1500, {"104014316H", "1039674645"}
+NEAR, FAR = 600, 1500
+OWN = unary_union([Polygon([HYPE_SW, HYPE_SE, (HYPE_SE[0] + HYPE_NW[0] - HYPE_SW[0], HYPE_SE[1] + HYPE_NW[1] - HYPE_SW[1]), HYPE_NW]), Polygon(PARKING)]).buffer(3)
 O0, OPX, ON = C - 1560, 0.3, 10400
 GK = Transformer.from_crs(3879, 3067, always_xy=True)
 NS = {"gml": "http://www.opengis.net/gml", "bldg": "http://www.opengis.net/citygml/building/2.0",
@@ -191,7 +193,7 @@ def buildings():
     bs = [prep(b) for b in parse() if np.hypot(*(b["faces"][0][1][0][:, :2].mean(0) - C)) < FAR + 100]
     bs = [b for b in bs if b["d"] < FAR and (len(b["roof"]) or b["walls"])]
     extra, rings = residual([b["foot"] for b in bs])
-    return [b for b in bs if b["id"] not in SKIP] + [prep(b) for b in extra], rings
+    return [b for b in bs + [prep(b) for b in extra] if b["foot"].is_empty or not OWN.contains(b["foot"].centroid)], rings
 
 
 def pack(sizes, w, h, pad=2, pages=99):
