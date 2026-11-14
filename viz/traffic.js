@@ -504,6 +504,7 @@ export class Net {
     this.flowView.visible = mode === 'flow';
     this.renderer.autoClear = false;
     if (this.run && this.on && mode !== 'cars') this.renderer.render(this.post, this.postCam);
+    if (this.group && this.on && mode === 'heat') this.renderer.render(this.group, this.camera);
     if (this.hl && this.on) this.renderer.render(this.hl, this.camera);
     this.renderer.autoClear = true;
   }

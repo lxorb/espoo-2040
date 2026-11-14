@@ -12,7 +12,7 @@ const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Sou
   ['Matinkylä', 4518, 1343], ['Niittykumpu', 5884, 2487], ['Urheilupuisto', 6902, 2920], ['Tapiola', 8165, 2929], ['Aalto-yliopisto', 9295, 3944], ['Keilaniemi', 9590, 2952]];
 const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 3: 7.5, 4: 10, 5: 12 }, TILT = Math.tan(15 * Math.PI / 180);
 const q = new URLSearchParams(location.search);
-const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 0.35, dz: 1 }, flowOpt = {};
+const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 0.47, dz: 1 }, flowOpt = {};
 const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 3, split: false, pair: [], shown: [], cut: 0.5 };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
@@ -238,18 +238,18 @@ function projectTags(put) {
       return t;
     }));
   }
-  const cap = camera.zoom < 0.2 ? 3 : camera.zoom < 0.5 ? 6 : 99, w = innerWidth, h = innerHeight;
-  let n = 0;
+  const w = innerWidth, h = innerHeight;
   for (const t of tags) {
     const text = words(t, state.f);
     if (t.el.textContent !== text) t.el.textContent = text;
     v.copy(t.p).project(camera);
-    const x = (v.x + 1) / 2 * w, y = (1 - v.y) / 2 * h - 8, bw = text.length * 6.6 + 14, r = [x - bw / 2, y - 20, x + bw / 2, y];
-    t.on = !!text && t.net.keep(t.x, t.y) && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && n < cap && !put.some(b => r[0] < b[2] + 4 && r[2] > b[0] - 4 && r[1] < b[3] + 2 && r[3] > b[1] - 2);
+    const x = (v.x + 1) / 2 * w, bw = text.length * 6.6 + 14;
+    let y = (1 - v.y) / 2 * h - 8;
+    t.on = !!text && t.net.keep(t.x, t.y) && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
     t.el.style.display = t.on ? '' : 'none';
     if (!t.on) continue;
-    n++;
-    put.push(r);
+    while (put.some(b => x - bw / 2 < b[2] + 4 && x + bw / 2 > b[0] - 4 && y - 20 < b[3] + 2 && y > b[1] - 2)) y -= 22;
+    put.push([x - bw / 2, y - 20, x + bw / 2, y]);
     t.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
     t.el.style.opacity = Math.min(Math.max(1 - (state.f - t.b - 2) / 0.5, 0), 1);
   }
@@ -459,7 +459,7 @@ settings([
   knob('cb', 'congestion against', 'choice', ['2025', 'free flow'], '2025', v => { flowOpt.free = v === 'free flow'; for (const m of nets) m.lastF = NaN; paint(); }),
   knob('hb', 'heat background', 'range', [0.05, 1, 0.05], 0.2, v => { opt.heat = v; apply(); }),
   knob('fb', 'flow background', 'range', [0.02, 1, 0.01], 0.2, v => { opt.flow = v; apply(); }),
-  knob('spy', 'seconds per year', 'range', [0.1, 5, 0.05], 0.35, v => { opt.tl = v; }),
+  knob('sy', 'seconds per year', 'range', [0.1, 5, 0.01], 0.47, v => { opt.tl = v; }),
   knob('fps', 'fps', 'toggle', 0, false, v => { fps.hidden = !v; })
 ]);
 frame();
