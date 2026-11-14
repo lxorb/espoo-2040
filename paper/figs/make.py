@@ -35,6 +35,7 @@ growth = json.loads((DATA / "growth.json").read_text())
 ASEEDS = sorted(runs.get("agent", {}), key=int) or ["0", "1", "2"]
 LEVEL, macros = {}, {}
 GRPO_SEEDS = []
+SEARCH = {}
 
 
 def mac(name, value):
@@ -158,6 +159,11 @@ def vals_of(gr):
             vals[k] = [runs[k][s]["score"] for s in sorted(runs[k], key=int)]
     if gr and gr.get("final"):
         vals["grpo"] = gr["final"]
+    sf = ROOT / "runs" / "rl" / "search-eval.json"
+    if sf.exists():
+        d = json.loads(sf.read_text())
+        vals["rlsearch"] = [float(np.clip(x, 0, 1)) for x in d["scores"]]
+        SEARCH.update(zip([str(x) for x in d["seeds"]], vals["rlsearch"]))
     return vals
 
 
@@ -252,6 +258,14 @@ def table(vals):
             lost = [norms[s][0] if k == "nothing" else tot(runs[k][s]) for s in ASEEDS]
             last = np.mean([runs[k][s]["delay"][-1] for s in ASEEDS]) / 1e6
             spend = np.mean([sum(runs[k][s]["spent"]) for s in ASEEDS])
+        elif k == "rlsearch" and SEARCH:
+            sc = [SEARCH[x] for x in ASEEDS]
+            rows.append(f"{name} & {np.mean(vals[k]):.2f} & {np.mean(sc):.2f} & -- & -- & -- & -- & -- \\\\")
+            mac("rlsearchScore", f"{np.mean(vals[k]):.2f}")
+            mac("rlsearchMin", f"{min(vals[k]):.2f}")
+            worse = sorted((s_ for s_ in SEARCH if SEARCH[s_] < runs["rl"][s_]["score"] - 0.02), key=lambda s_: SEARCH[s_] - runs["rl"][s_]["score"])
+            mac("rlsearchWorse", ", ".join(worse[:3]) if worse else "none")
+            continue
         elif k == "grpo" and GRPO_SEEDS:
             sc = GRPO_SEEDS
             rows.append(f"{name} & {np.mean(sc):.2f} & {np.mean([sc[int(x)] for x in ASEEDS]):.2f} & -- & -- & -- & -- & -- \\\\")
@@ -328,6 +342,16 @@ def facts():
                 mac(f"gapRl{L}", f"{(tot(a[s]) - tot(runs['rl'][s])) / 1e6:.0f}")
             if s in runs.get("refold", {}):
                 mac(f"refoldLost{L}", f"{tot(runs['refold'][s]) / 1e6:.1f}")
+    if "rl" in runs:
+        bm = json.loads((DATA / "booms.json").read_text())
+        key = lambda n: n.split()[0].lower().replace("ä", "a")
+        first_hit = []
+        for s_, v in runs["rl"].items():
+            ys = [i for i, b in enumerate(v["builds"]) for p in b if p.endswith("-access") and any(p.startswith(key(n)) for n in bm[s_])]
+            first_hit.append(min(ys) if ys else None)
+        mac("rlBoomEarly", str(sum(y is not None and y <= 3 for y in first_hit)))
+        mac("rlBoomAny", str(sum(y is not None for y in first_hit)))
+        mac("rlN", str(len(first_hit)))
     f = [(n - b) / n for n, b in norms.values()]
     mac("bestPctMin", f"{100 * min(f):.1f}")
     mac("bestPctMax", f"{100 * max(f):.1f}")
@@ -495,6 +519,32 @@ def strategy():
         ks = first(gs, "step", lambda r: all(r["freq"].get(p, 0) >= 0.999 for p in kept))
         mac("grpoKeptAt", str(ks))
 
+def ablation():
+    f = ROOT / "runs" / "rl" / "ablation-jam.json"
+    if not f.exists():
+        return
+    rows = json.loads(f.read_text())["rows"]
+    by = {}
+    for r in rows:
+        sc = [float(np.clip(x, 0, 1)) for x in r["scores"]]
+        by.setdefault(r["experts"], {})[r["jam"]] = (np.mean(sc), min(sc))
+    out = []
+    for e in sorted(by):
+        w, o = by[e].get(True), by[e].get(False)
+        out.append(f"{e} & {w[0]:.2f} & {w[1]:.2f} & {o[0]:.2f} & {o[1]:.2f} \\\\")
+        mac(f"jamWith{e}".replace("0", "Zero").replace("1", "One").replace("2", "Two").replace("4", "Four").replace("7", "Seven").replace("9", "Nine"), f"{w[0]:.2f}")
+        mac(f"jamWithout{e}".replace("0", "Zero").replace("1", "One").replace("2", "Two").replace("4", "Four").replace("7", "Seven").replace("9", "Nine"), f"{o[0]:.2f}")
+    (HERE / "ablation.tex").write_text("\n".join(out) + "\n")
+    es = sorted(by)
+    gaps = [by[e][True][0] - by[e][False][0] for e in es]
+    mac("jamFew", str(es[0]))
+    mac("jamFewGap", f"{gaps[0]:.2f}")
+    mac("jamFewMinWith", f"{by[es[0]][True][1]:.2f}")
+    mac("jamFewMinWithout", f"{by[es[0]][False][1]:.2f}")
+    mac("jamMany", str(es[-1]))
+    mac("jamManyGap", f"{gaps[-1]:.2f}")
+
+
 def main():
     rescore()
     rl, gr = rl_curves(), grpo_curve()
@@ -523,12 +573,13 @@ def main():
     fig_years()
     fig_curves(rl, gr)
     strategy()
+    ablation()
     table(vals)
     facts()
     cats()
     used = set(re.findall(r"\\([a-zA-Z]+)\{\}", (HERE.parent / "main.tex").read_text()))
     for u in sorted(used):
-        if re.match(r"(planner|reactive|greedy|random|agent|best|nothing|grpo|rl|rlcheck|rlsearch|refrl|refold|gapRl|n|cat|evo)[A-Z]", u) and u not in macros:
+        if re.match(r"(rlBoom|planner|reactive|greedy|random|agent|best|nothing|grpo|rl|rlcheck|rlsearch|refrl|refold|gapRl|n|cat|evo|jam)[A-Z]", u) and u not in macros:
             macros[u] = "\\pending{}"
     (HERE / "numbers.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in macros.items()))
     print(json.dumps(macros, indent=0))
