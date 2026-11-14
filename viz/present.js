@@ -26,7 +26,7 @@ export function present(v) {
     () => show('pp', el('img', { src: 'assets/paper.jpg' }))
   ];
   let n = -1, taps = [];
-  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp'].forEach(hide); };
+  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp'].forEach(hide); if (on) { v.warm(); for (const f of ['formulas.png', 'paper.jpg']) new Image().src = `assets/${f}`; } };
   addEventListener('keydown', e => {
     if (e.key === 'ArrowRight' && n >= 0) n < steps.length ? steps[n++]() : mode(false);
     if (e.key !== 'p') return;

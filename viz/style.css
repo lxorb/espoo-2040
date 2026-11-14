@@ -9,8 +9,8 @@ canvas { display: block; }
 #modes { top: 16px; left: 16px; }
 #right { position: fixed; top: 16px; right: 16px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: calc(100% - 32px); }
 #right .seg { position: static; flex-wrap: wrap; justify-content: flex-end; }
-#formal, #fx { font: 700 10px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); background: var(--ink); border: 0; border-radius: 8px; padding: 8px 10px; cursor: pointer; box-shadow: 0 4px 16px #0006; }
-#formal:hover, #fx:hover { color: #ddd; }
+#formal, #cmp, #fx { font: 700 10px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); background: var(--ink); border: 0; border-radius: 8px; padding: 8px 10px; cursor: pointer; box-shadow: 0 4px 16px #0006; }
+#formal:hover, #cmp:hover, #fx:hover { color: #ddd; }
 #card { position: fixed; right: 16px; bottom: 16px; min-width: 190px; padding: 10px 12px; background: var(--ink); color: var(--mute); font-size: 11px; border-radius: 10px; box-shadow: 0 4px 16px #0006; pointer-events: none; }
 #card b { display: block; margin-bottom: 6px; color: var(--hi); letter-spacing: .04em; }
 #card div { display: flex; justify-content: space-between; gap: 18px; line-height: 1.7; }
@@ -76,3 +76,8 @@ canvas, img { -webkit-user-drag: none; user-select: none; }
 #pc { left: 32px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
 #pc div { padding: 14px 20px; background: var(--ink); color: var(--hi); font-weight: 700; font-size: 18px; letter-spacing: .08em; text-transform: uppercase; border-radius: 10px; box-shadow: 0 4px 16px #0006; opacity: 0; animation: in .25s forwards; }
 @keyframes in { to { opacity: 1; } }
+.sw::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; background: var(--c); }
+#fm svg { display: block; width: 100%; margin-top: 18px; }
+#fm svg text { fill: var(--mute); font-size: 11px; }
+#fm svg text.n { fill: #ccc; font-weight: 700; }
+#fm p.r { white-space: pre; }

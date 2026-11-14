@@ -66,7 +66,7 @@ function hull(pts) {
   const lo = half(pts), hi = half([...pts].reverse());
   return lo.slice(0, -1).concat(hi.slice(0, -1));
 }
-function place(url, footprint) {
+const place = (url, footprint) => new Promise(done => {
   new GLTFLoader().load(url, g => {
     const polys = [];
     g.scene.updateMatrixWorld(true);
@@ -85,12 +85,14 @@ function place(url, footprint) {
     g.scene.visible = lod < 1;
     if (polys.length) city.hide(polys);
     apply();
-  }, undefined, () => {});
-}
+    done();
+  }, undefined, done);
+});
 place('assets/hype.glb', true);
 fetch('assets/district.json').then(r => r.json()).then(d => {
   city.hide((d.hide || []).map(f => f.reduce((p, v, i) => (i % 2 ? p[p.length - 1].push(v) : p.push([v]), p), [])));
-  for (const m of d.models || []) place(`assets/${m}`, false);
+  const [first, rest] = [true, false].map(k => (d.models || []).filter(m => m.includes('near') === k));
+  Promise.all(first.map(m => place(`assets/${m}`, false))).then(() => { for (const m of rest) place(`assets/${m}`, false); });
 }).catch(() => {});
 
 const file = who => fetch(`data/runs/${who}.json`).then(r => r.json()), start = file('nothing');
@@ -427,12 +429,42 @@ async function formal() {
   document.getElementById('fmc').replaceChildren(el('p', '', `Each year, for ${q(R.years)} years, the planner makes one decision.`), el('div', 'seg tabs', ...tabs), body);
   fm.hidden = false;
 }
+const TONE = ['#3987e5', '#d95926', '#199e70'];
+const svg = (tag, at, ...kids) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in at) e.setAttribute(k, at[k]); e.append(...kids); return e; };
+async function compare() {
+  const names = [...state.list, 'nothing'], rs = await Promise.all(names.map(get)), last = names.length - 1;
+  const D = rs.map(r => r.years.slice(1).map(y => y.delay / 1e6)), tot = D.map(d => d.reduce((a, b) => a + b, 0)), n = D[0].length, y0 = rs[0].y0 + 1;
+  const hue = k => TONE[k] || '#8a8a85', name = k => k < last ? names[k].toUpperCase() : 'NO ACTION', f = v => v.toFixed(1);
+  const W = 860, H = 250, L = 34, R = 96, T = 10, B = 24, top = Math.ceil(Math.max(...D.flat()) / 5) * 5, X = i => L + i / (n - 1) * (W - L - R), Y = v => H - B - v / top * (H - T - B);
+  const ends = D.map((d, k) => [Y(d[n - 1]), k]).sort((a, b) => a[0] - b[0]);
+  ends.forEach((e, i) => { if (i && e[0] < ends[i - 1][0] + 13) e[0] = ends[i - 1][0] + 13; });
+  const mark = svg('line', { y1: T, y2: H - B, stroke: '#555', visibility: 'hidden' }), read = el('p', 's r', '\u00a0');
+  const plot = svg('svg', { viewBox: `0 0 ${W} ${H}` },
+    ...[0, top / 2, top].flatMap(v => [svg('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), stroke: '#2a2a2a' }), svg('text', { x: L - 6, y: Y(v) + 4, 'text-anchor': 'end' }, `${v}`)]),
+    ...[0, n >> 1, n - 1].map(i => svg('text', { x: X(i), y: H - 6, 'text-anchor': 'middle' }, `${y0 + i}`)), mark,
+    ...D.map((d, k) => svg('polyline', { points: d.map((v, i) => `${X(i)},${Y(v)}`).join(' '), fill: 'none', stroke: hue(k), 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-dasharray': k < last ? 'none' : '4 4' })),
+    ...D.map((d, k) => svg('circle', { cx: X(n - 1), cy: Y(d[n - 1]), r: 4, fill: hue(k), stroke: '#141414', 'stroke-width': 2 })),
+    ...ends.map(([y, k]) => svg('text', { x: W - R + 10, y: y + 4, class: 'n' }, name(k))));
+  plot.onpointermove = e => {
+    const b = plot.getBoundingClientRect(), i = Math.min(Math.max(Math.round(((e.clientX - b.left) / b.width * W - L) / (W - L - R) * (n - 1)), 0), n - 1);
+    for (const a of ['x1', 'x2']) mark.setAttribute(a, X(i));
+    mark.setAttribute('visibility', 'visible');
+    read.textContent = [y0 + i, ...D.map((d, k) => `${name(k)} ${f(d[i])}`)].join('   ');
+  };
+  plot.onpointerleave = () => { mark.setAttribute('visibility', 'hidden'); read.textContent = '\u00a0'; };
+  const tag = k => { const e = el('span', 'sw', name(k)); e.style.setProperty('--c', hue(k)); return e; };
+  document.getElementById('fmc').replaceChildren(table(['', `Million hours lost in ${y0 + n - 1}`, `Million hours lost, ${y0} to ${y0 + n - 1}`, 'Saved'],
+    D.map((d, k) => ['', tag(k), f(d[n - 1]), f(tot[k]), k < last ? `${Math.round((1 - tot[k] / tot[last]) * 100)}%` : '']), 'n'), plot, read);
+  fm.hidden = false;
+}
 document.getElementById('formal').onclick = formal;
+document.getElementById('cmp').onclick = compare;
 document.getElementById('fx').onclick = () => { fm.hidden = true; };
 fm.onclick = e => { if (e.target === fm) fm.hidden = true; };
 addEventListener('keydown', e => { if (e.key === 'Escape') fm.hidden = true; });
 
 present({
+  warm: () => { for (const w of state.list) get(w); },
   go: k => go(...VIEWS[k]),
   set: o => { Object.assign(state, o); if ('who' in o || 'split' in o || 'pair' in o) loadRun(); if ('f' in o) paint(); apply(); },
   slide: to => { const a = state.cut, t0 = performance.now(), step = () => { const t = Math.min((performance.now() - t0) / 1500, 1); state.cut = a + (to - a) * t * t * (3 - 2 * t); if (t < 1) requestAnimationFrame(step); }; step(); }
