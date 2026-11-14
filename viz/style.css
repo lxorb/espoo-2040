@@ -69,8 +69,8 @@ canvas, img { -webkit-user-drag: none; user-select: none; }
 #fps { position: fixed; left: 16px; bottom: 16px; color: var(--hi); font-size: 11px; font-weight: 700; pointer-events: none; }
 .pr { position: fixed; z-index: 30; pointer-events: none; }
 #pf, #pp { inset: 0; display: flex; align-items: center; justify-content: center; }
-#pf img { max-width: min(980px, 92vw); max-height: 84vh; border-radius: 12px; box-shadow: 0 8px 40px #000a; }
-#pp img { max-width: 92vw; max-height: 94vh; border-radius: 4px; box-shadow: 0 8px 40px #000a; }
+#pf img { max-width: min(980px, 92vw); max-height: 84vh; box-shadow: 0 8px 40px #000a; }
+#pp img { max-width: 92vw; max-height: 94vh; box-shadow: 0 8px 40px #000a; }
 #pa { width: 6px; height: 56px; margin-left: -3px; background: var(--hi); }
 #pa::after { content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%); border: 14px solid transparent; border-top: 20px solid var(--hi); border-bottom: 0; }
 #pc { left: 32px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
