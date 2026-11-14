@@ -1,0 +1,21 @@
+services:
+  main:
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+
+  mcp-server:
+    build:
+      context: ./server
+    environment:
+      SEED: ${SEED:-0}
+      YEARS: ${YEARS:-15}
+      FORECASTS: ${FORECASTS:-6}
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), timeout=2).close()"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 300s
