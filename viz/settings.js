@@ -35,7 +35,7 @@ export function settings(table) {
     return make('div', { className: 'row' }, make('span', { textContent: t.l }), ...nodes);
   }), make('button', { id: 'reset', textContent: 'reset', onclick: () => { for (const t of table) set(t, t.d); save({}); } }));
   document.body.append(panel);
-  for (const t of table) set(t, t.k in val ? val[t.k] : t.d);
+  for (const t of table) set(t, val[t.k]);
   let keys = [];
   addEventListener('keydown', e => {
     keys = [...keys, e.key.length === 1 ? e.key.toLowerCase() : e.key].slice(-10);

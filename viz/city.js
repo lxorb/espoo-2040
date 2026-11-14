@@ -70,10 +70,9 @@ const sideMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColor
   float r = 0.5 * w - 2.5, ax = abs(x);
   if (ax < r - 0.2) discard;
   diffuseColor.rgb = raw(vec2((ax - r) / 2.5, vB.x / uMat[${L.sidewalk}].a), ${L.sidewalk}.0, vR.y) * uDim;`, RIB[0], looks.one, looks.detail);
-const lineMat = (c, a) => new THREE.ShaderMaterial({ uniforms: { uPx: looks.px, uA: { value: a } },
+export const borderMat = new THREE.ShaderMaterial({ uniforms: { uPx: looks.px, uA: { value: 1 } },
   vertexShader: 'attribute vec3 aE; uniform float uPx; void main() { vec3 p = position; p.xz += aE.xy * aE.z * uPx * 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }',
-  fragmentShader: `uniform float uA; void main() { gl_FragColor = vec4(vec3(${new THREE.Color(c).toArray().map(v => v.toFixed(3))}) * uA, 1.0); }` });
-export const borderMat = lineMat('#8a8a85', 1);
+  fragmentShader: 'uniform float uA; void main() { gl_FragColor = vec4(vec3(0.254, 0.254, 0.235) * uA, 1.0); }' });
 const overMat = patch(new THREE.MeshStandardMaterial({ roughness: 0.9, vertexColors: true, depthTest: false, depthWrite: false }),
   'transformed.xz += aE.xy * max(0.0, uPx * 2.5 - aE.z) * 0.5;', 'diffuseColor.rgb *= uDim;', 'attribute vec3 aE; uniform float uPx;');
 
@@ -188,8 +187,7 @@ function ground(list, kinds, size, i, j, trees) {
   return m;
 }
 
-const roadStyle = k => /rail|tram|subway|metro/.test(k) ? [2.4, '#55524d', 0.48] : /foot|path|cycle|steps|pedestrian|track|bridleway/.test(k) ? [1.2, '#979893', 0.4]
-  : /service|living/.test(k) ? [3.5, '#7a7c7d', 0.42] : [0, '#5e6164', 0.45];
+const roadStyle = k => /rail|tram|subway/.test(k) ? [2.4, '#55524d', 0.48] : /foot|cycle|track/.test(k) ? [1.2, '#979893', 0.4] : k === 'service' ? [3.5, '#7a7c7d', 0.42] : [0, '#5e6164', 0.45];
 
 export function ribbon(lines, extra) {
   const pos = [], ab = [], col = [], idx = [], c = new THREE.Color();
@@ -286,24 +284,23 @@ export class City {
       g.renderOrder = -3; r.renderOrder = -2;
       scene.add(g, r);
       const round = f => { for (let n = 4; n--;) { const g = []; for (let i = 0; i < f.length; i += 2) { const j = (i + 2) % f.length; g.push(0.75 * f[i] + 0.25 * f[j], 0.75 * f[i + 1] + 0.25 * f[j + 1], 0.25 * f[i] + 0.75 * f[j], 0.25 * f[i + 1] + 0.75 * f[j + 1]); } f = g; } return [...f, f[0], f[1]]; };
-      const rings = [(o.border || []).map(round)];
-      rings[0].forEach(f => {
+      const rings = (o.border || []).map(round);
+      rings.forEach(f => {
         const q = [], m = new THREE.Mesh(ribbon([{ pts: f, w: 0, y: 0.6, px: 2 }], ({ px }, s, dx, dz) => q.push(-dz * s, -dx * s, px)), borderMat);
         m.geometry.setAttribute('aE', new THREE.Float32BufferAttribute(q, 3));
         m.frustumCulled = false;
         scene.add(m);
       });
-      if (rings[0].length) {
-        const all = rings[0].flat(), xs = all.filter((v, i) => !(i % 2)), ys = all.filter((v, i) => i % 2), d = 3000, S = 2048;
-        const x0 = Math.min(...xs) - d, y0 = Math.min(...ys) - d, w = Math.max(...xs) + d - x0, h = Math.max(...ys) + d - y0;
+      if (rings.length) {
+        const ys = rings.flat().filter((v, i) => i % 2);
         const far = 4e5, shape = new THREE.Shape([[-far, -far], [far, -far], [far, far], [-far, far]].map(p => new THREE.Vector2(...p)));
-        for (const f of rings[0]) { const p = []; for (let i = 0; i < f.length - 2; i += 2) p.push(new THREE.Vector2(f[i], f[i + 1])); shape.holes.push(new THREE.Path(p)); }
+        for (const f of rings) { const p = []; for (let i = 0; i < f.length - 2; i += 2) p.push(new THREE.Vector2(f[i], f[i + 1])); shape.holes.push(new THREE.Path(p)); }
         const shade = new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({ uniforms: { uOut: looks.out }, depthTest: false, depthWrite: false, transparent: true,
           blending: THREE.CustomBlending, blendSrc: THREE.ZeroFactor, blendDst: THREE.SrcColorFactor,
           vertexShader: 'void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }', fragmentShader: 'uniform float uOut; void main() { gl_FragColor = vec4(vec3(pow(uOut, 0.4545)), 1.0); }' }));
         shade.renderOrder = 50; shade.frustumCulled = false;
         scene.add(shade);
-        const f = rings[0].reduce((a, b) => b.length > a.length ? b : a);
+        const f = rings.reduce((a, b) => b.length > a.length ? b : a);
         let A = 0, mx = 0, my = 0;
         for (let i = 0; i < f.length - 2; i += 2) { const c = f[i] * f[i + 3] - f[i + 2] * f[i + 1]; A += c; mx += (f[i] + f[i + 2]) * c; my += (f[i + 1] + f[i + 3]) * c; }
         mx /= 3 * A; my /= 3 * A;
@@ -345,7 +342,7 @@ export class City {
         g.name = k;
         g.userData.trees = trees;
         this.onTile?.(t, g);
-        g.userData.res = (t.r || []).filter(([q]) => /residential|service|living|unclassified/.test(m.rkinds[q])).map(([q, , f]) => ({ s: m.rkinds[q] === 'service', g: f.reduce((a, v, i) => (i % 2 ? a[a.length - 1].push(v) : a.push([v]), a), []) }));
+        g.userData.res = (t.r || []).filter(([q]) => /residential|service/.test(m.rkinds[q])).map(([q, , f]) => ({ s: m.rkinds[q] === 'service', g: f.reduce((a, v, i) => (i % 2 ? a[a.length - 1].push(v) : a.push([v]), a), []) }));
         this.root.add(g);
         this.loaded.set(k, g);
       }).catch(() => {}).finally(() => this.busy--);

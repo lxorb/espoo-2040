@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { looks, patch, up, DITHER, HYPE, COVER, junctions } from './city.js';
 import { lengths, along } from './traffic.js';
 
-export const caps = { marks: 4000, texels: 24e6, cache: 40e6, sprites: 10000, walkers: 300, props: 3000, loads: 8 };
+const caps = { marks: 4000, texels: 24e6, cache: 40e6, sprites: 10000, walkers: 300, props: 3000, loads: 8 };
 const GROUPS = [['birch', 'linden'], ['pine', 'spruce'], ['linden', 'linden', 'birch'], ['pine', 'spruce', 'birch'], ['pine', 'spruce'], ['shrub']];
 const SHADOW = [0.51, 0.86];
 const v = new THREE.Vector3();

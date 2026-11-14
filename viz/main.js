@@ -10,10 +10,9 @@ import { Cars } from './cars.js';
 
 const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Soukka', 603, -544], ['Kaitaa', 1797, 312], ['Finnoo', 2981, 656],
   ['Matinkylä', 4518, 1343], ['Niittykumpu', 5884, 2487], ['Urheilupuisto', 6902, 2920], ['Tapiola', 8165, 2929], ['Aalto-yliopisto', 9295, 3944], ['Keilaniemi', 9590, 2952]];
-const RUNS = ['agent', 'rl'];
 const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 3: 7.5, 4: 10, 5: 12 }, TILT = Math.tan(15 * Math.PI / 180);
 const q = new URLSearchParams(location.search);
-const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 1.4, dz: 1, cars: 20000, fps: false }, flowOpt = { particles: 1, trail: 1, radius: 1, heat: 1, sources: false, abs: false, free: false };
+const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 1.4, dz: 1 }, flowOpt = {};
 const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 3, split: false, pair: [], shown: [], cut: 0.5 };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
@@ -46,8 +45,8 @@ sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.6;
 scene.add(hemi, sun, sun.target);
 
-const city = new City(scene), near = new Near(scene, renderer, city), detail = new Detail(scene, city), fineDepth = fadeDepth(looks.fine);
-let nets = [], cars;
+const city = new City(scene), near = new Near(scene, renderer, city), detail = new Detail(scene, city), cars = new Cars(scene), fineDepth = fadeDepth(looks.fine);
+let nets = [];
 
 const catalogue = fetch('data/catalogue.json').then(r => r.json()).catch(() => []);
 fetch('data/net.json').then(r => r.json()).then(async n => {
@@ -57,7 +56,6 @@ fetch('data/net.json').then(r => r.json()).then(async n => {
   apply();
   runList.then(loadRun);
 });
-cars = new Cars(scene);
 const hypeMats = [], fine = [];
 let lod = 0, coarse = false, close = false;
 function hull(pts) {
@@ -95,7 +93,7 @@ fetch('assets/district.json').then(r => r.json()).then(d => {
 }).catch(() => {});
 
 const runs = {}, get = who => runs[who] ||= fetch(`data/runs/${who}.json`).then(r => r.json());
-const runList = fetch('data/runs/index.json').then(r => r.json()).catch(() => RUNS).then(all => Promise.all(all.map(r => fetch(`data/runs/${r}.json`, { method: 'HEAD' }).then(x => x.ok && r, () => false)))).then(ok => {
+const runList = fetch('data/runs/index.json').then(r => r.json()).then(all => Promise.all(all.map(r => fetch(`data/runs/${r}.json`, { method: 'HEAD' }).then(x => x.ok && r, () => false)))).then(ok => {
   const list = ok.filter(Boolean);
   const box = document.getElementById('runs');
   for (const r of list) box.insertAdjacentHTML('beforeend', `<button data-v="${r}">${r.toUpperCase()}</button>`);
@@ -125,7 +123,6 @@ function loadRun() {
     sync();
   }).catch(() => want.forEach(w => { const b = document.querySelector(`#runs [data-v=${w}]`); if (b) b.disabled = true; }));
 }
-const delay = (run, f) => { const ys = run.years, a = Math.min(Math.floor(f), ys.length - 1), b = Math.min(a + 1, ys.length - 1), t = f - a; return ys[a].delay * (1 - t) + ys[b].delay * t; };
 const year = document.getElementById('year'), ylab = document.getElementById('ylab'), play = document.getElementById('play');
 const cut = document.getElementById('cut'), sides = [...document.querySelectorAll('.side')];
 sides.forEach((e, k) => e.onclick = () => { const o = state.list.find(r => !state.pair.includes(r)); if (o) { state.pair[k] = o; loadRun(); } });
@@ -177,7 +174,7 @@ function apply() {
   for (const m of hypeMats) m.userData.base && m.color.copy(m.userData.base).multiplyScalar(looks.dim.value);
   hemi.intensity = state.mode === 'flow' ? 0.5 : 1.2;
   for (const m of nets) m.show(state.mode);
-  cars && cars.show(state.mode);
+  cars.show(state.mode);
   sync();
 }
 document.getElementById('modes').onclick = e => { if (e.target.dataset.v) { state.mode = e.target.dataset.v; apply(); } };
@@ -194,21 +191,16 @@ addEventListener('keydown', e => {
 
 const UI = ['modes', 'right', 'time', 'sl', 'sr', 'card'].map(id => document.getElementById(id));
 let tags = [], shown = [], hold = 0, espoo = null;
-function tag(text, x, y, cls) {
+function label(text, x, y, h, cls) {
   const el = document.createElement('div');
   el.className = `lab ${cls}`;
   el.textContent = text;
+  el.ondblclick = () => { fly = { t: 0, a: controls.target.clone(), b: new THREE.Vector3(x, 0, -y), z0: camera.zoom, z1: Math.max(camera.zoom, 2.5) }; };
   document.getElementById('labels').append(el);
-  return { el, p: new THREE.Vector3(x, 20, -y) };
+  return { el, p: new THREE.Vector3(x, h, -y) };
 }
-const WORDS = { road: ['BUILD ROAD', 'NEW ROAD'], lanes: ['WIDEN ROAD', 'WIDER ROAD'], junction: ['REBUILD JUNCTION', 'NEW JUNCTION'], rail: ['BUILD RAIL', 'NEW RAIL'],
-  bus: ['ADD BUS LINE', 'NEW BUS LINE'], buslane: ['ADD BUS LANE', 'NEW BUS LANE'], toll: ['ADD TOLL', 'TOLL', 1], parking: ['CHARGE PARKING', 'PAID PARKING', 1], pnr: ['BUILD PARK & RIDE', 'PARK & RIDE', 1] };
-function words(t, f, y0) {
-  if (f < t.a - 1e-6) return '';
-  const [doing, done, stays] = WORDS[t.what] || WORDS.road;
-  if (f < t.b - 1e-6) return t.build ? doing : '';
-  return stays || f < t.b + 2.5 ? done : '';
-}
+const WORDS = { road: ['BUILD ROAD', 'NEW ROAD'], lanes: ['WIDEN ROAD', 'WIDER ROAD'], junction: ['REBUILD JUNCTION', 'NEW JUNCTION'] };
+const words = (t, f) => f < t.a - 1e-6 || f >= t.b + 2.5 ? '' : (WORDS[t.what] || WORDS.road)[+(f >= t.b - 1e-6)];
 let lit = null;
 function hover(t) {
   lit?.el.classList.remove('hi');
@@ -230,10 +222,10 @@ function projectTags(put) {
       return t;
     }));
   }
-  const y0 = state.run?.y0 ?? 2026, cap = camera.zoom < 0.2 ? 3 : camera.zoom < 0.5 ? 6 : 99, w = innerWidth, h = innerHeight;
+  const cap = camera.zoom < 0.2 ? 3 : camera.zoom < 0.5 ? 6 : 99, w = innerWidth, h = innerHeight;
   let n = 0;
   for (const t of tags) {
-    const text = words(t, state.f, y0);
+    const text = words(t, state.f);
     if (t.el.textContent !== text) t.el.textContent = text;
     v.copy(t.p).project(camera);
     const x = (v.x + 1) / 2 * w, y = (1 - v.y) / 2 * h - 8, bw = text.length * 6.6 + 14, r = [x - bw / 2, y - 20, x + bw / 2, y];
@@ -243,19 +235,12 @@ function projectTags(put) {
     n++;
     put.push(r);
     t.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
-    t.el.style.opacity = t.kind === 'road' ? Math.min(Math.max(1 - (state.f - t.b - 2) / 0.5, 0), 1) : 1;
+    t.el.style.opacity = Math.min(Math.max(1 - (state.f - t.b - 2) / 0.5, 0), 1);
   }
   if (lit && !lit.on) hover(null);
 }
 
-let labels = [['HYPE', ...HYPE, 40, 'big'], ...STATIONS.map(([n, x, y]) => [n.toUpperCase(), x, y, 12, 'st'])].map(([text, x, y, h, cls]) => {
-  const el = document.createElement('div');
-  el.className = `lab ${cls}`;
-  el.textContent = text;
-  el.ondblclick = () => { fly = { t: 0, a: controls.target.clone(), b: new THREE.Vector3(x, 0, -y), z0: camera.zoom, z1: Math.max(camera.zoom, 2.5) }; };
-  document.getElementById('labels').append(el);
-  return { el, p: new THREE.Vector3(x, h, -y) };
-});
+const labels = [label('HYPE', ...HYPE, 40, 'big'), ...STATIONS.map(([n, x, y]) => label(n.toUpperCase(), x, y, 12, 'st'))];
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -290,7 +275,6 @@ function flying(dt) {
 
 const sunDir = new THREE.Vector3(-0.45, 0.8, 0.75).normalize(), sunX = new THREE.Vector3(0, 1, 0).cross(sunDir).normalize(), sunY = sunDir.clone().cross(sunX), snap = new THREE.Vector3();
 const clock = new THREE.Clock();
-let last = '';
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
   if (fly) flying(dt);
@@ -330,13 +314,11 @@ function frame() {
     paint();
     sync();
   }
-  if (cars) cars.max = opt.cars;
   split();
-  if (cars && state.mode === 'cars') cars.tick(dt * state.speed, nets.filter(m => m.on && m.links), [x0, y0, x1, y1], px, city.loaded);
+  if (state.mode === 'cars') cars.tick(dt * state.speed, nets.filter(m => m.on && m.links), [x0, y0, x1, y1], px, city.loaded);
   for (const m of nets) m.draw(state.mode, [x0, y0, x1, y1], dt * (state.mode === 'flow' ? FLOW[state.flow] : state.speed), px, city.loaded);
-  if (city.tag && !espoo) labels.push(espoo = Object.assign(tag('ESPOO', ...city.tag, 'big'), { far: true }));
+  if (city.tag && !espoo) labels.push(espoo = Object.assign(label('ESPOO', ...city.tag, 20, 'big'), { far: true }));
   const w = innerWidth, h = innerHeight, put = [];
-  labels = labels.filter(l => l.el.isConnected);
   for (const l of labels) {
     v.copy(l.p).project(camera);
     l.on = Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && (!l.el.classList.contains('st') || camera.zoom > 0.12) && (!l.far || camera.zoom < 0.35);
@@ -352,8 +334,6 @@ function frame() {
   for (const l of all.filter(l => l.on && over(l.el.getBoundingClientRect()))) l.el.style.display = 'none';
   renderer.render(scene, camera);
   for (const m of nets) m.overlay(state.mode);
-  const s = `${city.loaded.size}`;
-  if (s !== last) { last = s; document.body.dataset.tiles = s; }
   frames++;
   requestAnimationFrame(frame);
 }
@@ -442,7 +422,7 @@ settings([
   knob('gd', 'ground detail', 'toggle', 0, true, v => { opt.gd = +v; }),
   knob('sat', 'satellite buildings', 'toggle', 0, false, v => { detail.use(v); }),
   knob('dz', 'detail zoom', 'range', [0.5, 4, 0.1], 1, v => { opt.dz = v; }),
-  knob('cars', 'max cars', 'range', [0, 20000, 500], 20000, v => { opt.cars = v; }),
+  knob('cars', 'max cars', 'range', [0, 20000, 500], 20000, v => { cars.max = v; }),
   knob('cz', 'car spawn zoom', 'range', [0.3, 5, 0.1], 1, v => { cars.spawn = v; }),
   knob('walk', 'pedestrians', 'range', [0, 1, 0.1], 1, v => { near.walkers.density = v; near.key = ''; }),
   knob('trees', 'trees', 'range', [0, 1, 0.1], 1, v => { looks.trees.value = v; near.key = ''; }),
@@ -450,7 +430,6 @@ settings([
   knob('hi', 'heat intensity', 'range', [0.25, 4, 0.05], 1, v => { flowOpt.heat = v; }),
   knob('fp', 'flow particles', 'range', [0.1, 1, 0.05], 1, v => { flowOpt.particles = v; }),
   knob('ft', 'flow trail', 'range', [0.25, 4, 0.05], 1, v => { flowOpt.trail = v; }),
-  knob('fs', 'flow sources', 'toggle', 0, false, v => { flowOpt.sources = v; }),
   knob('fc', 'flow color', 'choice', ['relative', 'absolute'], 'relative', v => { flowOpt.abs = v === 'absolute'; }),
   knob('cv', 'congestion against', 'choice', ['2026', 'free flow'], '2026', v => { flowOpt.free = v === 'free flow'; }),
   knob('hb', 'heat background', 'range', [0.05, 1, 0.05], 0.2, v => { opt.heat = v; apply(); }),

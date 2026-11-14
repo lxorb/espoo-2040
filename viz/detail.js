@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { looks, patch, fadeDepth } from './city.js';
 import { stamp } from './near.js';
 
-export const DETAIL_CAP = 12;
+const DETAIL_CAP = 12;
 const v = new THREE.Vector3(), depth = fadeDepth(looks.fine);
 
 export class Detail {
