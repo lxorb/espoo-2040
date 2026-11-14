@@ -17,7 +17,7 @@ const pick = cdf => {
   return lo;
 };
 const tone = (c, r, a) => { const s = Math.min(Math.max((r - 0.3) / 0.6, 0), 1); c.setHSL(0.47 * s * Math.sqrt(s), 1, 0.5).multiplyScalar(a * (1.7 - 0.7 * s)); return 1.5 + 2 * (1 - s); };
-const STEP = 20, SHUT = 0.35, GRID = 40, FINE = 10;
+const STEP = 12, SHUT = 0.35, GRID = 40, FINE = 10;
 const W = l => Math.max(l.lanes || 1, 1) * 3.3 + 1, len = g => lengths(g).at(-1);
 const full = (frag, extra = {}) => new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
   depthTest: false, depthWrite: false, transparent: true, ...extra,
@@ -509,7 +509,7 @@ export class Net {
     const r = this.renderer, size = r.getDrawingBufferSize(this.size);
     if (this.flowRT.width !== size.x || this.flowRT.height !== size.y) { this.flowRT.setSize(size.x, size.y); this.flowRT2.setSize(size.x, size.y); for (const t of [this.heatRT, this.heatOld]) t.setSize(Math.ceil(size.x / 2), Math.ceil(size.y / 2)); }
     this.uni.uPx.value = px;
-    this.uni.uSigma.value = Math.max((5 + 19 * Math.min(Math.max((4 - px) / 3, 0), 1)) * px, 30) * this.opt.radius;
+    this.uni.uSigma.value = Math.max((5 + 19 * Math.min(Math.max((4 - px) / 3, 0), 1)) * px, Math.min(Math.max(30 * px, 7), 30)) * this.opt.radius;
     if (!this.run || !this.on) return;
     const now = performance.now(), hv = this.heatView.material.uniforms;
     this.uni.uOy.value = this.anim ? this.anim.y : -99;
