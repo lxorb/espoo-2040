@@ -107,10 +107,10 @@ export class Net {
       void main() {
         clip();
         float t = log2(max(mix(texture2D(tOld, vU).r, texture2D(tMap, vU).r, uMix) * uHeat / uRef, 1e-6));
-        vec3 c = mix(vec3(0.16, 0.7, 0.34), vec3(1.0, 0.88, 0.15), smoothstep(-3.6, -1.6, t));
-        c = mix(c, vec3(0.95, 0.1, 0.06), smoothstep(-1.6, 0.4, t));
-        c = mix(c, vec3(0.5, 0.0, 0.42), smoothstep(1.2, 2.8, t));
-        gl_FragColor = vec4(c, smoothstep(-6.0, -3.6, t) * mix(0.55, 0.92, smoothstep(-3.6, 0.0, t)));
+        vec3 c = mix(vec3(0.16, 0.7, 0.34), vec3(1.0, 0.88, 0.15), smoothstep(-3.4, -1.1, t));
+        c = mix(c, vec3(0.95, 0.1, 0.06), smoothstep(-1.1, 0.0, t));
+        c = mix(c, vec3(0.5, 0.0, 0.42), smoothstep(0.9, 1.6, t));
+        gl_FragColor = vec4(c, smoothstep(-6.0, -4.2, t) * mix(0.55, 0.92, smoothstep(-3.4, 0.0, t)));
       }`);
     this.heatView.material.uniforms = { tMap: { value: this.heatRT.texture }, tOld: { value: this.heatOld.texture }, uRef: this.uni.uRef, uClip: this.uni.uClip, uHeat: { value: 1 }, uMix: { value: 1 } };
     this.flowView = full(`uniform sampler2D tMap; varying vec2 vU; ${CLIP}
@@ -157,11 +157,36 @@ export class Net {
     scene.add(this.roads);
   }
 
+  queue() {
+    const L = this.links, n = L.length, room = Float32Array.from(L, l => l.len * Math.max(l.lanes || 1, 1)), full = new Float32Array(n);
+    if (this.into?.n !== n) { this.into = Object.assign([], { n }); L.forEach((l, i) => (this.into[l.b] ||= []).push(i)); }
+    let wait = this.loss.slice();
+    for (let pass = 0; pass < 40; pass++) {
+      const next = new Float32Array(n);
+      let any = false;
+      for (let i = 0; i < n; i++) {
+        if (!(wait[i] > 0)) continue;
+        const put = Math.min(wait[i], room[i] - full[i]), over = wait[i] - put;
+        full[i] += put;
+        if (over < 1) continue;
+        const pre = (this.into[L[i].a] || []).filter(j => L[j].a !== L[i].b), sum = pre.reduce((a, j) => a + this.flow[j], 0);
+        if (!(sum > 0)) continue;
+        for (const j of pre) next[j] += over * this.flow[j] / sum;
+        any = true;
+      }
+      if (!any) break;
+      wait = next;
+    }
+    for (let i = 0; i < n; i++) {
+      const q = this.loss[i] = full[i] / room[i], r = this.ratio[i] = Math.min(this.ratio[i], 1 - 0.8 * q);
+      this.speed[i] = Math.min(this.speed[i], L[i].len / this.ff[i] * r);
+    }
+  }
+
   calib(run) {
-    const y = run.years[0], loss = [], fl = [], q = (a, p) => a.sort((u, v) => u - v)[Math.floor(a.length * p)] || 1;
-    this.base.forEach((l, i) => { const f = y.flow[i]; if (f > 0) { fl.push(f); loss.push(f * Math.max(y.time[i] - l.len / (l.kmh / 3.6), 0) / 3.6 / l.len); } });
-    this.scale = this.uni.uRef.value = q(loss.filter(v => v > 0), 0.99);
-    this.fref = q(fl, 0.9);
+    const fl = run.years[0].flow.slice(0, this.base.length).filter(f => f > 0).sort((u, v) => u - v);
+    this.scale = this.uni.uRef.value = 0.8;
+    this.fref = fl[Math.floor(fl.length * 0.9)] || 1;
     this.dirty = true;
   }
 
@@ -312,10 +337,11 @@ export class Net {
       this.speed[i] = this.links[i].len / Math.max(tm, 0.1);
       this.ratio[i] = Math.min(ff / Math.max(tm, 0.1), 1);
       this.flow[i] = this.cap[i] < SHUT ? 0 : (A.flow[i] ?? 0) * (1 - t) + (B.flow[i] ?? 0) * t;
-      this.loss[i] = this.flow[i] * Math.max(tm - ff, 0) / 3.6 / this.links[i].len;
+      this.loss[i] = this.flow[i] * Math.max(tm - ff, 0) / 3600 * 7.5;
       this.cond[i] = (A.cond?.[i] ?? 1) * (1 - t) + (B.cond?.[i] ?? 1) * t;
       if (this.cap[i] < SHUT) shut.push(i);
     }
+    this.queue();
     const O = this.oflow.fill(0), I = this.iflow.fill(0);
     this.links.forEach((l, i) => { O[l.a] += this.flow[i]; I[l.b] += this.flow[i]; });
     let src = 0;
