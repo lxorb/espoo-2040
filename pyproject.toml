@@ -17,6 +17,11 @@ dependencies = [
 ]
 
 [dependency-groups]
+grpo = [
+    "peft>=0.21.3",
+    "torch>=2.15.0",
+    "transformers>=5.23.0",
+]
 micro = ["eclipse-sumo", "sumolib", "traci"]
 rl = ["torch"]
 
