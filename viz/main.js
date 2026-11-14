@@ -92,7 +92,8 @@ fetch('assets/district.json').then(r => r.json()).then(d => {
   for (const m of d.models || []) place(`assets/${m}`, false);
 }).catch(() => {});
 
-const runs = {}, get = who => runs[who] ||= fetch(`data/runs/${who}.json`).then(r => r.json());
+const file = who => fetch(`data/runs/${who}.json`).then(r => r.json()), start = file('nothing');
+const runs = {}, get = who => runs[who] ||= Promise.all([file(who), start]).then(([r, b]) => ({ ...r, y0: r.y0 - 1, years: [{ ...b.years[0], actions: [], works: [], new: [], open: [], events: [] }, ...r.years] }));
 const runList = fetch('data/runs/index.json').then(r => r.json()).then(all => Promise.all(all.map(r => fetch(`data/runs/${r}.json`, { method: 'HEAD' }).then(x => x.ok && r, () => false)))).then(ok => {
   const list = ok.filter(Boolean);
   const box = document.getElementById('runs');
@@ -101,7 +102,7 @@ const runList = fetch('data/runs/index.json').then(r => r.json()).then(all => Pr
   state.list = list;
   state.pair = list.slice(0, 2);
   state.split &&= state.pair.length === 2 && !state.who;
-  state.who ||= list[0];
+  state.who ||= list[1] || list[0];
   sync();
   return list;
 });
@@ -139,7 +140,7 @@ function sync() {
   play.classList.toggle('on', state.play);
   year.value = state.f;
   speed.textContent = `${state[rate()]}x`;
-  ylab.textContent = (state.run ? state.run.y0 : 2026) + Math.floor(state.f + 1e-6);
+  ylab.textContent = (state.run ? state.run.y0 : 2025) + Math.floor(state.f + 1e-6);
   const split = state.split && state.shown.length === 2;
   cut.hidden = !split;
   sides.forEach((e, k) => { e.hidden = !split; e.textContent = state.pair[k]?.toUpperCase() ?? ''; });
@@ -195,17 +196,21 @@ play.onclick = () => { state.play = !state.play; if (state.play && state.f >= +y
 addEventListener('keydown', e => {
   if (e.key.toLowerCase() === 's') toggleSplit();
   if (e.key === ' ') play.onclick();
+  if (e.key === 'o') go(2422, 7758, 0.052, HOME);
+  if (e.key === 'O') go(1626, 9935, 0.0411, HOME);
   const m = { 1: 'cars', 2: 'heat', 3: 'flow' }[e.key];
   if (m) { state.mode = m; apply(); }
 });
 
 const UI = ['modes', 'right', 'time', 'sl', 'sr', 'card'].map(id => document.getElementById(id));
 let tags = [], shown = [], espoo = null;
+const HOME = -Math.PI / 4, turn = () => controls.getAzimuthalAngle();
+const go = (x, y, z1 = Math.max(camera.zoom, 2.5), r1 = turn()) => { fly = { t: 0, a: controls.target.clone(), b: new THREE.Vector3(x, 0, -y), z0: camera.zoom, z1, r0: turn(), r1 }; };
 function label(text, x, y, h, cls) {
   const el = document.createElement('div');
   el.className = `lab ${cls}`;
   el.textContent = text;
-  el.ondblclick = () => { fly = { t: 0, a: controls.target.clone(), b: new THREE.Vector3(x, 0, -y), z0: camera.zoom, z1: Math.max(camera.zoom, 2.5) }; };
+  el[text === 'HYPE' ? 'onclick' : 'ondblclick'] = () => text === 'HYPE' ? go(x, y, 3, HOME) : go(x, y);
   document.getElementById('labels').append(el);
   return { el, p: new THREE.Vector3(x, h, -y) };
 }
@@ -277,9 +282,10 @@ let fly = null;
 function flying(dt) {
   fly.t = Math.min(fly.t + dt / 1.2, 1);
   const e = fly.t * fly.t * (3 - 2 * fly.t), p = fly.a.clone().lerp(fly.b, e);
-  camera.position.add(p.clone().sub(controls.target));
+  const d = fly.r1 - fly.r0;
   controls.target.copy(p);
-  camera.zoom = fly.z0 + (fly.z1 - fly.z0) * e;
+  camera.position.setFromSphericalCoords(60000 * Math.sqrt(3), controls.maxPolarAngle, fly.r0 + Math.atan2(Math.sin(d), Math.cos(d)) * e).add(p);
+  camera.zoom = fly.z0 * (fly.z1 / fly.z0) ** e;
   camera.updateProjectionMatrix();
   if (fly.t === 1) fly = null;
 }
@@ -450,7 +456,7 @@ settings([
   knob('fp', 'flow particles', 'range', [0.1, 1, 0.05], 1, v => { flowOpt.particles = v; }),
   knob('ft', 'flow trail', 'range', [0.25, 4, 0.05], 1, v => { flowOpt.trail = v; }),
   knob('fc', 'flow color', 'choice', ['relative', 'absolute'], 'relative', v => { flowOpt.abs = v === 'absolute'; }),
-  knob('cv', 'congestion against', 'choice', ['2026', 'free flow'], '2026', v => { flowOpt.free = v === 'free flow'; for (const m of nets) m.lastF = NaN; paint(); }),
+  knob('cb', 'congestion against', 'choice', ['2025', 'free flow'], '2025', v => { flowOpt.free = v === 'free flow'; for (const m of nets) m.lastF = NaN; paint(); }),
   knob('hb', 'heat background', 'range', [0.05, 1, 0.05], 0.2, v => { opt.heat = v; apply(); }),
   knob('fb', 'flow background', 'range', [0.02, 1, 0.01], 0.2, v => { opt.flow = v; apply(); }),
   knob('spy', 'seconds per year', 'range', [0.1, 5, 0.05], 0.35, v => { opt.tl = v; }),
