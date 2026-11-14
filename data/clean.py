@@ -1,15 +1,15 @@
 import hashlib
 import json
 import sys
-from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Pool
 
 import numpy as np
 import shapely
 from PIL import Image, ImageDraw
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
-from data.district import BG, TEX, call
-from data.facade import LOOKS, PROMPT
+from data.district import BG, DET, ROOT, TEX, buildings, call, glb, normals, prep, prism, save, tilebs
+from data.facade import LOOKS, PROMPT, at, cls, dress, parapet, roles, unfold
 
 CL = TEX / "clean"
 ROOFS = {"flat-dark": "dark grey bituminous roofing membrane laid in long parallel strips with faint welded seams",
@@ -62,20 +62,13 @@ def textures():
     jobs = [(f"clean_roof_{k}", Image.new("RGB", (1536, 1024), (128, 128, 128)), TILE.format(v), ref, True) for k, v in ROOFS.items()]
     jobs += [(f"clean_house_{k}", house(c), PROMPT.format(n=3, what="detached family houses", era="built between the 1960s and the 2000s", look=desc,
                                                          rail="no balconies") + " Each strip is one storey of a small Finnish wooden or masonry detached house.",
-              [TEX.parent.parent / "data/hype/hype_s.jpg"]) for k, (c, desc) in HOUSES.items()]
-    with ThreadPoolExecutor(4) as ex:
-        res = dict(zip([j[0] for j in jobs], ex.map(call, jobs)))
+              [ROOT / "data/hype/hype_s.jpg"]) for k, (c, desc) in HOUSES.items()]
+    res = {j[0]: call(j) for j in jobs}
     for k in ROOFS:
         seamless(res[f"clean_roof_{k}"]).save(CL / f"roof-{k}.webp", quality=82)
     for k in HOUSES:
         for row, y in enumerate((60, 400, 740)):
             res[f"clean_house_{k}"].crop((48, y, 48 + 480, y + (150 if row == 2 else 180))).resize((480, 180)).save(CL / f"house-{k}-{'gwm'[row]}.webp", quality=82)
-
-
-def cls(b):
-    g = b["style"][0]
-    return "big" if g in ("industry", "shed", "parking") or g == "shop" and b["foot"].area > 1500 else \
-        "res" if g in ("apt", "row", "house") else "com"
 
 
 def vary(path):
@@ -86,8 +79,6 @@ def vary(path):
 
 
 def modules():
-    from data.district import buildings
-    from data.facade import at, dress
     items = {it[0]: (sh["file"], it[1:5], it[5]) for sh in json.loads((TEX / "facade.json").read_text())["sheets"] for it in sh["items"]}
     fine, lib = {k.split(":")[0] for k in items}, []
     for b in buildings()[0]:
@@ -134,7 +125,7 @@ def modules():
     (CL / "mod.json").write_text(json.dumps(lib))
 
 
-DETC = TEX.parent.parent / "viz/data/detail-clean"
+DETC = DET.parent / "detail-clean"
 FLAT = {"res": ["flat-dark", "flat-light", "gravel"], "com": ["flat-dark", "flat-light", "gravel"], "big": ["industrial", "flat-light"]}
 PITCH = {"res": ["tile-red", "tile-brown", "tile-black", "shingle", "metal-grey", "metal-green", "metal-red"], "com": ["metal-grey", "tile-black", "metal-red"],
          "big": ["industrial", "metal-grey"]}
@@ -188,13 +179,11 @@ def chop(t, u, z):
 
 
 def tidy(b, small):
-    from data.district import prep, prism
     r = b["roof"]
     if not len(r) or b["foot"].is_empty:
         return
-    n = np.cross(r[:, 1] - r[:, 0], r[:, 2] - r[:, 0])
-    a = np.linalg.norm(n, axis=1) + 1e-9
-    n, p = n / a[:, None], n[:, 2] / a < 0.97
+    n, a = normals(r)
+    p = n[:, 2] < 0.97
     messy = len(r) > 6 + b["foot"].area / 15
     if p.sum():
         h = np.bincount(((np.arctan2(n[p, 1], n[p, 0]) + np.pi) / (np.pi / 4)).astype(int) % 8, a[p], 8)
@@ -213,7 +202,6 @@ def tidy(b, small):
 
 
 def dressup(b, lib, out):
-    from data.facade import roles, unfold
     c, g = cls(b), b["style"][0]
     c = "com" if c == "big" and b["h"] > 12 else c
     mat = "metal" if c == "big" and b["h"] < 15 else b["style"][2]
@@ -236,7 +224,6 @@ def dressup(b, lib, out):
         wid = {r: rec[r if r in rec else have[0]] for r in "mbegw"}
     fh, top = b["fh"], max(b["h"], 3)
     if b.get("parapet"):
-        from data.facade import parapet
         for w in b["walls"]:
             w["base"] = w["tris"]
             t, u = (np.array(x) for x in parapet(w))
@@ -254,8 +241,7 @@ def dressup(b, lib, out):
     r = b["roof"]
     if not len(r):
         return
-    n = np.cross(r[:, 1] - r[:, 0], r[:, 2] - r[:, 0])
-    n = n / (np.linalg.norm(n, axis=1, keepdims=True) + 1e-9)
+    n = normals(r)[0]
     fl = n[:, 2] > 0.97
     flat = pick(FLAT[c] + (["green"] if b["style"][1] == "new" and c == "res" and b["foot"].area < 2500 else []), "f")
     out(f"roof-{flat}", r[fl], r[fl][..., :2] * (1, -1) / (12 if flat == "industrial" else 8))
@@ -298,7 +284,6 @@ def decals(b, r, c, out):
 
 
 def model(bs, prefix="tex-"):
-    from data.district import glb
     lib, acc = {}, {}
     for rec in (r for r in json.loads((CL / "mod.json").read_text()) if set(r) & set("mbegw")):
         for key in ((rec["cls"], rec["mat"]), (rec["cls"], None), (None, None)):
@@ -310,24 +295,20 @@ def model(bs, prefix="tex-"):
 
 
 def tile(t):
-    from data.district import tilebs, save
     bs = tilebs(t)
     if data := model(bs):
         save(DETC / f"{t[0]}_{t[1]}.glb", data)
     return t, len(bs), len(data or b"")
 
 
-def tiles(*only):
-    from multiprocessing import Pool
-    from data.district import DET
+def tiles(procs="4", *names):
     DETC.mkdir(exist_ok=True)
     items()
     for f in CL.glob("*.webp"):
         (DETC / f"tex-{f.name}").write_bytes(f.read_bytes())
     done = json.loads((DET.parent / "detail.json").read_text())
-    names, n = [o for o in only if o[0] != "p"], int(next((o[1:] for o in only if o[0] == "p"), 4))
     todo = [tuple(x) for x in done["tiles"] if not names or f"{x[0]}_{x[1]}" in names]
-    with Pool(n) as p:
+    with Pool(int(procs)) as p:
         for r in p.imap_unordered(tile, todo):
             print(*r, flush=True)
     have = sorted(tuple(map(int, f.stem.split("_"))) for f in DETC.glob("*.glb"))

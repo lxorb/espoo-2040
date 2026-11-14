@@ -1,18 +1,20 @@
 import hashlib
 import json
 import sys
-from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import shapely
 from PIL import Image, ImageDraw, ImageFilter
 from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
-from data.district import BG, ERA, NEAR, RAW, ROOT, TEX, WHAT, buildings, call, pack, prep, prism, size
+from data.district import BG, NEAR, RAW, ROOT, TEX, buildings, call, normals, pack, prep, prism, size
 
-PICK = ["t-1521_1136", "1036850279", "1037184105", "103718423K", "1037865518", "1014164457", "101416423H", "101416429P",
-        "101426323V", "1003664713", "1014164479", "1038503111"]
 PPM = 22
+WHAT = {"house": "detached family houses", "row": "terraced row houses", "apt": "apartment blocks", "shop": "retail buildings",
+        "shed": "small outbuildings, storage sheds and garages", "office": "office buildings", "parking": "parking garages",
+        "public": "public buildings such as a school, day care centre or sports hall", "industry": "industrial halls and warehouses",
+        "transit": "metro station entrance and ventilation buildings"}
+ERA = {"old": "built in the 1970s and 1980s", "mid": "built in the 1990s and 2000s", "new": "built after 2010"}
 LOOKS = {"concrete": [((214, 212, 206), "light grey precast concrete sandwich panels with visible panel joints"),
                       ((230, 226, 216), "off-white washed exposed-aggregate concrete panels with visible panel joints"),
                       ((204, 196, 180), "light beige exposed-aggregate concrete panels with visible panel joints")],
@@ -40,9 +42,14 @@ RAILS = {"gr": "pale teal-grey bands = frameless glass balcony railings with the
          "sr": "dark grey bands = solid balcony parapet panels with the dark balcony recess and balcony door above them"}
 
 
+def cls(b):
+    g = b["style"][0]
+    return "big" if g in ("industry", "shed", "parking") or g == "shop" and b["foot"].area > 1500 else "res" if g in ("apt", "row", "house") else "com"
+
+
 def look(b):
-    g, era, mat = b["style"]
-    big = g in ("industry", "shed", "parking") or g == "shop" and b["foot"].area > 1500
+    _, era, mat = b["style"]
+    big = cls(b) == "big"
     mat = "metal" if big and b["h"] < 15 else mat
     opts = LOOKS[mat]
     return opts[int(hashlib.md5(b["id"].encode()).hexdigest(), 16) % len(opts)], big, "gr" if era == "new" else "sr"
@@ -164,10 +171,8 @@ def plan(b, w, role, big):
 
 
 def flat(b):
-    r = b["roof"]
-    n = np.cross(r[:, 1] - r[:, 0], r[:, 2] - r[:, 0]) if len(r) else np.zeros((0, 3))
-    a = np.linalg.norm(n, axis=1)
-    return len(r) > 0 and a[n[:, 2] > 0.97 * a].sum() > 0.8 * a.sum()
+    n, a = normals(b["roof"])
+    return len(a) > 0 and a[n[:, 2] > 0.97].sum() > 0.8 * a.sum()
 
 
 def small(b):
@@ -268,33 +273,23 @@ def layout(ws):
     return min(fits)[2:]
 
 
-def ranked(bs):
-    c = [b for b in bs if b["d"] < NEAR and not b["foot"].is_empty and b["walls"] and b["foot"].area > 100]
-    area = lambda b: sum((w["u1"] - w["u0"]) * (w["zt"] - w["z0"]) for w in b["walls"])
-    return sorted(c, key=lambda b: (b["id"] not in PICK, -area(b) / (b["d"] + 150)))
-
-
-def sheets(n, *only):
-    jobs, book = [], {"sheets": []}
-    for b in ranked(buildings()[0])[: int(n)]:
+def sheets():
+    book = {"sheets": []}
+    for b in buildings()[0]:
+        if b["d"] >= NEAR or b["foot"].is_empty or not b["walls"] or b["foot"].area <= 100:
+            continue
         dress(b)
-        ws = list(enumerate(b["walls"]))
         s, pos = layout(b["walls"])
         for pg in range(max(p[0] for p in pos) + 1):
             base, its = Image.new("RGB", (1536, 1024), BG), []
-            for (i, w), (p, x, y) in zip(ws, pos):
+            for i, (w, (p, x, y)) in enumerate(zip(b["walls"], pos)):
                 if p == pg:
                     base.paste(control(b, w, scale(w, s)), (x, y))
                     its.append([f"{b['id']}:{i}", x, y, x + size(w, scale(w, s))[0], y + size(w, scale(w, s))[1], scale(w, s)])
             name = "fac_" + hashlib.md5(json.dumps(its).encode() + bytes(np.asarray(base))).hexdigest()[:8]
             book["sheets"].append({"file": f"{name}.jpg", "items": its})
-            text = PROMPT.format(n=len(its), what=WHAT[b["style"][0]], era=ERA[b["style"][1]], look=b["look"][1], rail=RAILS[b["look"][3]])
-            jobs.append((name, base, text, sorted((RAW / "photos").glob(f"{b['style'][0]}_{b['style'][1]}*.jpg")) + [ROOT / "data/hype/hype_s.jpg"]))
-    for j in jobs:
-        j[1].save(RAW / f"{j[0]}_in.png")
-    jobs = [j for j in jobs if not only or j[0].startswith(only)]
-    with ThreadPoolExecutor(4) as ex:
-        list(ex.map(call, jobs))
+            call((name, base, PROMPT.format(n=len(its), what=WHAT[b["style"][0]], era=ERA[b["style"][1]], look=b["look"][1], rail=RAILS[b["look"][3]]),
+                  sorted((RAW / "photos").glob(f"{b['style'][0]}_{b['style'][1]}*.jpg")) + [ROOT / "data/hype/hype_s.jpg"]))
     (TEX / "facade.json").write_text(json.dumps(book))
 
 

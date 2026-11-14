@@ -1,5 +1,4 @@
 import numpy as np
-import trimesh
 from PIL import Image
 from shapely import constrained_delaunay_triangles
 from shapely.geometry import Polygon
@@ -62,16 +61,11 @@ def prism(poly, z0, z1, mat, cap=True):
     if not p.exterior.is_ccw:
         p = Polygon(list(p.exterior.coords)[::-1])
     ring = np.array(p.exterior.coords)[:-1]
-    verts, uvs, faces = [], [], []
-    run = 0.0
-    for i in range(len(ring)):
-        a, b = ring[i], ring[(i + 1) % len(ring)]
-        L = float(np.linalg.norm(b - a))
+    verts, faces = [], []
+    for a, b in zip(ring, np.roll(ring, -1, 0)):
         n = len(verts)
         verts += [(*a, z0), (*b, z0), (*b, z1), (*a, z1)]
-        uvs += [(run, z0), (run + L, z0), (run + L, z1), (run, z1)]
         faces += [(n, n + 1, n + 2), (n, n + 2, n + 3)]
-        run += L
     if cap:
         for t in constrained_delaunay_triangles(p).geoms:
             tri = np.array(t.exterior.coords)[:3]
@@ -81,9 +75,8 @@ def prism(poly, z0, z1, mat, cap=True):
             for z, order in ((z1, (0, 1, 2)), (z0, (0, 2, 1))):
                 n = len(verts)
                 verts += [(*tri[k], z) for k in order]
-                uvs += [tuple(tri[k]) for k in order]
                 faces.append((n, n + 1, n + 2))
-    parts.append((mat, np.array(verts), np.array(uvs), np.array(faces)))
+    parts.append((mat, np.array(verts), np.array(faces)))
 
 
 def box(u0, u1, v0, v1, z0, z1, mat, fr=H):
@@ -169,8 +162,7 @@ def parking():
 
 def merge(chunks):
     off = np.cumsum([0] + [len(c[1]) for c in chunks])[:-1]
-    return (np.vstack([c[1] for c in chunks]), np.vstack([c[2] for c in chunks]),
-            np.vstack([c[3] + k for c, k in zip(chunks, off)]))
+    return np.vstack([c[1] for c in chunks])[np.vstack([c[2] + k for c, k in zip(chunks, off)])]
 
 
 def local_frame(fr, v):
@@ -185,7 +177,7 @@ def side_uv(side, u, v, z, u0, u1, v0, v1, zt):
 
 
 def keys(group, chunks, tri, skin):
-    mats = np.concatenate([[c[0]] * len(c[3]) for c in chunks])
+    mats = np.concatenate([[c[0]] * len(c[2]) for c in chunks])
     if not skin or group not in SKINS or not all((TEX / f"{group}_{s}.jpg").exists() for s in SIDES):
         return mats
     fr, u0, u1, v0, v1, zt = SKINS[group]
@@ -202,32 +194,20 @@ def keys(group, chunks, tri, skin):
 
 def build(skin=True):
     parts.clear()
-    groups, scene = {}, trimesh.Scene()
+    prims, groups = [], {}
     for group, fn in (("hype", hype), ("parking", parking)):
         n = len(parts)
         fn()
         groups[group] = chunks = parts[n:]
-        tri, tuv = (lambda v, uv, f: (v[f], uv[f]))(*merge(chunks))
+        tri = merge(chunks)
         key = keys(group, chunks, tri, skin)
         for name in dict.fromkeys(key):
             t = tri[key == name].reshape(-1, 3)
-            if name in MATS:
-                r, g, b, metal, rough = MATS[name]
-                mat = trimesh.visual.material.PBRMaterial(name=name, baseColorFactor=[r, g, b, 1.0],
-                                                          metallicFactor=metal, roughnessFactor=rough)
-                tex = tuv[key == name].reshape(-1, 2)
-            else:
-                img = Image.open(TEX / f"{group}_{name}.jpg")
-                mat = trimesh.visual.material.PBRMaterial(name=name, baseColorTexture=img, metallicFactor=0.0)
-                tex = side_uv(name, *local_frame(SKINS[group][0], t), *SKINS[group][1:])
-            m = trimesh.Trimesh(np.c_[t[:, 0], t[:, 2], -t[:, 1]], np.arange(len(t)).reshape(-1, 3), process=False,
-                                visual=trimesh.visual.TextureVisuals(uv=tex, material=mat))
-            scene.add_geometry(m, node_name=f"{group}_{name}", geom_name=f"{group}_{name}")
-    return scene, groups
+            uv = None if name in MATS else side_uv(name, *local_frame(SKINS[group][0], t), *SKINS[group][1:]) * (1, -1) + (0, 1)
+            prims.append((MATS[name] if name in MATS else Image.open(TEX / f"{group}_{name}.jpg"), t, uv))
+    return prims, groups
 
 
 if __name__ == "__main__":
-    s, _ = build()
-    GLB.parent.mkdir(parents=True, exist_ok=True)
-    GLB.write_bytes(s.export(file_type="glb"))
-    print(GLB, sum(len(g.faces) for g in s.geometry.values()), "tris", GLB.stat().st_size, "bytes")
+    from data.district import glb
+    GLB.write_bytes(glb(build()[0], 75))

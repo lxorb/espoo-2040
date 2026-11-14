@@ -1,17 +1,13 @@
-import base64
-import json
 import sys
 from pathlib import Path
 
 import numpy as np
-import requests
 from PIL import Image, ImageFilter
 
+from data.district import BG, call
 from data.hype import MATS, SIDES, SKINS, TEX, local_frame, side_uv, build
 
 PPM = 24
-BG = (205, 214, 224)
-REF = Path(sys.argv[2]) if len(sys.argv) > 2 else None
 PHOTOS = {
     "hype_s": ["1564-ulkokuva-crisp2jpg-e1755686086271-1400x984.jpg", "hype_refe1.1-3.jpg"],
     "hype_w": ["hype_refe1.1-3.jpg", "1564-ulkokuva2-1000x838.jpg"],
@@ -82,7 +78,7 @@ def elevation(group, side, chunks):
     tall = v1 - v0 if side == "t" else zt
     w, h = round(span * PPM), round(tall * PPM)
     tris, cols = [], []
-    for mat, v, _, f in chunks:
+    for mat, v, f in chunks:
         tris.append(v[f])
         cols += [np.array(MATS[mat][:3]) * 255] * len(f)
     tris = np.vstack(tris)
@@ -96,45 +92,22 @@ def elevation(group, side, chunks):
     return Image.fromarray(img.astype(np.uint8))
 
 
-def fit(img):
+def canvas(img):
     w, h = img.size
     tw, th = (1536, 1024) if w >= h else (1024, 1536)
     s = min(tw / w, th / h)
-    canvas = Image.new("RGB", (tw, th), BG)
     nw, nh = round(w * s), round(h * s)
     box = ((tw - nw) // 2, (th - nh) // 2, (tw - nw) // 2 + nw, (th - nh) // 2 + nh)
-    canvas.paste(img.resize((nw, nh), Image.LANCZOS), box[:2])
-    return canvas, box
-
-
-def generate(key, model, group, side, chunks, out):
-    base = elevation(group, side, chunks)
-    base.save(out / f"{group}_{side}_ortho.png")
-    canvas, box = fit(base)
-    canvas.save(out / f"{group}_{side}_in.png")
-    files = [("image[]", ("base.png", open(out / f"{group}_{side}_in.png", "rb"), "image/png"))]
-    files += [("image[]", (p, open(REF / p, "rb"), "image/jpeg")) for p in PHOTOS[f"{group}_{side}"]]
-    data = {"model": model, "prompt": PROMPT.format(view=VIEW[side], what=WHAT[group]) + " " + NOTES[f"{group}_{side}"],
-            "size": f"{canvas.size[0]}x{canvas.size[1]}", "quality": "high", "n": "1"}
-    r = requests.post("https://api.openai.com/v1/images/edits", headers={"Authorization": f"Bearer {key}"},
-                      data=data, files=files, timeout=600)
-    j = r.json()
-    if "data" not in j:
-        raise SystemExit(json.dumps(j)[:800])
-    gen = Image.open(__import__("io").BytesIO(base64.b64decode(j["data"][0]["b64_json"]))).convert("RGB")
-    gen.save(out / f"{group}_{side}_raw.png")
-    tex = gen.resize(canvas.size, Image.LANCZOS).crop(box).resize(base.size, Image.LANCZOS)
-    print(group, side, "usage", json.dumps(j.get("usage")), flush=True)
-    return tex
+    out = Image.new("RGB", (tw, th), BG)
+    out.paste(img.resize((nw, nh), Image.LANCZOS), box[:2])
+    return out, box
 
 
 if __name__ == "__main__":
-    key = Path.home().joinpath(".secrets/agent-secrets/openai.txt").read_text().strip()
-    model, out = sys.argv[1], Path(sys.argv[3])
-    only = sys.argv[4:] or [f"{g}_{s}" for g in SKINS for s in SIDES]
-    _, groups = build(skin=False)
-    TEX.mkdir(exist_ok=True)
-    for name in only:
+    ref, groups = Path(sys.argv[1]), build(skin=False)[1]
+    for name in sys.argv[2:] or [f"{g}_{s}" for g in SKINS for s in SIDES]:
         group, side = name.split("_")
-        tex = generate(key, model, group, side, groups[group], out)
-        tex.save(TEX / f"{group}_{side}.jpg", quality=88)
+        base = elevation(group, side, groups[group])
+        img, box = canvas(base)
+        text = PROMPT.format(view=VIEW[side], what=WHAT[group]) + " " + NOTES[name]
+        call((f"hypetex_{name}", img, text, [ref / p for p in PHOTOS[name]], True)).crop(box).resize(base.size, Image.LANCZOS).save(TEX / f"{name}.jpg", quality=88)

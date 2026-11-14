@@ -1,16 +1,15 @@
-import base64, gzip, hashlib, io, json, re, struct, sys, time
+import base64, gzip, io, json, re, struct, sys, time
 import xml.etree.ElementTree as ET
-from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
 import requests
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
-from pyproj import Transformer
 import shapely
+from PIL import Image, ImageEnhance, ImageFilter
+from pyproj import Transformer
 from shapely import constrained_delaunay_triangles
-from shapely.geometry import LineString, Point, Polygon, box
+from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 from data.geo import ROOT, VIZ
 from data.hype import HYPE_NW, HYPE_SE, HYPE_SW, PARKING
@@ -23,9 +22,9 @@ NEAR, FAR, TS = 600, 1500, 1000
 OWN = unary_union([Polygon([HYPE_SW, HYPE_SE, (HYPE_SE[0] + HYPE_NW[0] - HYPE_SW[0], HYPE_SE[1] + HYPE_NW[1] - HYPE_SW[1]), HYPE_NW]), Polygon(PARKING)]).buffer(3)
 DIST = (C - 1560, 0.3, 10400)
 GK, KG = Transformer.from_crs(3879, 3067, always_xy=True), Transformer.from_crs(3067, 3879, always_xy=True)
-NS = {"gml": "http://www.opengis.net/gml", "bldg": "http://www.opengis.net/citygml/building/2.0",
-      "gen": "http://www.opengis.net/citygml/generics/2.0"}
-Image.MAX_IMAGE_PIXELS, POOL = None, 4
+NS = {"gml": "http://www.opengis.net/gml", "bldg": "http://www.opengis.net/citygml/building/2.0", "gen": "http://www.opengis.net/citygml/generics/2.0"}
+BG = (205, 214, 224)
+Image.MAX_IMAGE_PIXELS = None
 
 
 def get(url, ok, **params):
@@ -51,8 +50,7 @@ def read(path):
 
 def wfs(path, x0, y0, x1, y1):
     for name, typ, ver in (("lod2", "bldg:building_lod2", "1.1.0"), ("kanta", "kanta:Rakennus", "1.0.0")):
-        p = path(name)
-        if not p.exists():
+        if not (p := path(name)).exists():
             a, b = KG.transform(*np.array([[x0, x1, x0, x1], [y0, y0, y1, y1]]) + E0[:, None])
             data = get(WFS, lambda c: b"FeatureCollection" in c[:3000], SERVICE="WFS", VERSION=ver, REQUEST="GetFeature",
                        TYPENAME=typ, SRSNAME="EPSG:3879", BBOX=f"{min(a):.0f},{min(b):.0f},{max(a):.0f},{max(b):.0f}")
@@ -60,22 +58,18 @@ def wfs(path, x0, y0, x1, y1):
 
 
 def ortho(path, o, px, n):
-    if path.exists():
-        return Image.open(path), (o, px, n)
-    k = -(-n // 2080)
-    img, step = Image.new("RGB", (n, n)), n // k
-
-    def one(ij):
-        e, s = o + E0 + (ij[0] * step * px, (n - (ij[1] + 1) * step) * px)
-        img.paste(Image.open(io.BytesIO(get(WMS, lambda c: c[:1] != b"<", SERVICE="WMS", VERSION="1.1.1",
-                  REQUEST="GetMap", LAYERS="Ortokartta", STYLES="", SRS="EPSG:3067", FORMAT="image/jpeg", WIDTH=step,
-                  HEIGHT=step, BBOX=f"{e},{s},{e + step * px},{s + step * px}"))).convert("RGB"), (ij[0] * step, ij[1] * step))
-
-    with ThreadPoolExecutor(POOL) as ex:
-        list(ex.map(one, [(i, j) for i in range(k) for j in range(k)]))
-    img.save(buf := io.BytesIO(), "JPEG", quality=90)
-    save(path, buf.getvalue())
-    return img, (o, px, n)
+    if not path.exists():
+        k = -(-n // 2080)
+        img, step = Image.new("RGB", (n, n)), n // k
+        for i in range(k):
+            for j in range(k):
+                e, s = o + E0 + (i * step * px, (n - (j + 1) * step) * px)
+                img.paste(Image.open(io.BytesIO(get(WMS, lambda c: c[:1] != b"<", SERVICE="WMS", VERSION="1.1.1", REQUEST="GetMap", LAYERS="Ortokartta",
+                                                     STYLES="", SRS="EPSG:3067", FORMAT="image/jpeg", WIDTH=step, HEIGHT=step,
+                                                     BBOX=f"{e},{s},{e + step * px},{s + step * px}"))).convert("RGB"), (i * step, j * step))
+        img.save(buf := io.BytesIO(), "JPEG", quality=90)
+        save(path, buf.getvalue())
+    return Image.open(path), (o, px, n)
 
 
 def parse(lod, kanta):
@@ -110,15 +104,18 @@ GROUPS = [("house", "Omakoti|Pari|Sauna|vapaa-ajan"), ("row", "Rivi"), ("apt", "
 BKIND = {"residential": "house", "apartments": "apt", "commercial": "shop", "industrial": "industry", "public": "public",
          "garage": "parking", "other": "shed"}
 MAT = {"puu": "wood", "tiili": "brick", "betoni": "concrete", "metallilevy": "metal"}
-TINT = {"wood": (196, 170, 128), "brick": (160, 96, 78), "concrete": (200, 198, 192), "metal": (150, 156, 162),
-        "render": (222, 214, 196)}
-BG = (205, 214, 224)
 
 
 def style(b):
     g = b["use"] if b["use"] in BKIND.values() else next((g for g, p in GROUPS if re.search(p, b["use"])),
                                                          "apt" if b["floors"] >= 3 else "industry" if not b["use"] and b["h"] > 7 else "shed")
     return g, "old" if b["year"] < 1990 else "mid" if b["year"] < 2010 else "new", MAT.get(b["mat"], "render")
+
+
+def normals(r):
+    n = np.cross(r[:, 1] - r[:, 0], r[:, 2] - r[:, 0]) if len(r) else np.zeros((0, 3))
+    a = np.linalg.norm(n, axis=1) + 1e-9
+    return n / a[:, None], a
 
 
 def triangulate(rings):
@@ -182,7 +179,7 @@ def prep(b):
     eu = (eu := max((mrr[1] - mrr[0], mrr[2] - mrr[1]), key=np.linalg.norm)) / (np.linalg.norm(eu) or 1)
     axes = [eu, np.array([-eu[1], eu[0]]), -eu, np.array([eu[1], -eu[0]])]
     tops = [(Polygon(r[0][:, :2]).buffer(0), r[0][:, 2].max()) for k, r in faces if k == "R" and len(r[0]) > 2]
-    sides, roof = [{"e": axes[(k + 1) % 4], "tris": [], "rings": []} for k in range(4)], []
+    sides, roof = [{"e": axes[(k + 1) % 4], "tris": []} for k in range(4)], []
     for k, rs in faces:
         rs = [np.c_[r[:, :2], np.maximum(r[:, 2], 0)] for r in rs]
         t, n = triangulate(rs)
@@ -192,9 +189,7 @@ def prep(b):
             q = Point(rs[0][:, :2].mean(0) + 0.4 * n[:2] / (np.linalg.norm(n[:2]) or 1))
             if any(z > rs[0][:, 2].mean() and p.contains(q) for p, z in tops):
                 t, n = t[:, ::-1], -n
-            w = sides[int(np.argmax([n[:2] @ x for x in axes]))]
-            w["tris"].append(t)
-            w["rings"].append(rs[0])
+            sides[int(np.argmax([n[:2] @ x for x in axes]))]["tris"].append(t)
     b["walls"] = [w for w in sides if w["tris"]]
     for w in b["walls"]:
         w["tris"] = np.vstack(w["tris"])
@@ -236,17 +231,6 @@ def size(f, s):
     return int(np.ceil((f["u1"] - f["u0"]) * s)) + 1, int(np.ceil((f["zt"] - f["z0"]) * s)) + 1
 
 
-def draw(b, f, s, bg=None):
-    (w, h), col = size(f, s), TINT[b["style"][2]]
-    im, m = Image.new("RGB", (w, h), col), Image.new("L", (w, h), 0)
-    for z in np.arange(b["fh"], f["zt"], b["fh"]):
-        ImageDraw.Draw(im).line([(0, (f["zt"] - z) * s), (w, (f["zt"] - z) * s)], fill=tuple(int(c * 0.75) for c in col))
-    for r in f["rings"]:
-        ImageDraw.Draw(m).polygon([((p[:2] @ f["e"] - f["u0"]) * s, (f["zt"] - p[2]) * s) for p in r], fill=255, outline=255)
-    im = Image.composite(Image.new("RGB", (w, h), (70, 70, 70)), im, m.filter(ImageFilter.FIND_EDGES))
-    return Image.composite(im, Image.new("RGB", (w, h), bg or col), m if bg else Image.new("L", (w, h), 255))
-
-
 def ortho_px(v, o):
     return np.stack([(v[..., 0] - o[0][0]) / o[1], o[2] - (v[..., 1] - o[0][1]) / o[1]], -1)
 
@@ -265,34 +249,28 @@ def bake(b, f, s, sw):
 
 
 def library():
-    lib = json.loads((TEX / "lib.json").read_text()) if (TEX / "lib.json").exists() else {}
-    for v in lib.values():
-        v[:] = [dict(sw, img=np.asarray(Image.open(TEX / sw["file"]).convert("RGB"))) for sw in v if (TEX / sw["file"]).exists()]
-    return {k: v for k, v in lib.items() if v}
+    return {k: [dict(sw, img=np.asarray(Image.open(TEX / sw["file"]).convert("RGB"))) for sw in v] for k, v in json.loads((TEX / "lib.json").read_text()).items()}
 
 
 def pick(lib, st, seed):
-    for k in ("/".join(st), *(k for k in lib if k.startswith(f"{st[0]}/") and k.endswith(st[2])),
-              *(k for k in lib if k.startswith(f"{st[0]}/")), "apt/old/concrete"):
+    for k in ("/".join(st), *(k for k in lib if k.startswith(f"{st[0]}/") and k.endswith(st[2])), *(k for k in lib if k.startswith(f"{st[0]}/")), "apt/old/concrete"):
         if k in lib:
             return lib[k][seed % len(lib[k])]
 
 
-def model(bs, lib, ortho, A, f=1.0, pages=99, crops={}, far=0.6):
+def model(bs, lib, ortho, A, f=1.0, pages=99, crops={}):
     jobs, (img, o) = [], ortho
     for b in bs:
-        near = b["d"] < NEAR
         if len(b["roof"]):
             q = ortho_px(b["roof"], o)
             lo, hi = np.floor(q.reshape(-1, 2).min(0)) - 1, np.ceil(q.reshape(-1, 2).max(0)) + 1
-            k = min(f * o[1] / (0.1 if f"{b['id']}:r" in crops else 0.3 if near else far), (A - 16) / max(hi - lo))
+            k = min(f * o[1] / (0.1 if f"{b['id']}:r" in crops else 0.3), (A - 16) / max(hi - lo))
             jobs.append((b, None, (lo, k), *np.ceil((hi - lo) * k).astype(int)))
         for i, w in enumerate(b["walls"]):
             c = crops.get(f"{b['id']}:{i}", ())
-            s = min(f * (c[2] if len(c) > 2 else 7 if near else 3), (A - 16) / max(w["u1"] - w["u0"], 1))
+            s = min(f * (c[2] if len(c) > 2 else 7 if b["d"] < NEAR else 3), (A - 16) / max(w["u1"] - w["u0"], 1))
             jobs.append((b, i, s, *size(w, s)))
-    pos = pack([j[3:] for j in jobs], A, A, pages=pages)
-    if pos is None:
+    if (pos := pack([j[3:] for j in jobs], A, A, pages=pages)) is None:
         return None
     out = [(Image.new("RGB", (A, A), (128, 128, 128)), [], []) for _ in range(max([p[0] for p in pos], default=0) + 1)]
     for (b, i, s, w, h), (pg, x, y) in zip(jobs, pos):
@@ -304,8 +282,7 @@ def model(bs, lib, ortho, A, f=1.0, pages=99, crops={}, far=0.6):
             px = (ortho_px(t, o) - lo) * k + (x, y)
         else:
             wl, t = b["walls"][i], b["walls"][i]["tris"]
-            sw = pick(lib, b["style"], sum(map(ord, b["id"])))
-            im = bake(b, wl, s, sw) if sw else draw(b, wl, s)
+            im = bake(b, wl, s, pick(lib, b["style"], sum(map(ord, b["id"]))))
             px = np.stack([(wl["u"] if "u" in wl else t[..., :2] @ wl["e"]) * s - wl["u0"] * s + x, (wl["zt"] - t[..., 2]) * s + y], -1)
         if key in crops:
             im = Image.open(TEX / crops[key][0]).crop(tuple(crops[key][1])).resize((w, h), Image.LANCZOS)
@@ -318,53 +295,58 @@ def model(bs, lib, ortho, A, f=1.0, pages=99, crops={}, far=0.6):
     return [(p, np.vstack(v), np.vstack(uv)) for p, v, uv in out if v]
 
 
-def glb(prims, q=84):
+def glb(prims, q=85):
     lo = np.min([v.min(0) for _, v, _ in prims], 0)
     span = np.maximum(np.max([v.max(0) for _, v, _ in prims], 0) - lo, 1e-3)
-    views, acc, prim, bins = [], [], [], []
+    views, acc, prim, bins, images, mats = [], [], [], [], [], []
 
     def view(data, **kw):
         views.append({"buffer": 0, "byteOffset": sum(map(len, bins)), "byteLength": len(data), **kw})
         bins.append(data + b"\0" * (-len(data) % 4))
         return len(views) - 1
 
-    images = []
-    for n, (img, v, uv) in enumerate(prims):
+    for img, v, uv in prims:
         ext = isinstance(img, str)
-        if not ext:
-            img.save(buf := io.BytesIO(), "JPEG", quality=q)
-        images.append({"uri": img} if ext else {"bufferView": view(buf.getvalue()), "mimeType": "image/jpeg"})
+        if isinstance(img, tuple):
+            m = {"pbrMetallicRoughness": {"baseColorFactor": [*img[:3], 1.0], "metallicFactor": img[3], "roughnessFactor": img[4]}}
+            uv = np.zeros((len(v), 0))
+        else:
+            if not ext:
+                img.save(buf := io.BytesIO(), "JPEG", quality=q)
+            images.append({"uri": img} if ext else {"bufferView": view(buf.getvalue()), "mimeType": "image/jpeg"})
+            m = {"pbrMetallicRoughness": {"baseColorTexture": {"index": len(images) - 1}, "metallicFactor": 0, "roughnessFactor": 0.9}}
+            uv = uv if ext else np.round(np.clip(uv, 0, 1) * 65535)
+        mats += [m] if m not in mats else []
         w = (v - lo) / span * (1, -1, 1) + (0, 1, 0)
-        a, ix = np.unique(np.c_[np.round(np.c_[w[:, [0, 2, 1]], 0 * w[:, 0]] * 65535), uv if ext else np.round(np.clip(uv, 0, 1) * 65535)], axis=0, return_inverse=True)
+        a, ix = np.unique(np.c_[np.round(np.c_[w[:, [0, 2, 1]], 0 * w[:, 0]] * 65535), uv], axis=0, return_inverse=True)
         ix, t = ix.ravel().astype(np.uint16 if len(a) < 65536 else np.uint32), a[:, 4:].astype(np.float32 if ext else np.uint16)
         acc += [{"bufferView": view(ix.tobytes(), target=34963), "componentType": 5121 + ix.itemsize, "count": len(ix), "type": "SCALAR"},
                 {"bufferView": view(a[:, :4].astype(np.uint16).tobytes(), byteStride=8, target=34962), "componentType": 5123, "normalized": True,
-                 "count": len(a), "type": "VEC3", "min": a[:, :3].min(0).tolist(), "max": a[:, :3].max(0).tolist()},
-                {"bufferView": view(t.tobytes(), target=34962), "componentType": 5126 if ext else 5123, "normalized": not ext, "count": len(a), "type": "VEC2"}]
-        prim.append({"material": n, "indices": len(acc) - 3, "attributes": {"POSITION": len(acc) - 2, "TEXCOORD_0": len(acc) - 1}})
+                 "count": len(a), "type": "VEC3", "min": a[:, :3].min(0).tolist(), "max": a[:, :3].max(0).tolist()}]
+        attr = {"POSITION": len(acc) - 1}
+        if t.shape[1]:
+            acc.append({"bufferView": view(t.tobytes(), target=34962), "componentType": 5126 if ext else 5123, "normalized": not ext, "count": len(a), "type": "VEC2"})
+            attr["TEXCOORD_0"] = len(acc) - 1
+        prim.append({"material": mats.index(m), "indices": attr["POSITION"] - 1, "attributes": attr})
     js = {"asset": {"version": "2.0"}, "extensionsUsed": ["KHR_mesh_quantization"], "extensionsRequired": ["KHR_mesh_quantization"], "scene": 0,
           "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0, "translation": [lo[0], lo[2], -lo[1] - span[1]], "scale": [span[0], span[2], span[1]]}],
-          "meshes": [{"primitives": prim}], "images": images,
-          "materials": [{"pbrMetallicRoughness": {"baseColorTexture": {"index": n}, "metallicFactor": 0, "roughnessFactor": 0.9}} for n in range(len(prim))],
-          "textures": [{"sampler": 0, "source": n} for n in range(len(prim))], "samplers": [{"magFilter": 9729, "minFilter": 9987}], "accessors": acc,
-          "bufferViews": views, "buffers": [{"byteLength": len(body := b"".join(bins))}]}
+          "meshes": [{"primitives": prim}], "images": images, "materials": mats, "textures": [{"sampler": 0, "source": n} for n in range(len(images))],
+          "samplers": [{"magFilter": 9729, "minFilter": 9987}], "accessors": acc, "bufferViews": views, "buffers": [{"byteLength": len(body := b"".join(bins))}]}
     head = (lambda h: h + b" " * (-len(h) % 4))(json.dumps(js, separators=(",", ":")).encode())
     return struct.pack("<4sIII4s", b"glTF", 2, 28 + len(head) + len(body), len(head), b"JSON") + head + struct.pack("<I4s", len(body), b"BIN\0") + body
 
 
 def build():
+    from data.clean import model as clean
     from data.facade import dress, plain, small
     bs, rings = buildings()
-    sheets = [sh for f in ("near.json", "facade.json") if (TEX / f).exists() for sh in json.loads((TEX / f).read_text())["sheets"] if (TEX / sh["file"]).exists()]
-    crops = {it[0]: (sh["file"], it[1:5], *it[5:]) for sh in sheets for it in sh["items"]}
-    fine = {k.split(":")[0] for k, v in crops.items() if len(v) > 2}
-    lib, o, files = library(), ortho(RAW / "ortho.jpg", *DIST), []
+    crops = {it[0]: (sh["file"], it[1:5], *it[5:]) for f in ("near.json", "facade.json") for sh in json.loads((TEX / f).read_text())["sheets"] for it in sh["items"]}
+    fine, lib, o, files = {k.split(":")[0] for k, v in crops.items() if len(v) > 2}, library(), ortho(RAW / "ortho.jpg", *DIST), []
     for b in bs:
         if b["id"] in fine:
             dress(b)
         elif b["d"] < NEAR and small(b):
             b["plain"] = plain(b)
-    from data.clean import model as clean
     if outer := clean([b for b in bs if b["id"] not in fine and b["d"] >= NEAR], "../data/detail-clean/tex-"):
         (OUT / "district-outer.glb").write_bytes(outer)
         files.append("district-outer.glb")
@@ -373,71 +355,37 @@ def build():
         for k in range(0, len(prims), 5):
             files.append(name if len(prims) <= 5 else name.replace(".glb", f"-{k // 5}.glb"))
             (OUT / files[-1]).write_bytes(glb(prims[k:k + 5]))
-            print(files[-1], len(part), sum(len(v) // 3 for _, v, _ in prims[k:k + 5]), "tris")
-    hide = [list(np.round(np.array(p.exterior.coords)[:-1], 1).ravel()) for b in bs
-            for p in getattr(b["foot"], "geoms", [b["foot"]]) if not p.is_empty] + rings
+    hide = [list(np.round(np.array(p.exterior.coords)[:-1], 1).ravel()) for b in bs for p in getattr(b["foot"], "geoms", [b["foot"]]) if not p.is_empty] + rings
     (OUT / "district.json").write_text(json.dumps({"models": files, "hide": hide}, separators=(",", ":")))
 
 
-def tilebs(t, keep=lambda d: d >= FAR):
+def tilebs(t):
     i, j = t
     wfs(lambda name: RAW / f"tiles/{name}_{i}_{j}.xml.gz", i * TS, j * TS, (i + 1) * TS, (j + 1) * TS)
     bs = [prep(b) for b in parse(read(RAW / f"tiles/lod2_{i}_{j}.xml.gz"), read(RAW / f"tiles/kanta_{i}_{j}.xml.gz"))]
     foot = [b["foot"] for b in bs]
-    bs = [b for b in bs if (len(b["roof"]) or b["walls"]) and keep(b["d"]) and np.all(b["c"] // TS == t)]
-    return bs + [prep(b) for b in residual(foot, [t], lambda c: keep(np.hypot(*(c - C))))[0]]
+    bs = [b for b in bs if (len(b["roof"]) or b["walls"]) and b["d"] >= FAR and np.all(b["c"] // TS == t)]
+    return bs + [prep(b) for b in residual(foot, [t], lambda c: np.hypot(*(c - C)) >= FAR)[0]]
 
 
 def tile(t):
-    i, j = t
-    bs = tilebs(t)
-    if bs:
-        o = ortho(RAW / f"tiles/o_{i}_{j}.jpg", np.array(t) * TS - 100.0, 0.3, 4000)
-        prims = next(m for A, f in [(512, 1), (1024, 1), (2048, 1)] + [(4096, 0.9 ** k) for k in range(40)] if (m := model(bs, LIB, o, A, f, 1, far=0.3)))
-        save(DET / f"{i}_{j}.glb", glb(prims, 85))
-    return t, len(bs), sum(b["id"][0] != "t" for b in bs), sum(len(v) // 3 for _, v, _ in prims) if bs else 0
+    if bs := tilebs(t):
+        o, lib = ortho(RAW / f"tiles/o_{t[0]}_{t[1]}.jpg", np.array(t) * TS - 100.0, 0.3, 4000), library()
+        prims = next(m for A, f in [(512, 1), (1024, 1), (2048, 1)] + [(4096, 0.9 ** k) for k in range(40)] if (m := model(bs, lib, o, A, f, 1)))
+        save(DET / f"{t[0]}_{t[1]}.glb", glb(prims))
+    return t, len(bs)
 
 
-def tiles(*only):
-    global LIB, POOL
-    LIB, POOL = library(), 1
+def tiles():
     for d in (RAW / "tiles", DET):
         d.mkdir(exist_ok=True)
     zone = Polygon(np.array(json.loads((VIZ / "overview.json").read_text())["border"][0]).reshape(-1, 2)).buffer(500)
-    todo = [t for t in json.loads((VIZ / "tiles.json").read_text())["tiles"] if zone.intersects(box(*np.array(t) * TS, *(np.array(t) + 1) * TS))]
-    todo = [t for t in todo if not only or f"{t[0]}_{t[1]}" in only]
-    t0, road = time.time(), LineString([C, (8165, 2929)])
     with Pool(4) as p:
-        for n, r in enumerate(p.imap_unordered(tile, sorted(todo, key=lambda t: road.distance(Point((np.array(t) + 0.5) * TS))))):
-            print(*r, f"{time.time() - t0:.0f}s", flush=True)
-            if n % 50 == 49 or n == len(todo) - 1:
-                done = sorted(tuple(map(int, f.stem.split("_"))) for f in DET.glob("*.glb"))
-                part = [t for t in done if box(t[0] * TS, t[1] * TS, (t[0] + 1) * TS, (t[1] + 1) * TS).intersects(Point(C).buffer(FAR + 50))]
-                (VIZ / "detail.json").write_text(json.dumps({"size": TS, "tiles": done, "partial": part}, separators=(",", ":")))
-
-
-WHAT = {"house": "detached family houses", "row": "terraced row houses", "apt": "apartment blocks", "shop": "retail buildings",
-        "shed": "small outbuildings, storage sheds and garages", "office": "office buildings", "parking": "parking garages",
-        "public": "public buildings such as a school, day care centre or sports hall", "industry": "industrial halls and warehouses",
-        "transit": "metro station entrance and ventilation buildings"}
-ERA = {"old": "built in the 1970s and 1980s", "mid": "built in the 1990s and 2000s", "new": "built after 2010"}
-SKIN = {"wood": "painted timber board cladding", "brick": "brick", "concrete": "white or light grey precast concrete panels",
-        "metal": "profiled metal sheet cladding", "render": "rendered or mixed panel cladding"}
-RULES = "Keep every shape's outline, size and position exactly; do not add, merge, move or resize shapes and keep the flat pale blue-grey background untouched. "
-ROOF = ("The first image shows {} separate blurry low resolution aerial orthophoto crops of building roofs in Kivenlahti, Espoo, Finland, each seen "
-        "exactly from straight above. Redraw every roof as a crisp, clean, high resolution architectural illustration of the very same roof in the style "
-        "of the last reference image: keep its layout and every object on it (solar panels, vents, skylights, hatches, parapets, roof edges, railings), "
-        "keep the roofing material and its colours, remove all shadows, tree canopies, cars, blur and noise, and do not add or remove any large objects. "
-        + RULES + "Strictly top-down orthographic view, soft even light, no text.")
-
-
-def prompt(st, what):
-    return (f"The first image shows {what} of {WHAT[st[0]]} in Kivenlahti, Espoo, Finland, {ERA[st[1]]}, with {SKIN[st[2]]} facades. Each flat-coloured "
-            "shape is one wall seen exactly straight-on with its bottom edge at ground level; thin dark lines mark the floor levels. Repaint every shape as "
-            "a realistic photographic facade texture typical of such Finnish buildings: windows aligned to the floor lines, entrances only along the bottom "
-            "edge, balconies, drainpipes and a plinth where typical. " + RULES + "Perfectly straight-on with no perspective, soft even overcast daylight, "
-            "no cast shadows, no sky, no people, no cars, no trees or plants in front, no text, no signs, no logos." + (" The other images are real "
-            "photographs of such buildings in Kivenlahti for material and colour reference only." if st[0] in ("apt", "transit") else ""))
+        for r in p.imap_unordered(tile, [t for t in json.loads((VIZ / "tiles.json").read_text())["tiles"] if zone.intersects(box(*np.array(t) * TS, *(np.array(t) + 1) * TS))]):
+            print(*r, flush=True)
+    done = sorted(tuple(map(int, f.stem.split("_"))) for f in DET.glob("*.glb"))
+    part = [t for t in done if box(t[0] * TS, t[1] * TS, (t[0] + 1) * TS, (t[1] + 1) * TS).intersects(Point(C).buffer(FAR + 50))]
+    (VIZ / "detail.json").write_text(json.dumps({"size": TS, "tiles": done, "partial": part}, separators=(",", ":")))
 
 
 def fit(out, base):
@@ -455,82 +403,18 @@ def call(job):
     key = Path.home().joinpath(".secrets/agent-secrets/openai.txt").read_text().strip()
     for _ in range(20):
         r = requests.post("https://api.openai.com/v1/images/edits", headers={"Authorization": f"Bearer {key}"},
-                          data={"model": "gpt-image-2.6-flare", "prompt": text, "size": "1536x1024", "quality": "high"},
+                          data={"model": "gpt-image-2.6-flare", "prompt": text, "size": "%dx%d" % img.size, "quality": "high"},
                           files=[("image[]", ("base.png", buf.getvalue(), "image/png"))] +
-                          [("image[]", (p.name, p.read_bytes(), "image/png" if p.suffix == ".png" else "image/jpeg")) for p in refs],
-                          timeout=900).json()
+                          [("image[]", (p.name, p.read_bytes(), "image/png" if p.suffix == ".png" else "image/jpeg")) for p in refs], timeout=900).json()
         with open(RAW / "usage.jsonl", "a") as f:
             f.write(json.dumps({"name": name, "usage": r.get("usage"), "error": r.get("error")}) + "\n")
         if "data" in r:
             break
         time.sleep(30)
-    out = Image.open(io.BytesIO(base64.b64decode(r["data"][0]["b64_json"]))).convert("RGB").resize((1536, 1024))
+    out = Image.open(io.BytesIO(base64.b64decode(r["data"][0]["b64_json"]))).convert("RGB").resize(img.size)
     out = out if raw else fit(out, img)
     out.save(TEX / f"{name}.jpg", quality=90)
     return out
-
-
-def roofshot(b, o, img):
-    q = ortho_px(b["roof"], o)
-    lo, hi = np.floor(q.reshape(-1, 2).min(0)) - 1, np.ceil(q.reshape(-1, 2).max(0)) + 1
-    m = Image.new("L", tuple((hi - lo).astype(int)), 0)
-    for t in q - lo:
-        ImageDraw.Draw(m).polygon([tuple(p) for p in t], fill=255)
-    m = m.filter(ImageFilter.MaxFilter(5))
-    return (hi - lo) * o[1], lambda s: Image.composite(img.crop((*lo.astype(int), *hi.astype(int))), Image.new("RGB", m.size, BG), m) \
-        .resize(tuple(np.ceil((hi - lo) * o[1] * s).astype(int) + 1), Image.LANCZOS)
-
-
-def sheets(*only):
-    bs, _ = buildings()
-    img, o = ortho(RAW / "ortho.jpg", *DIST)
-    own = lambda b: b["d"] < NEAR and b["id"][0] not in "tx" and (b["style"][0] != "shed" or b["foot"].area > 150)
-    ang, photos = lambda b: round(np.arctan2(*(b["c"] - C)), 1), lambda st: sorted((RAW / "photos").glob(f"{st[0]}_{st[1]}*.jpg"))
-    walls = sorted(((b, i, f) for b in bs if own(b) for i, f in enumerate(b["walls"])), key=lambda t: (t[0]["style"][::2], ang(t[0]), t[0]["id"], t[1]))
-    items = [(f"{b['id']}:{i}", b["style"][::2], (lambda s, f=f: size(f, s)), (lambda s, b=b, f=f: draw(b, f, s, BG)), b) for b, i, f in walls]
-    for b in sorted((b for b in bs if own(b) and len(b["roof"])), key=lambda b: (ang(b), b["id"])):
-        wh, render = roofshot(b, o, img)
-        items.append((f"{b['id']}:r", "roof", (lambda s, wh=wh: tuple(int(v) + 1 for v in np.ceil(wh * s))), render, b))
-    groups = [[]]
-    for it in items:
-        if groups[-1] and (groups[-1][0][1] != it[1] or not pack([c[2](12) for c in groups[-1] + [it]], 1536, 1024, 8, 1)):
-            groups.append([])
-        groups[-1].append(it)
-    jobs, layout, lib = [], {"sheets": []}, {}
-    for g in groups:
-        s = next(s for s in range(16, 0, -1) if pack([c[2](s) for c in g], 1536, 1024, 8, 1))
-        pos, base = pack([c[2](s) for c in g], 1536, 1024, 8, 1), Image.new("RGB", (1536, 1024), BG)
-        for c, (_, x, y) in zip(g, pos):
-            base.paste(c[3](s), (x, y))
-        its = [[c[0], x, y, x + c[2](s)[0], y + c[2](s)[1]] for c, (_, x, y) in zip(g, pos)]
-        name = ("roof_" if g[0][1] == "roof" else "near_") + hashlib.md5(json.dumps(its).encode()).hexdigest()[:8]
-        layout["sheets"].append({"file": f"{name}.jpg", "items": its})
-        eras = [c[4]["style"][1] for c in g]
-        st = (g[0][4]["style"][0], max(eras, key=eras.count), g[0][4]["style"][2])
-        jobs.append((name, base, ROOF.format(len(g)), [RAW / "photos/roof_style.png"]) if g[0][1] == "roof" else
-                    (name, base, prompt(st, f"{len(g)} separate flat orthographic facade elevations"), photos(st)))
-    area = {}
-    for b in (b for b in bs if b["d"] >= NEAR):
-        area[b["style"]] = area.get(b["style"], 0) + sum((f["u1"] - f["u0"]) * (f["zt"] - f["z0"]) for f in b["walls"])
-    top = sorted(area, key=area.get, reverse=True)
-    for st in top[:18] + [st for st in top[18:] if st == next(t for t in top if t[0] == st[0])]:
-        F = {"apt": 4, "office": 4, "parking": 3, "shed": 1}.get(st[0], 2)
-        base, name, w = Image.new("RGB", (1536, 1024), BG), "lib_" + "_".join(st), 1500 / (460 / (F * 3))
-        sw = {"u0": 0, "u1": w, "z0": 0, "zt": F * 3.0, "e": np.array([1.0, 0]), "rings": [np.array([(0, 0, 0), (w, 0, 0), (w, 0, F * 3), (0, 0, F * 3)])]}
-        for y in (30, 534):
-            base.paste(draw({"style": st, "fh": 3.0}, sw, 460 / (F * 3), BG).resize((1500, 460)), (18, y))
-        lib["/".join(st)] = [{"file": f"{name}_{k}.jpg", "floors": F, "width": w, "box": [18, y, 1518, y + 460]} for k, y in enumerate((30, 534))]
-        jobs.append((name, base, prompt(st, f"two separate flat orthographic facade swatches, each exactly {F} storeys and the upper and lower swatch "
-                                            "from two different buildings, with regular repeating window bays and no building corners"), photos(st)))
-    for j in jobs:
-        j[1].save(RAW / f"{j[0]}_in.png")
-    jobs = [j for j in jobs if not only or j[0].startswith(only)]
-    with ThreadPoolExecutor(4) as ex:
-        res = dict(zip([j[0] for j in jobs], ex.map(call, jobs)))
-    for sw in (sw for v in lib.values() for sw in v if sw["file"].rsplit("_", 1)[0] in res):
-        res[sw["file"].rsplit("_", 1)[0]].crop(tuple(sw["box"])).save(TEX / sw["file"], quality=90)
-    (TEX / "near.json").write_text(json.dumps(layout))
-    (TEX / "lib.json").write_text(json.dumps(lib))
 
 
 if __name__ == "__main__":
