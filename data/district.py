@@ -288,7 +288,8 @@ def model(bs, lib, ortho, A, f=1.0, pages=99, crops={}, far=0.6):
             k = min(f * o[1] / (0.1 if f"{b['id']}:r" in crops else 0.3 if near else far), (A - 16) / max(hi - lo))
             jobs.append((b, None, (lo, k), *np.ceil((hi - lo) * k).astype(int)))
         for i, w in enumerate(b["walls"]):
-            s = min(f * (7 if near else 3), (A - 16) / max(w["u1"] - w["u0"], 1))
+            c = crops.get(f"{b['id']}:{i}", ())
+            s = min(f * (c[2] if len(c) > 2 else 7 if near else 3), (A - 16) / max(w["u1"] - w["u0"], 1))
             jobs.append((b, i, s, *size(w, s)))
     pos = pack([j[3:] for j in jobs], A, A, pages=pages)
     if pos is None:
@@ -345,15 +346,24 @@ def glb(prims, q=84):
 
 
 def build():
+    from data.facade import dress
     bs, rings = buildings()
-    near = json.loads((TEX / "near.json").read_text()) if (TEX / "near.json").exists() else {"sheets": []}
-    crops = {it[0]: (sh["file"], it[1:]) for sh in near["sheets"] for it in sh["items"] if (TEX / sh["file"]).exists()}
-    prims = model(bs, library(), ortho(RAW / "ortho.jpg", *DIST), 4096, crops=crops)
-    (OUT / "district.glb").write_bytes(glb(prims))
+    sheets = [sh for f in ("near.json", "facade.json") if (TEX / f).exists() for sh in json.loads((TEX / f).read_text())["sheets"] if (TEX / sh["file"]).exists()]
+    crops = {it[0]: (sh["file"], it[1:5], *it[5:]) for sh in sheets for it in sh["items"]}
+    fine = {k.split(":")[0] for k, v in crops.items() if len(v) > 2}
+    lib, o, files = library(), ortho(RAW / "ortho.jpg", *DIST), []
+    for b in bs:
+        if b["id"] in fine:
+            dress(b)
+    for name, part in (("district.glb", [b for b in bs if b["id"] not in fine]), ("district-near.glb", [b for b in bs if b["id"] in fine])):
+        if part:
+            prims = model(part, lib, o, 4096, crops=crops)
+            (OUT / name).write_bytes(glb(prims))
+            files.append(name)
+            print(name, len(part), sum(len(v) // 3 for _, v, _ in prims), "tris", len(prims), "pages")
     hide = [list(np.round(np.array(p.exterior.coords)[:-1], 1).ravel()) for b in bs
             for p in getattr(b["foot"], "geoms", [b["foot"]]) if not p.is_empty] + rings
-    (OUT / "district.json").write_text(json.dumps({"models": ["district.glb"], "hide": hide}, separators=(",", ":")))
-    print(len(bs), sum(b["d"] < NEAR for b in bs), sum(len(v) // 3 for _, v, _ in prims), "tris", len(prims), "pages")
+    (OUT / "district.json").write_text(json.dumps({"models": files, "hide": hide}, separators=(",", ":")))
 
 
 def tile(t):
