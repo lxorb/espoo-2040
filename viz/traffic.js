@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { looks } from './city.js';
 
+export const lengths = g => { let s = 0; return g.map((p, k) => s += k ? Math.hypot(p[0] - g[k - 1][0], p[1] - g[k - 1][1]) : 0); };
 const STEP = 20;
 const full = (frag, extra = {}) => new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
   depthTest: false, depthWrite: false, transparent: true, ...extra,
@@ -9,38 +9,68 @@ const full = (frag, extra = {}) => new THREE.Mesh(new THREE.PlaneGeometry(2, 2),
 }));
 const target = () => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false });
 
-function band(links, key) {
-  const pos = [], aS = [], aN = [], aK = [], idx = [];
-  links.forEach((l, i) => {
-    const g = l.geom, w = Math.max(l.lanes || 1, 1) * 3.3 + 2;
-    g.forEach(([x, y], k) => {
+function band(lines, y) {
+  const pos = [], aS = [], aN = [], aK = [], aU = [], idx = [];
+  for (const { geom: g, w, k: key, shift = 0 } of lines) {
+    const cum = lengths(g), L = cum[cum.length - 1];
+    g.forEach(([x, z], k) => {
       const a = g[Math.max(k - 1, 0)], b = g[Math.min(k + 1, g.length - 1)], d = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
-      for (const s of [-1, 1]) { pos.push(x, 0.9, -y); aS.push(s, w); aN.push((b[1] - a[1]) / d, (b[0] - a[0]) / d); aK.push(key(i)); }
+      for (const s of [-1, 1]) { pos.push(x, y, -z); aS.push(s, w, shift); aN.push((b[1] - a[1]) / d, (b[0] - a[0]) / d); aK.push(...key); aU.push(cum[k], L); }
       const v = pos.length / 3 - 2;
       if (k) idx.push(v - 2, v, v - 1, v - 1, v, v + 1);
     });
-  });
+  }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('aS', new THREE.Float32BufferAttribute(aS, 2));
-  geo.setAttribute('aN', new THREE.Float32BufferAttribute(aN, 2));
-  geo.setAttribute('aK', new THREE.Float32BufferAttribute(aK, 1));
+  for (const [n, a, m] of [['position', pos, 3], ['aS', aS, 3], ['aN', aN, 2], ['aK', aK, 3], ['aU', aU, 2]]) geo.setAttribute(n, new THREE.Float32BufferAttribute(a, m));
   geo.setIndex(idx);
   return geo;
 }
 
-const BAND_VERT = `attribute vec2 aS; attribute vec2 aN; attribute float aK; uniform float uPx; varying float vK; varying vec2 vW;
+const BAND_VERT = `attribute vec3 aS; attribute vec2 aN; attribute vec3 aK; attribute vec2 aU; uniform float uPx; varying vec3 vK; varying vec2 vW, vU; varying float vS;
   void main() {
-    vK = aK;
-    vec3 p = position + vec3(aN.x, 0.0, aN.y) * aS.x * 0.5 * max(aS.y, 5.0 * uPx);
+    vK = aK; vU = aU; vS = aS.x;
+    float w = max(aS.y, 4.0 * uPx);
+    vec3 p = position + vec3(aN.x, 0.0, aN.y) * (aS.x + aS.z) * 0.5 * w;
     vW = p.xz;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   }`;
+const BAND_FRAG = (body) => `uniform float uYear, uDim, uSat; varying vec3 vK; varying vec2 vW, vU; varying float vS;
+  void main() {
+    float stripe = step(0.5, fract((vW.x + vW.y) / 8.0)), dash = step(0.5, fract(vU.x / 16.0)), e = abs(vS);
+    vec3 c = vec3(0.0); float al = 1.0;
+    ${body}
+    c = mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, uSat) * uDim;
+    gl_FragColor = vec4(c, al);
+  }`;
+const SURFACE = BAND_FRAG(`float h = fract(sin(dot(floor(vW / 2.5), vec2(12.9898, 78.233))) * 43758.5453), wear = 1.0 - vK.x;
+    c = mix(vec3(0.17, 0.18, 0.19), vec3(0.56, 0.56, 0.53), wear) * (1.0 - 0.22 * wear * h);
+    al = 0.8;
+    if (vK.y < 0.999) { c = stripe * vec3(1.0, 0.5, 0.05); al = 0.95; }`);
+const PROJECT = BAND_FRAG(`float st = vK.z, age = uYear - vK.y, f = vU.x / max(vU.y, 1.0), d = age / 0.7 - f;
+    if (uYear < vK.x) discard;
+    bool done = age >= 0.0 && d > 0.0;
+    float glow = done ? exp(-d * 8.0) * step(age, 1.2) : 0.0;
+    if (st > 4.5) { if (age < 0.0) discard; c = vec3(0.9, 0.15, 0.12); }
+    else if (st > 3.5) { if (age < 0.0 && dash < 0.5) discard; c = vec3(0.25, 0.55, 1.0); }
+    else if (!done) {
+      if (st > 1.5 && st < 2.5) { if (e < 0.7) { c = vec3(1.0, 0.5, 0.05); al = 0.3; } else { if (dash < 0.5) discard; c = vec3(1.0, 0.5, 0.05); } }
+      else c = stripe * vec3(1.0, 0.5, 0.05);
+    } else if (st < 0.5) discard;
+    else if (st > 2.5) { if (e > 0.6 && glow < 0.05) discard; c = vec3(0.8, 0.12, 0.1); al = 0.85; }
+    else { if (e < 0.75 && st < 1.5 && glow < 0.05) discard; c = e < 0.75 ? vec3(0.2, 0.21, 0.22) : vec3(1.0, 0.82, 0.1); }
+    c = mix(c, vec3(1.0, 0.95, 0.6), glow);`);
+const KIND = { road: 1, lanes: 1, junction: 1, buslane: 3, rail: 0, bus: 0, toll: 0, parking: 0, pnr: 0 };
+const CAT = { road: 'works', lanes: 'works', junction: 'works', rail: 'pt', bus: 'pt', buslane: 'pt', toll: 'toll', parking: 'toll', pnr: 'toll' };
+const mid = pts => [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
 
 export class Net {
-  constructor(scene, net, renderer, camera) {
-    Object.assign(this, { scene, renderer, camera, base: net.links });
-    this.uni = { uPx: { value: 1 }, uYear: { value: 0 }, uSigma: { value: 30 } };
+  constructor(scene, net, renderer, camera, cat) {
+    Object.assign(this, { scene, renderer, camera, base: net.links, segs: net.segs || [], cat: new Map((cat || []).map(p => [p.id, p])) });
+    this.byOsm = new Map();
+    net.links.forEach((l, i) => this.byOsm.set(l.osm, [...(this.byOsm.get(l.osm) || []), i]));
+    const twin = new Set(net.links.map(l => l.a + ',' + l.b));
+    this.two = net.links.map(l => twin.has(l.b + ',' + l.a) ? 1 : 0);
+    this.uni = { uPx: { value: 1 }, uYear: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat };
     this.heatRT = target();
     this.flowRT = target();
     this.heatScene = new THREE.Scene();
@@ -52,9 +82,11 @@ export class Net {
         gl_FragColor = vec4(c, smoothstep(0.04, 0.3, t) * 0.78);
       }`);
     this.heatView.material.uniforms = { tMap: { value: this.heatRT.texture }, uScale: { value: 1 } };
-    this.flowView = full(`uniform sampler2D tMap; varying vec2 vU; void main() { gl_FragColor = vec4(texture2D(tMap, vU).rgb, 1.0); }`, { blending: THREE.AdditiveBlending });
+    this.flowView = full(`uniform sampler2D tMap; varying vec2 vU;
+      void main() { vec3 c = texture2D(tMap, vU).rgb; float m = max(c.r, max(c.g, c.b)); gl_FragColor = vec4(c / max(m, 1e-4) * (1.0 - exp(-1.6 * m)), 1.0); }`, { blending: THREE.AdditiveBlending });
     this.flowView.material.uniforms = { tMap: { value: this.flowRT.texture } };
-    this.fade = full('void main() { gl_FragColor = vec4(0.0, 0.0, 0.0, 0.045); }');
+    this.fade = full('uniform float uA; void main() { gl_FragColor = vec4(0.0, 0.0, 0.0, uA); }');
+    this.fade.material.uniforms = { uA: { value: 0.04 } };
     this.post = new THREE.Scene();
     this.post.add(this.heatView, this.flowView);
     this.postCam = new THREE.Camera();
@@ -66,6 +98,7 @@ export class Net {
     this.lines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthTest: false }));
     this.lines.frustumCulled = false;
     this.fade.renderOrder = -1;
+    this.fade.frustumCulled = false;
     this.flowScene.add(this.fade, this.lines);
     this.rect = [0, 0, 0, 0];
     this.camKey = '';
@@ -82,7 +115,7 @@ export class Net {
     this.links = this.base.concat(ext);
     const L = this.links, n = L.length, nb = this.base.length;
     this.ff = Float32Array.from(L, l => l.len / (l.kmh / 3.6));
-    this.speed = new Float32Array(n); this.flow = new Float32Array(n); this.loss = new Float32Array(n); this.cap = new Float32Array(n).fill(1);
+    this.speed = new Float32Array(n); this.flow = new Float32Array(n); this.loss = new Float32Array(n); this.cap = new Float32Array(n).fill(1); this.cond = new Float32Array(n);
     this.box = L.map(l => { const xs = l.geom.map(p => p[0]), ys = l.geom.map(p => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; });
     const P = [], link = [];
     L.forEach((l, i) => {
@@ -106,19 +139,47 @@ export class Net {
     dots.frustumCulled = false;
     this.heatScene.add(dots);
     this.dots = q.attributes.aI;
-    for (const m of [this.roads, this.works]) if (m) { this.scene.remove(m); m.geometry.dispose(); }
-    this.roads = new THREE.Mesh(band(ext, i => this.open[i]), new THREE.ShaderMaterial({
-      uniforms: this.uni, vertexShader: BAND_VERT, side: THREE.DoubleSide,
-      fragmentShader: `uniform float uYear; varying float vK;
-        void main() { if (uYear < vK) discard; gl_FragColor = vec4(mix(vec3(0.33, 0.35, 0.37), vec3(1.0, 0.85, 0.15), 1.0 - clamp(uYear - vK, 0.0, 1.0)), 1.0); }`
-    }));
-    this.works = new THREE.Mesh(band(L, () => 1), new THREE.ShaderMaterial({
-      uniforms: this.uni, vertexShader: BAND_VERT, transparent: true, side: THREE.DoubleSide,
-      fragmentShader: `varying float vK; varying vec2 vW;
-        void main() { if (vK > 0.999) discard; gl_FragColor = vec4(step(0.5, fract((vW.x + vW.y) / 8.0)) * vec3(1.0, 0.5, 0.05), 0.9); }`
-    }));
-    this.vlink = Int32Array.from(L.flatMap((l, i) => Array(l.geom.length * 2).fill(i)));
-    for (const m of [this.roads, this.works]) { m.frustumCulled = false; m.renderOrder = 2; this.scene.add(m); }
+    for (const m of [this.roads, this.works, this.stops]) if (m) { this.scene.remove(m); m.geometry.dispose(); }
+    const W = l => Math.max(l.lanes || 1, 1) * 3.3 + 1, lines = [], stops = [], at = l => this.base[l].geom;
+    this.signs = []; this.ticks = []; this.cards = [];
+    run.years.forEach((y, k) => {
+      const segs = new Set(y.actions.map(a => a.resurface ?? a.retime).filter(v => v !== undefined));
+      if (segs.size) this.ticks.push({ k, cat: 'care', at: mid(this.segs.filter(s => segs.has(s.id)).flatMap(s => s.links.map(i => mid(at(i))))) });
+      for (const a of y.actions) {
+        const p = this.cat.get(a.build);
+        if (!p) continue;
+        const b = k + p.years, pts = [], key = st => [k, b, st];
+        const link = (osm, st) => osm.forEach(o => (this.byOsm.get(o) || []).forEach(i => { lines.push({ geom: at(i), w: W(this.base[i]), k: key(st), shift: this.two[i] }); pts.push(mid(at(i))); }));
+        for (const m of p.works || []) link(m.osm, 0);
+        for (const m of p.mod || []) link(m.osm, KIND[p.kind]);
+        for (const n of p.new || []) { lines.push({ geom: n.geom, w: (n.oneway ? 1 : 2) * Math.max(n.lanes || 1, 1) * 3.3 + 2, k: key(2) }); pts.push(...n.geom); }
+        for (const t of p.pt || []) { lines.push({ geom: t.stops, w: 3, k: key(4) }); stops.push(...t.stops.map(s => [...s, b])); pts.push(...t.stops); }
+        if (p.toll) for (const o of p.toll.osm) for (const i of this.byOsm.get(o) || []) {
+          const g = at(i), [x, y2] = mid(g), [ax, ay] = g[0], [bx, by] = g[g.length - 1], d = Math.hypot(bx - ax, by - ay) || 1, h = W(this.base[i]) * (this.two[i] ? 1 : 0.5) + 2;
+          lines.push({ geom: [[x - (by - ay) / d * h, y2 + (bx - ax) / d * h], [x + (by - ay) / d * h, y2 - (bx - ax) / d * h]], w: 2.5, k: key(5) });
+          pts.push([x, y2]);
+          if (!this.signs.some(s => s.a === b && Math.hypot(s.x - x, s.y - y2) < 600)) this.signs.push({ text: '€', x, y: y2, a: b });
+        }
+        if (p.park) { const [x, y2] = mid(p.park.area); this.signs.push({ text: 'P', x, y: y2, a: b }); pts.push([x, y2]); }
+        if (p.pnr) { this.signs.push({ text: 'P', x: p.pnr.at[0], y: p.pnr.at[1], a: b }); pts.push(p.pnr.at); }
+        const c = mid(pts.length ? pts : [[0, 0]]);
+        this.ticks.push({ k, cat: CAT[p.kind] || 'works', at: c });
+        if (!this.cards[k] || this.cards[k].cost < p.cost) this.cards[k] = { cost: p.cost, x: c[0], y: c[1], text: `${p.name}\n${p.cost} M EUR\n${p.years} ${p.years > 1 ? 'years' : 'year'}` };
+      }
+    });
+    this.roads = new THREE.Mesh(band(this.base.map((l, i) => ({ geom: l.geom, w: W(l), k: [1, 1, 0], shift: this.two[i] })), 0.5), new THREE.ShaderMaterial({
+      uniforms: this.uni, vertexShader: BAND_VERT, fragmentShader: SURFACE, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    this.works = new THREE.Mesh(band(lines, 0.55), new THREE.ShaderMaterial({
+      uniforms: this.uni, vertexShader: BAND_VERT, fragmentShader: PROJECT, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(stops.flatMap(([x, y]) => [x, 1.2, -y]), 3));
+    sg.setAttribute('aK', new THREE.Float32BufferAttribute(stops.map(s => s[2]), 1));
+    this.stops = new THREE.Points(sg, new THREE.ShaderMaterial({ uniforms: this.uni, transparent: true, depthTest: false,
+      vertexShader: 'attribute float aK; uniform float uYear; varying float vA; void main() { vA = step(aK, uYear); gl_PointSize = 11.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'varying float vA; void main() { float r = length(gl_PointCoord - 0.5); if (vA < 0.5 || r > 0.5) discard; gl_FragColor = vec4(r > 0.32 ? vec3(0.25, 0.55, 1.0) : vec3(1.0), 1.0); }' }));
+    this.vlink = Int32Array.from(this.base.flatMap((l, i) => Array(l.geom.length * 2).fill(i)));
+    this.roads.renderOrder = 2; this.works.renderOrder = 3; this.stops.renderOrder = 4;
+    for (const m of [this.roads, this.works, this.stops]) { m.frustumCulled = false; this.scene.add(m); }
     this.show(this.mode);
     if (!this.scale) {
       const all = [];
@@ -138,33 +199,18 @@ export class Net {
       this.flow[i] = (A.flow[i] ?? 0) * (1 - t) + (B.flow[i] ?? 0) * t;
       this.loss[i] = this.flow[i] * Math.max(tm - ff, 0) / 3.6 / this.links[i].len;
       this.cap[i] = A.cap?.[i] ?? 1;
+      this.cond[i] = (A.cond?.[i] ?? 1) * (1 - t) + (B.cond?.[i] ?? 1) * t;
     }
     for (let p = 0; p < this.plink.length; p++) this.dots.array[p] = this.loss[this.plink[p]];
     this.dots.needsUpdate = true;
-    const k = this.works.geometry.attributes.aK;
-    for (let v = 0; v < this.vlink.length; v++) k.array[v] = this.cap[this.vlink[v]];
+    const k = this.roads.geometry.attributes.aK;
+    for (let v = 0; v < this.vlink.length; v++) { k.array[3 * v] = this.cond[this.vlink[v]]; k.array[3 * v + 1] = this.cap[this.vlink[v]]; }
     k.needsUpdate = true;
     this.uni.uYear.value = f;
     if (Math.abs(f - (this.fieldF ?? -9)) > 0.25 || run !== this.fieldRun) { this.fieldF = f; this.fieldRun = run; this.dirty = true; }
   }
 
-  events(k) {
-    const y = this.run?.years[k];
-    if (!y) return [];
-    const nb = this.base.length, prev = this.run.years[k - 1];
-    const ids = this.links.map((l, i) => i).filter(i => (i >= nb && this.open[i - nb] === k) || ((y.cap?.[i] ?? 1) !== (prev?.cap?.[i] ?? 1)));
-    const segs = new Set(y.actions.map(a => a.resurface ?? a.retime).filter(v => v !== undefined));
-    this.links.forEach((l, i) => { if (segs.has(l.seg)) ids.push(i); });
-    return (y.events || []).map(text => {
-      const named = ids.filter(i => this.links[i].name && text.includes(this.links[i].name));
-      const use = named.length ? named : ids;
-      if (!use.length) return { text };
-      const pts = use.flatMap(i => this.links[i].geom);
-      return { text, x: pts.reduce((s, p) => s + p[0], 0) / pts.length, y: pts.reduce((s, p) => s + p[1], 0) / pts.length };
-    });
-  }
-
-  field(rect) {
+  field(rect, fresh) {
     const [x0, y0, x1, y1] = rect, c = Math.max(Math.max(x1 - x0, y1 - y0) / 300, 6), W = Math.ceil((x1 - x0) / c) + 1, H = Math.ceil((y1 - y0) / c) + 1;
     const U = new Float32Array(W * H), V = new Float32Array(W * H), D = new Float32Array(W * H), sg = 2 * (1.1 * c) ** 2;
     this.links.forEach((l, i) => {
@@ -188,9 +234,8 @@ export class Net {
     const cdf = new Float32Array(D.length);
     let acc = 0;
     for (let o = 0; o < D.length; o++) cdf[o] = acc += D[o] > max * 0.05 ? D[o] : 0;
-    const first = !this.F;
     this.F = { x0, y0, c, W, H, U, V, D, cdf, min: max * 0.03 };
-    if (first) for (let p = 0; p < this.N; p++) this.spawn(p);
+    if (fresh) for (let p = 0; p < this.N; p++) this.spawn(p);
   }
 
   spawn(p) {
@@ -213,9 +258,9 @@ export class Net {
 
   draw(mode, rect, dt, px) {
     const r = this.renderer, size = r.getDrawingBufferSize(new THREE.Vector2());
-    if (this.flowRT.width !== size.x || this.flowRT.height !== size.y) { this.flowRT.setSize(size.x, size.y); this.heatRT.setSize(Math.ceil(size.x / 4), Math.ceil(size.y / 4)); }
+    if (this.flowRT.width !== size.x || this.flowRT.height !== size.y) { this.flowRT.setSize(size.x, size.y); this.heatRT.setSize(Math.ceil(size.x / 2), Math.ceil(size.y / 2)); }
     this.uni.uPx.value = px;
-    this.uni.uSigma.value = Math.max(24 * px, 30);
+    this.uni.uSigma.value = Math.max((5 + 19 * Math.min(Math.max((4 - px) / 3, 0), 1)) * px, 30);
     if (!this.run) return;
     const key = this.camera.matrixWorld.elements.join() + this.camera.zoom + size.x;
     if (mode === 'heat' && key + this.uni.uYear.value + this.run.who !== this.heatKey) {
@@ -227,26 +272,30 @@ export class Net {
       const moved = key !== this.camKey;
       if (moved || this.dirty) {
         const o = this.rect, d = Math.max(rect[2] - rect[0], rect[3] - rect[1]) * 0.1;
-        if (this.dirty || !this.F || !rect.every((v, k) => Math.abs(v - o[k]) < d)) { this.rect = rect; this.field(rect); }
+        const fresh = !this.F || !rect.every((v, k) => Math.abs(v - o[k]) < d);
+        if (this.dirty || fresh) { this.rect = rect; this.field(rect, fresh); }
         this.dirty = false;
       }
       r.setRenderTarget(this.flowRT);
       if (moved) { this.camKey = key; r.setClearColor(0, 0); r.clear(); }
       this.advect(dt, px);
+      this.fade.material.uniforms.uA.value = 1 - Math.exp(-0.25 * dt);
+      r.autoClear = false;
       r.render(this.flowScene, this.camera);
+      r.autoClear = true;
     }
     r.setRenderTarget(null);
   }
 
   advect(dt, px) {
-    const pos = this.lines.geometry.attributes.position.array, col = this.lines.geometry.attributes.color.array, v = [0, 0, 0], c = new THREE.Color(), k = px * 4.5 * dt;
+    const pos = this.lines.geometry.attributes.position.array, col = this.lines.geometry.attributes.color.array, v = [0, 0, 0], c = new THREE.Color(), k = px * 0.45 * dt;
     for (let p = 0; p < this.N; p++) {
       const x = this.px[p], y = this.py[p];
       this.age[p] -= dt;
       if (this.age[p] < 0 || !this.sample(x, y, v)) { this.spawn(p); pos.fill(0, p * 6, p * 6 + 6); continue; }
       const sp = Math.hypot(v[0], v[1]);
       this.px[p] = x + v[0] * k; this.py[p] = y + v[1] * k;
-      c.setHSL(0.66 * (1 - Math.min(sp * 3.6 / 100, 1)), 1, 0.5).multiplyScalar(0.55);
+      c.setHSL(0.66 * (1 - Math.min(sp * 3.6 / 100, 1)), 1, 0.5).multiplyScalar(0.3);
       pos.set([x, 1, -y, this.px[p], 1, -this.py[p]], p * 6);
       col.set([c.r, c.g, c.b, c.r, c.g, c.b], p * 6);
     }
@@ -264,90 +313,6 @@ export class Net {
 
   show(mode) {
     this.mode = mode;
-    if (this.roads) this.roads.visible = mode !== 'flow';
-    if (this.works) this.works.visible = mode !== 'flow';
-  }
-}
-
-const MODELS = { car: ['sedan', 4.5, 1.5, 1.85], van: ['van', 5.2, 2.2, 2.0], truck: ['delivery', 8.5, 3.4, 2.5], bus: ['van', 12, 3.1, 2.55], moto: ['kart-oobi', 2.1, 1.4, 0.8] };
-const PAINT = { car: ['#e8e8e6', '#1c1d20', '#a9adb3', '#b3242a', '#2c4f8a', '#5d6267', '#d8d2c2', '#3d6b4f'], van: ['#f2f2ef', '#c9ccd0', '#2c4f8a'], truck: ['#f2f2ef', '#e07a1f', '#2c4f8a'], bus: ['#2a62b8'], moto: ['#1c1d20', '#b3242a'] };
-const loads = {};
-
-async function vehicle(t) {
-  const [name, L, H, W] = MODELS[t] || MODELS.car;
-  const g = await (loads[name] ||= new GLTFLoader().loadAsync(`assets/cars/${name}.glb`));
-  g.scene.updateMatrixWorld(true);
-  const parts = [];
-  let map;
-  g.scene.traverse(o => {
-    if (!o.isMesh) return;
-    const p = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
-    for (const k in p.attributes) if (!['position', 'normal', 'uv'].includes(k)) p.deleteAttribute(k);
-    parts.push(p);
-    map = o.material.map;
-  });
-  const geo = mergeGeometries(parts).rotateY(Math.PI / 2);
-  geo.computeBoundingBox();
-  const b = geo.boundingBox, sz = b.getSize(new THREE.Vector3());
-  geo.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2).scale(L / sz.x, H / sz.y, W / sz.z);
-  const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.55 });
-  mat.onBeforeCompile = s => {
-    s.fragmentShader = s.fragmentShader.replace('#include <color_fragment>', `
-      vec3 d = diffuseColor.rgb;
-      float hi = max(max(d.r, d.g), d.b), sat = hi - min(min(d.r, d.g), d.b);
-      diffuseColor.rgb = mix(d, vColor * (0.35 + 0.65 * hi), smoothstep(0.12, 0.3, sat));`);
-  };
-  return [geo, mat];
-}
-
-export class Cars {
-  static async load(scene, meta, pts) {
-    return new Cars(scene, meta, pts, await Promise.all(meta.types.map(vehicle)));
-  }
-
-  constructor(scene, meta, pts, kits) {
-    this.meta = meta;
-    this.pts = pts;
-    this.end = Math.max(...meta.veh.map(v => v[1] + v[3]));
-    this.t = 0;
-    this.heading = new Float32Array(meta.veh.length);
-    this.meshes = meta.types.map((t, k) => {
-      const n = meta.veh.filter(v => v[0] === k).length;
-      const m = new THREE.InstancedMesh(...kits[k], Math.max(n, 1));
-      m.setColorAt(0, new THREE.Color());
-      m.castShadow = true;
-      m.frustumCulled = false;
-      m.userData.paint = (PAINT[t] || PAINT.car).map(c => new THREE.Color(c));
-      scene.add(m);
-      return m;
-    });
-  }
-
-  tick(dt) {
-    this.t = (this.t + dt * this.meta.dt) % this.end;
-    const o = new THREE.Object3D(), P = this.pts, count = this.meshes.map(() => 0);
-    this.meta.veh.forEach(([type, start, off, n], id) => {
-      const s = (this.t - start) / this.meta.dt, k = Math.floor(s);
-      if (k < 0 || k >= n - 1) return;
-      const a = 2 * (off + k), f = s - k;
-      const x = (P[a] + (P[a + 2] - P[a]) * f) / 10, y = (P[a + 1] + (P[a + 3] - P[a + 1]) * f) / 10;
-      const dx = P[a + 2] - P[a], dy = P[a + 3] - P[a + 1];
-      if (dx * dx + dy * dy > 4) this.heading[id] = Math.atan2(dy, dx);
-      o.position.set(x, 0.45, -y);
-      o.rotation.y = this.heading[id];
-      o.updateMatrix();
-      const m = this.meshes[type], c = count[type]++;
-      m.setMatrixAt(c, o.matrix);
-      m.setColorAt(c, m.userData.paint[(id * 7919) % m.userData.paint.length]);
-    });
-    this.meshes.forEach((m, k) => {
-      m.count = count[k];
-      m.instanceMatrix.needsUpdate = true;
-      if (m.instanceColor) m.instanceColor.needsUpdate = true;
-    });
-  }
-
-  show(mode) {
-    for (const m of this.meshes) m.visible = mode === 'cars';
+    for (const m of [this.roads, this.works, this.stops]) if (m) m.visible = mode !== 'flow';
   }
 }

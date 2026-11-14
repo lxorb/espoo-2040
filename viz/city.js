@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const HYPE = [-1511.7, 1239.2];
-export const looks = { dim: { value: 1 }, sat: { value: 1 }, tree: { value: 1 }, lane: { value: 1 }, path: { value: 1 }, one: { value: 1 } };
+export const looks = { dim: { value: 1 }, sat: { value: 1 }, tree: { value: 1 }, lane: { value: 1 }, path: { value: 1 }, one: { value: 1 }, px: { value: 1 } };
 
 const GROUND = { land: '#8e8f8b', water: '#15191c', forest: '#4f6339', park: '#667f48', grass: '#6f864e', field: '#959872',
   wetland: '#6d7a58', sand: '#b5ad92', rock: '#97958f', paved: '#9a9b97', rail: '#7d7a74', pitch: '#7a9c56' };
@@ -12,7 +12,7 @@ const hash = `float hash(float n){return fract(sin(n*12.9898)*43758.5453);}`;
 
 function patch(mat, vert, frag, pars = '', fade = looks.one) {
   mat.onBeforeCompile = s => {
-    Object.assign(s.uniforms, { uDim: looks.dim, uSat: looks.sat, uTree: looks.tree, uLane: looks.lane, uFade: fade });
+    Object.assign(s.uniforms, { uDim: looks.dim, uSat: looks.sat, uTree: looks.tree, uLane: looks.lane, uFade: fade, uPx: looks.px });
     s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>\nuniform float uTree;\n${pars}`).replace('#include <begin_vertex>', `#include <begin_vertex>\n${vert}`);
     s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\nuniform float uDim, uSat, uLane, uFade;\n${hash}\n${pars.replace(/attribute[^;]*;/g, '')}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${frag}\ndiffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, uSat);`);
@@ -26,8 +26,9 @@ const buildingMat = patch(new THREE.MeshStandardMaterial({ roughness: 0.92 }), '
   float fw = 2.6 + 1.6 * r, fh = 3.1 + 0.5 * hash(k + 7.0);
   vec2 g = fract(vec2(vB.x / fw, vB.y / fh));
   float win = step(0.22, g.x) * step(g.x, 0.78) * step(0.32, g.y) * step(g.y, 0.8) * step(2.0, vB.y);
+  win = mix(0.27, win, clamp(1.6 - 4.0 * max(fwidth(vB.x / fw), fwidth(vB.y / fh)), 0.0, 1.0));
   c *= 1.0 - (1.0 - roof) * (0.2 * win + 0.4 * (1.0 - smoothstep(0.0, 6.0, vB.y)));
-  c *= 1.0 - roof * 0.05 * step(0.5, fract(vB.x * 0.25));
+  c *= 1.0 - roof * 0.05 * mix(0.5, step(0.5, fract(vB.x * 0.25)), clamp(1.6 - 4.0 * fwidth(vB.x * 0.25), 0.0, 1.0));
   diffuseColor.rgb = c * uDim;`, 'attribute vec3 aB; varying vec3 vB;');
 
 const roadLook = fade => patch(new THREE.MeshStandardMaterial({ roughness: 0.9, vertexColors: true }), 'vB = aB; vW = (modelMatrix * vec4(position, 1.0)).xz;', `
@@ -38,6 +39,13 @@ const roadLook = fade => patch(new THREE.MeshStandardMaterial({ roughness: 0.9, 
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.92, 0.88), focus * uLane * max(lane, edge));
   diffuseColor.rgb = mix(vec3(0.27, 0.275, 0.26), diffuseColor.rgb, uFade) * uDim;`, 'attribute vec3 aB; varying vec3 vB; varying vec2 vW;', fade);
 const roadMat = roadLook(looks.one), pathMat = roadLook(looks.path);
+const lineMat = (c, a) => new THREE.ShaderMaterial({ uniforms: { uPx: looks.px, uA: { value: a } },
+  vertexShader: 'attribute vec3 aE; uniform float uPx; void main() { vec3 p = position; p.xz += aE.xy * aE.z * uPx * 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }',
+  fragmentShader: `uniform float uA; void main() { gl_FragColor = vec4(vec3(${new THREE.Color(c).toArray().map(v => v.toFixed(3))}) * uA, 1.0); }` });
+const borderMats = [lineMat('#f6d32d', 1), lineMat('#f6d32d', 0.55)];
+const outside = new THREE.MeshBasicMaterial({ color: '#d9d9d9', depthTest: false, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.ZeroFactor, blendDst: THREE.SrcColorFactor });
+const overMat = patch(new THREE.MeshStandardMaterial({ roughness: 0.9, vertexColors: true, depthTest: false, depthWrite: false }),
+  'transformed.xz += aE.xy * max(0.0, uPx * 2.5 - aE.z) * 0.5;', 'diffuseColor.rgb *= uDim;', 'attribute vec3 aE; uniform float uPx;');
 
 const groundMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true, depthWrite: false, depthTest: false }), '', 'diffuseColor.rgb *= uDim;');
 const treeMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true }), 'transformed *= uTree;', 'diffuseColor.rgb *= uDim;');
@@ -116,7 +124,7 @@ function ground(list, kinds, size, i, j, trees) {
     c.set(GROUND[name] || GROUND.land);
     for (const t of tris(p))
       for (const v of t) { pos.push(p[v].x, 0, -p[v].y); col.push(c.r, c.g, c.b); }
-    if (name !== 'forest') return;
+    if (name !== 'forest' || !trees) return;
     const n = Math.min(3000, (b[2] - b[0]) * (b[3] - b[1]) / 140);
     for (let s = 0; s < n && trees.length < 12000; s++) {
       const x = b[0] + Math.random() * (b[2] - b[0]), y = b[1] + Math.random() * (b[3] - b[1]);
@@ -194,6 +202,31 @@ export class City {
     this.lod = 0;
     this.busy = 0;
     this.ready = fetch('data/tiles.json').then(r => r.json()).then(m => { this.meta = m; }).catch(() => {});
+    Promise.all([this.ready, fetch('data/overview.json').then(r => r.json())]).then(([, o]) => {
+      const e = [], lines = (o.r || []).filter(([k]) => /motorway|trunk|primary|secondary/.test(this.meta.rkinds[k])).map(([, lanes, f]) => ({ pts: f, w: Math.max(lanes, 1) * 3.3 + 1, ww: Math.max(lanes, 1) * 3.3 + 1, color: '#5e6164', y: 0 }));
+      const g = ground(o.g || [], this.meta.gkinds, 0, 0, 0, null), r = new THREE.Mesh(up(ribbon(lines, ({ ww }, s, dx, dz) => e.push(-dz * s, -dx * s, ww))), overMat);
+      r.geometry.setAttribute('aE', new THREE.Float32BufferAttribute(e, 3));
+      g.renderOrder = -3; r.renderOrder = -2;
+      scene.add(g, r);
+      const rings = [o.border, o.inner].map(b => (b || []).map(f => [...f, f[0], f[1]])), v2 = f => ring(f);
+      rings.forEach((list, k) => list.forEach(f => {
+        const q = [], m = new THREE.Mesh(ribbon([{ pts: f, w: 0, y: 0.6, px: k ? 1.2 : 2.2 }], ({ px }, s, dx, dz) => q.push(-dz * s, -dx * s, px)), borderMats[k]);
+        m.geometry.setAttribute('aE', new THREE.Float32BufferAttribute(q, 3));
+        m.frustumCulled = false;
+        scene.add(m);
+      }));
+      if (rings[0].length) {
+        const all = rings[0].flat(), xs = all.filter((v, i) => !(i % 2)), ys = all.filter((v, i) => i % 2), d = 40000;
+        const out = new THREE.Shape([[Math.min(...xs) - d, Math.min(...ys) - d], [Math.max(...xs) + d, Math.min(...ys) - d], [Math.max(...xs) + d, Math.max(...ys) + d], [Math.min(...xs) - d, Math.max(...ys) + d]].map(([x, y]) => new THREE.Vector2(x, y)));
+        out.holes = rings[0].map(f => new THREE.Path(v2(f)));
+        const dim = new THREE.Mesh(new THREE.ShapeGeometry([out, ...rings[1].map(f => new THREE.Shape(v2(f)))]).rotateX(-Math.PI / 2), outside);
+        dim.renderOrder = -0.5;
+        dim.frustumCulled = false;
+        scene.add(dim);
+        const top = ys.indexOf(Math.max(...ys));
+        this.tag = [xs[top], ys[top]];
+      }
+    }).catch(() => {});
   }
 
   update(x0, y0, x1, y1) {
@@ -225,6 +258,7 @@ export class City {
         if (coarse.length) { g.userData.lod = buildings(coarse); g.add(g.userData.lod); this.setLod(this.lod); }
         if (trees.length) g.add(forest(trees));
         g.name = k;
+        g.userData.res = (t.r || []).filter(([q]) => /residential|service/.test(m.rkinds[q])).map(([, , f]) => ({ g: f.reduce((a, v, i) => (i % 2 ? a[a.length - 1].push(v) : a.push([v]), a), []) }));
         this.root.add(g);
         this.loaded.set(k, g);
       }).catch(() => {}).finally(() => this.busy--);
@@ -244,7 +278,9 @@ export class City {
   }
 
   show(mode, zoom) {
-    groundMat.visible = roadMat.visible = mode !== 'flow';
+    groundMat.visible = roadMat.visible = overMat.visible = outside.visible = mode !== 'flow';
+    borderMats[0].uniforms.uA.value = mode === 'flow' ? 0.5 : 1;
+    looks.px.value = 1 / zoom;
     const ramp = (a, b) => Math.min(Math.max((zoom - a) / (b - a), 0), 1);
     looks.tree.value = ramp(0.45, 0.75);
     looks.path.value = ramp(0.7, 1.1);

@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { City, HYPE, looks } from './city.js';
-import { Net, Cars } from './traffic.js';
+import { Net } from './traffic.js';
+import { Cars } from './cars.js';
 
 const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Soukka', 603, -544], ['Kaitaa', 1797, 312], ['Finnoo', 2981, 656],
   ['Matinkylä', 4518, 1343], ['Niittykumpu', 5884, 2487], ['Urheilupuisto', 6902, 2920], ['Tapiola', 8165, 2929], ['Aalto-yliopisto', 9295, 3944], ['Keilaniemi', 9590, 2952]];
@@ -20,7 +21,7 @@ renderer.toneMappingExposure = 0.9;
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 60000);
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 400000);
 camera.zoom = +(q.get('zoom') || 1.6);
 const controls = new MapControls(camera, renderer.domElement);
 controls.enableDamping = false;
@@ -30,7 +31,7 @@ controls.maxPolarAngle = 1.25;
 controls.zoomToCursor = true;
 const [tx, ty] = (q.get('at') || HYPE.join(',')).split(',').map(Number);
 controls.target.set(tx, 0, -ty);
-camera.position.set(tx - 7000, 7000, -ty + 7000);
+camera.position.set(tx - 60000, 60000, -ty + 60000);
 controls.update();
 
 const hemi = new THREE.HemisphereLight('#e4ebf2', '#6d6a62', 1.2);
@@ -44,9 +45,10 @@ scene.add(hemi, sun, sun.target);
 const city = new City(scene);
 let net, cars;
 
-fetch('data/net.json').then(r => r.json()).then(n => { net = new Net(scene, n, renderer, camera); apply(); runList.then(loadRun); });
+const catalogue = fetch('data/catalogue.json').then(r => r.json()).catch(() => []);
+fetch('data/net.json').then(r => r.json()).then(async n => { net = new Net(scene, n, renderer, camera, await catalogue); apply(); runList.then(loadRun); });
 Promise.all([fetch('data/cars.json').then(r => r.json()), fetch('data/cars.bin').then(r => r.arrayBuffer())])
-  .then(([m, b]) => Cars.load(scene, m, new Int32Array(b))).then(c => { cars = c; apply(); }).catch(e => console.log(e));
+  .then(([m, b]) => { cars = new Cars(scene, m, new Int32Array(b)); apply(); }).catch(e => console.log(e));
 const hypeMats = [], fine = [];
 let lod = 0, coarse = false;
 function hull(pts) {
@@ -112,7 +114,7 @@ function sync() {
 function apply() {
   scene.background = new THREE.Color(SKY[state.mode]);
   looks.dim.value = { cars: 1, heat: 0.8, flow: 0.07 }[state.mode];
-  looks.sat.value = { cars: 1, heat: 0.5, flow: 0.25 }[state.mode];
+  looks.sat.value = { cars: 1, heat: 0, flow: 0.25 }[state.mode];
   for (const m of hypeMats) m.userData.base && m.color.copy(m.userData.base).multiplyScalar(looks.dim.value);
   hemi.intensity = state.mode === 'flow' ? 0.5 : 1.2;
   net && net.show(state.mode);
@@ -130,24 +132,41 @@ addEventListener('keydown', e => {
   if (m) { state.mode = m; apply(); }
 });
 
-const news = document.getElementById('news');
-let events = [];
+const ticks = document.getElementById('ticks'), ROW = ['works', 'care', 'pt', 'toll'];
+let events = [], signs = [], shownRun = null, espoo = null;
+function tag(text, x, y, cls) {
+  const el = document.createElement('div');
+  el.className = `lab ${cls}`;
+  el.textContent = text;
+  document.getElementById('labels').append(el);
+  return { el, p: new THREE.Vector3(x, 20, -y) };
+}
 function eventTags() {
+  if (!net?.run || !state.run) return;
+  if (net.run !== shownRun) {
+    shownRun = net.run;
+    for (const s of signs) s.el.remove();
+    signs = net.signs.map(s => Object.assign(tag(s.text, s.x, s.y, 'sign'), { a: s.a }));
+    const seen = new Set();
+    ticks.replaceChildren(...net.ticks.filter(t => !seen.has(t.k + t.cat) && seen.add(t.k + t.cat)).map(t => {
+      const b = document.createElement('i');
+      b.className = t.cat;
+      Object.assign(b.style, { left: `${t.k / +year.max * 100}%`, bottom: `${ROW.indexOf(t.cat) * 7}px` });
+      b.onclick = () => {
+        state.f = t.k; state.play = false;
+        net.set(state.run, state.f);
+        fly = { t: 0, a: controls.target.clone(), b: new THREE.Vector3(t.at[0], 0, -t.at[1]), z0: camera.zoom, z1: camera.zoom };
+        sync();
+      };
+      return b;
+    }));
+  }
   const k = Math.floor(state.f + 1e-6), key = state.who + k;
-  if (!net || !state.run || key === state.shown) return;
+  if (key === state.shown) return;
   state.shown = key;
   for (const e of events) e.el.remove();
-  news.replaceChildren();
-  const at = {};
-  events = net.events(k).map(({ text, x, y }) => {
-    const el = document.createElement('div');
-    el.className = 'lab ev';
-    el.textContent = text;
-    if (x === undefined) { news.append(el); return null; }
-    document.getElementById('labels').append(el);
-    const n = at[x + ',' + y] = (at[x + ',' + y] || 0) + 1;
-    return { el, p: new THREE.Vector3(x, 20, -y), dy: (n - 1) * 30 };
-  }).filter(Boolean);
+  const c = net.cards[k];
+  events = c ? [Object.assign(tag(c.text, c.x, c.y, 'card'), { a: -1 })] : [];
 }
 
 const labels = [['HYPE', ...HYPE, 40, 'big'], ...STATIONS.map(([n, x, y]) => [n.toUpperCase(), x, y, 12, 'st'])].map(([text, x, y, h, cls]) => {
@@ -190,12 +209,13 @@ function flying(dt) {
   if (fly.t === 1) fly = null;
 }
 
+const sunDir = new THREE.Vector3(-0.45, 0.8, 0.75).normalize(), sunX = new THREE.Vector3(0, 1, 0).cross(sunDir).normalize(), sunY = sunDir.clone().cross(sunX), snap = new THREE.Vector3();
 const clock = new THREE.Clock();
 let last = '';
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
   if (fly) flying(dt);
-  coarse = camera.zoom < (coarse ? 1.0 : 0.8);
+  coarse = state.mode !== 'cars' || camera.zoom < (coarse ? 1.0 : 0.8);
   const lt = coarse ? 1 : 0;
   if (lt !== lod) {
     lod = lt;
@@ -207,8 +227,10 @@ function frame() {
   const [x0, y0, x1, y1] = view();
   city.update(x0 - 200, y0 - 200, x1 + 200, y1 + 200);
   city.show(state.mode, camera.zoom);
-  const span = Math.min(Math.max(x1 - x0, y1 - y0) * 0.6, 3000), t = controls.target;
-  sun.position.set(t.x - 0.45 * 4000, 4000 * 0.8, t.z + 0.75 * 4000);
+  const span = Math.min(2 ** Math.ceil(Math.log2(Math.max(x1 - x0, y1 - y0) * 0.6)), 4096), texel = span / 2048;
+  const t = snap.copy(controls.target);
+  for (const a of [sunX, sunY]) { const s = t.dot(a); t.addScaledVector(a, Math.round(s / texel) * texel - s); }
+  sun.position.copy(t).addScaledVector(sunDir, 5000);
   sun.target.position.copy(t);
   Object.assign(sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: 100, far: 12000 });
   sun.shadow.camera.updateProjectionMatrix();
@@ -218,13 +240,14 @@ function frame() {
     net && net.set(state.run, state.f);
     sync();
   }
-  if (cars && state.mode === 'cars') cars.tick(dt * state.speed);
+  if (cars && state.mode === 'cars') cars.tick(dt * state.speed, net, [x0, y0, x1, y1], px, city.loaded);
   net && net.draw(state.mode, [x0, y0, x1, y1], dt * state.speed, px);
   eventTags();
+  if (city.tag && !espoo) labels.push(espoo = Object.assign(tag('ESPOO', ...city.tag, 'big'), { far: true }));
   const w = innerWidth, h = innerHeight;
-  for (const l of [...labels, ...events]) {
+  for (const l of [...labels, ...events, ...signs]) {
     v.copy(l.p).project(camera);
-    const on = Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && (!l.el.classList.contains('st') || camera.zoom > 0.12);
+    const on = Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && (!l.el.classList.contains('st') || camera.zoom > 0.12) && !(l.a > state.f + 1e-6) && (l.a === undefined || state.mode !== 'flow') && (!l.far || camera.zoom < 0.35);
     l.el.style.display = on ? '' : 'none';
     if (on) l.el.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h - 8 - (l.dy || 0)}px) translate(-50%, -100%)`;
   }
