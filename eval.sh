@@ -9,7 +9,7 @@ for s in task/environment/server task/tests; do
   cp data/out/{net,zones}.json data/out/{od,truck,pt}.npy $s/data/out/
   cp data/catalogue.json $s/data/
 done
-cp rl/policy.py rl/policy.npz task/solution/ 2>/dev/null
+cp rl/policy.py rl/policy.npz rl/places.json task/solution/ 2>/dev/null
 [ "$1" = sync ] && exit
 id=$(date +%m%d-%H%M)-s${SEED:-0}
 h() { harbor run -y -p task --job-name "$id-$1" "${@:2}"; }

@@ -15,3 +15,4 @@ task/tests/sim/
 task/tests/data/
 task/solution/policy.py
 task/solution/policy.npz
+task/solution/places.json

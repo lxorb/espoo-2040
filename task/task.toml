@@ -17,6 +17,7 @@ timeout_sec = 5400.0
 
 [solution.env]
 MODE = "${MODE:-full}"
+REF = "${REF:-rl}"
 
 [environment]
 build_timeout_sec = 1800.0
