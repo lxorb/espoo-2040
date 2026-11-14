@@ -29,7 +29,7 @@ class Ground {
       looks.cover.value = this.cover = tex;
       looks.cbox.value.set(this.i0 * s, this.j0 * s, 1 / (this.ni * s), 1 / (this.nj * s));
       this.have = new Set(m.tiles.map(t => t.join('_')));
-      this.pre = m.tiles.map(([i, j]) => [Math.hypot((i + 0.5) * s - HYPE[0], (j + 0.5) * s - HYPE[1]), i, j]).sort((a, b) => a[0] - b[0]);
+      this.pre = m.tiles.map(([i, j]) => [Math.hypot((i + 0.5) * s - HYPE[0], (j + 0.5) * s - HYPE[1]), i, j]).sort((a, b) => a[0] - b[0]).slice(0, 80);
       this.meta = m;
     }).catch(() => {});
   }
