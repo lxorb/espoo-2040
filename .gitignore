@@ -11,3 +11,7 @@ task/environment/server/sim/
 task/environment/server/data/
 task/environment/server/test.sh
 *.pkl
+task/tests/sim/
+task/tests/data/
+task/solution/policy.py
+task/solution/policy.npz
