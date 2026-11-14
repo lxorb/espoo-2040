@@ -1,10 +1,11 @@
 import json
+import os
 
 import numpy as np
 import torch
 from torch import nn
 
-from .policy import AF, GF, PF, joints, jmask, obs
+from .policy import AF, GF, HERE, PF, joints, jmask, obs
 
 
 class Net(nn.Module):
@@ -34,6 +35,11 @@ class Net(nn.Module):
         hg = self.hg(x[:, 0])
         return hg[:, :3], hg[:, 3:6], hg[:, 6], self.hp(x[:, 1 + a.shape[1]:])[..., 0]
 
+    @staticmethod
+    def npz(path):
+        W = np.load(path)
+        return {("blocks." if k[0].isdigit() else "") + k[:-2] + (".weight" if k.endswith(".w") else ".bias"): W[k] for k in W.files if k != "layers"}
+
     def export(self, path):
         W = {k.replace("blocks.", "").replace(".weight", ".w").replace(".bias", ".b"): v.detach().numpy() for k, v in self.state_dict().items()}
         np.savez(path, layers=len(self.blocks), **W)
@@ -62,35 +68,14 @@ def places(c):
     return dict(projects={k: at(c.cat[k]) for k in c.menu}, areas=area)
 
 
-def footprint(c, q):
-    m = np.isin(c.s["osm"], [o for e in q.get("mod", []) + q.get("works", []) + [q.get("toll") or {"osm": []}] for o in e["osm"]])
-    pts = [g for e in q.get("new", []) for g in e["geom"]] + [g for e in q.get("pt", []) for g in e["stops"]]
-    pts += ([q["pnr"]["at"]] if "pnr" in q else []) + q.get("park", {}).get("area", [])
-    if pts:
-        m |= (np.linalg.norm(c.nodes[c.s["a"].astype(int)][:, None] - np.array(pts, float)[None], axis=2) < 1000).any(1)
-    return m
-
-
-def jam(c, foot):
-    if not c.recs:
-        return np.zeros(len(foot))
-    r, n = c.recs[-1], foot[0].size
-    late = r["flow"][:n] * np.maximum(r["time"][:n] - c._t0()[:n] * 60, 0)
-    return np.array([late[f].sum() for f in foot]) / max(late.sum(), 1e-9)
-
-
 class Agent:
     def __init__(self, c, net):
-        self.menu, self.net, self.places = list(c.menu), net, places(c)
-        self.foot = [footprint(c, c.cat[k]) for k in self.menu]
+        self.menu, self.net, self.J = list(c.menu), net, joints(len(c.menu))
         self.proj = [dict(id=k, **{f: c.cat[k].get(f, 0) for f in ("kind", "cost", "years", "opex")}) for k in self.menu]
-        self.J = joints(len(self.menu))
 
     def look(self, c):
-        m = np.array(c.mask(), bool)
-        cat = {q["id"]: q["jam"] for q in c.catalogue() if "jam" in q}
-        jm = [cat.get(k, 0.0) for k in self.menu] if cat else jam(c, self.foot)
-        return obs(c.state(), self.proj, m, c.years, self.places, jm), jmask(self.J, m)
+        m, jam = np.array(c.mask(), bool), {q["id"]: q["jam"] for q in c.catalogue() if not os.environ.get("RL_NOJAM")}
+        return obs(c.state(), [dict(q, jam=jam.get(q["id"], 0.0)) for q in self.proj], c.years), jmask(self.J, m)
 
     def eval(self, ob):
         with torch.no_grad():
@@ -100,3 +85,8 @@ class Agent:
 
 def batch(xs):
     return [torch.from_numpy(np.stack([x[0][i] for x in xs])) for i in range(3)]
+
+
+if __name__ == "__main__":
+    from sim import City
+    (HERE / "places.json").write_text(json.dumps(places(City(0))))

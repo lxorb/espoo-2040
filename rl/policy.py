@@ -5,8 +5,8 @@ import numpy as np
 
 KINDS = ["road", "lanes", "junction", "buslane", "rail", "bus", "toll", "parking", "pnr"]
 GF, AF, PF = 11, 8, len(KINDS) + 15
-WEIGHTS = Path(__file__).with_name("policy.npz")
-PLACES = json.loads(Path(__file__).with_name("places.json").read_text()) if Path(__file__).with_name("places.json").exists() else {"projects": {}, "areas": {}}
+HERE = Path(__file__).parent
+PLACES = json.loads((HERE / "places.json").read_text())
 
 
 def joints(n):
@@ -31,9 +31,8 @@ def encode(J, menu, acts):
     return int(np.flatnonzero((J[0] == m) & (J[1] == b[0]) & (J[2] == b[1]))[0])
 
 
-def obs(st, projects, mask, years=15, places=None, jam=None):
-    places = places or PLACES
-    t, inc, k = st["step"], max(st["income"], 1e-6), max(st["step"], 1)
+def obs(st, projects, years=15):
+    places, t, inc, k = PLACES, st["step"], max(st["income"], 1e-6), max(st["step"], 1)
     cond = np.r_[st["cond"], 1.0, 1.0][:2]
     g = np.array([[t / years, max(years - t, 0) / years, st["budget"] / inc / 5, st["committed"] / inc / 10, st["opex"] / inc,
                    st["car"] or 0.5, *cond, np.log1p(st["jam"] or 0) / 20, np.log1p(st["last"] or 0) / 20, t >= years]], np.float32)
@@ -47,7 +46,7 @@ def obs(st, projects, mask, years=15, places=None, jam=None):
     pxy = np.array([places["projects"].get(q["id"], (0.0, 0.0)) for q in projects], float)
     w = np.exp(-np.linalg.norm(pxy[:, None] - axy[None], axis=2) / 3000) if len(ar) else np.zeros((len(projects), 1))
     p = np.zeros((len(projects), PF), np.float32)
-    jam = np.zeros(len(projects)) if jam is None else np.asarray(jam, float)
+    jam = np.array([q.get("jam", 0.0) for q in projects])
     for i, q in enumerate(projects):
         p[i, KINDS.index(q["kind"]) if q["kind"] in KINDS else 0] = 1
         p[i, len(KINDS):] = [np.log1p(q["cost"]) / 7, q["cost"] / inc, q["years"] / 8, q.get("opex", 0) / inc * 10,
@@ -84,14 +83,9 @@ def joint(J, A, C, B):
 
 
 class Policy:
-    def __init__(self, path=WEIGHTS, check=False, maintain=None):
-        self.W, self.check, self.maintain = dict(np.load(path)), check, maintain
+    def __init__(self, path=HERE / "policy.npz"):
+        self.W = dict(np.load(path))
 
-    def __call__(self, st, projects, mask, forecast=None, k=4, years=15):
-        menu = [q["id"] for q in projects]
-        J = joints(len(menu))
-        A, C, _, B = forward(self.W, *obs(st, projects, mask, years, None, [q.get("jam", 0.0) for q in projects]))
-        lg = np.where(jmask(J, mask), joint(J, A, C, B), -np.inf)
-        top = np.argsort(-lg)[: k if self.check and forecast else 1]
-        acts = decode(J, menu, min(top, key=lambda i: forecast(decode(J, menu, i))) if len(top) > 1 else top[0])
-        return [{"maintain": self.maintain} if "maintain" in a and self.maintain is not None else a for a in acts]
+    def __call__(self, st, projects, mask, *_, years=15):
+        J, (A, C, _, B) = joints(len(projects)), forward(self.W, *obs(st, projects, years))
+        return decode(J, [q["id"] for q in projects], int(np.argmax(np.where(jmask(J, mask), joint(J, A, C, B), -np.inf))))

@@ -12,16 +12,12 @@ from sim import City
 
 from .core import Agent, Net, batch, jlogits
 from .policy import decode
-from .train import OUT, play, score, version
+from .train import OUT, SEEDS, load, play, score, version, weights
 
 
 def rollout(seed, sd):
-    torch.set_num_threads(1)
-    net = Net()
-    net.load_state_dict({k: torch.as_tensor(v) for k, v in sd.items()})
-    net.eval()
     c, rng = City(seed, fast=True), np.random.default_rng(seed)
-    ag, base = Agent(c, net), c.baseline()
+    ag, base = Agent(c, load(sd)), c.baseline()
     scale, tr = np.mean(base), []
     while not c.done:
         t, acts = c.state()["step"], []
@@ -32,7 +28,7 @@ def rollout(seed, sd):
             a = int(rng.choice(p.size, p=p / p.sum()))
             tr.append([ob, jm, a, float(np.log(p[a] / p.sum())), v, 0.0])
             acts = decode(ag.J, ag.menu, a)
-        tr[-1][5] += np.nan_to_num((base[t] - c.step(acts)["delay"]) / scale)
+        tr[-1][5] += (base[t] - c.step(acts)["delay"]) / scale
     return tr, score(c)
 
 
@@ -71,10 +67,9 @@ def main():
     ap.add_argument("--init", default="")
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--name", default="ppo")
-    ap.add_argument("--eval", default=",".join(map(str, range(16))))
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    ck, seeds = OUT / f"{a.name}-{version()}.pt", [int(s) for s in a.eval.split(",")]
+    ck = OUT / f"{a.name}-{version()}.pt"
     net = Net()
     opt = torch.optim.Adam(net.parameters(), a.lr)
     st = torch.load(ck, weights_only=False) if ck.exists() else dict(curve=[])
@@ -82,26 +77,23 @@ def main():
         net.load_state_dict(st["net"])
         opt.load_state_dict(st["opt"])
     elif a.init:
-        net.load_state_dict(torch.load(a.init, weights_only=False)["net"])
+        net.load_state_dict({k: torch.as_tensor(v) for k, v in Net.npz(a.init).items()})
     os.environ["NUMBA_NUM_THREADS"] = "1"
-    pool, J = ProcessPoolExecutor(a.workers, get_context("spawn")), Agent(City(seeds[0]), net).J
+    pool, J = ProcessPoolExecutor(a.workers, get_context("spawn")), Agent(City(0), net).J
     for it in range(len(st["curve"]) + 1, a.iters + 1):
         t = time.time()
-        sd = {k: v.numpy().copy() for k, v in net.state_dict().items()}
         ss = [2000 + it * a.workers + i for i in range(a.workers)]
-        res = list(pool.map(rollout, ss, [sd] * len(ss)))
+        res = list(pool.map(rollout, ss, [weights(net)] * len(ss)))
         update(net.train(), opt, [r[0] for r in res], J)
         net.eval()
-        row = dict(it=it, episodes=it * a.workers, train=float(np.nanmean([r[1] for r in res])), secs=time.time() - t)
+        row = dict(it=it, episodes=it * a.workers, train=float(np.mean([r[1] for r in res])), secs=time.time() - t)
         if it % a.every == 0:
-            sd = {k: v.numpy().copy() for k, v in net.state_dict().items()}
-            row["net"] = [r[1] for r in pool.map(play, seeds, [sd] * len(seeds), ["net"] * len(seeds))]
-            row["mean_net"] = float(np.nanmean(row["net"]))
+            row["net"] = [r[1] for r in pool.map(play, SEEDS, [weights(net)] * len(SEEDS))]
+            row["mean_net"] = float(np.mean(row["net"]))
             (OUT / "snap").mkdir(exist_ok=True)
             net.export(OUT / "snap" / f"{a.name}-{version()}-{row['episodes']:06d}.npz")
             if row["mean_net"] + min(row["net"]) > st.get("best", -9):
                 st["best"] = row["mean_net"] + min(row["net"])
-                torch.save(dict(net=net.state_dict()), ck.with_name(f"{a.name}best-{version()}.pt"))
                 net.export(ck.with_name(f"{a.name}best-{version()}.npz"))
         st["curve"].append(row)
         print(json.dumps({k: v for k, v in row.items() if k != "net"}), flush=True)

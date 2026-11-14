@@ -10,7 +10,7 @@ import numpy as np
 from sim import City
 
 from .policy import Policy, forward, jmask, joint, joints, obs
-from .train import OUT, version
+from .train import OUT, SEEDS, version
 
 
 def area_of(k):
@@ -22,7 +22,7 @@ def boom(c):
 
 
 def plan(path, seed):
-    c, pol = City(seed), Policy(path, maintain=None)
+    c, pol = City(seed), Policy(path)
     proj = [dict(id=k, **{f: c.cat[k].get(f, 0) for f in ("kind", "cost", "years", "opex")}) for k in c.menu]
     J, hot, ys, ent, legal, cash = joints(len(c.menu)), boom(c), [], [], [], None
     while not c.done:
@@ -30,7 +30,7 @@ def plan(path, seed):
         if t < c.years:
             jm = {q["id"]: q["jam"] for q in c.catalogue()}
             pj, m = [dict(q, jam=jm.get(q["id"], 0.0)) for q in proj], c.mask()
-            A, C, _, B = forward(pol.W, *obs(c.state(), pj, m, c.years, None, [q["jam"] for q in pj]))
+            A, C, _, B = forward(pol.W, *obs(c.state(), pj))
             ok = jmask(J, m)
             lg = joint(J, A, C, B)[ok]
             p = np.exp(lg - lg.max())
@@ -74,7 +74,7 @@ def summary(rows):
 
 
 def main():
-    names, seeds = sys.argv[1].split(","), list(range(16))
+    names, seeds = sys.argv[1].split(","), SEEDS
     os.environ["NUMBA_NUM_THREADS"] = "1"
     out_f = OUT / "strategy.json"
     out = json.loads(out_f.read_text()) if out_f.exists() else {}
