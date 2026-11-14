@@ -234,7 +234,8 @@ export class City {
       r.geometry.setAttribute('aE', new THREE.Float32BufferAttribute(e, 3));
       g.renderOrder = -3; r.renderOrder = -2;
       scene.add(g, r);
-      const rings = [(o.border || []).map(f => [...f, f[0], f[1]])];
+      const round = f => { for (let n = 4; n--;) { const g = []; for (let i = 0; i < f.length; i += 2) { const j = (i + 2) % f.length; g.push(0.75 * f[i] + 0.25 * f[j], 0.75 * f[i + 1] + 0.25 * f[j + 1], 0.25 * f[i] + 0.75 * f[j], 0.25 * f[i + 1] + 0.75 * f[j + 1]); } f = g; } return [...f, f[0], f[1]]; };
+      const rings = [(o.border || []).map(round)];
       rings[0].forEach(f => {
         const q = [], m = new THREE.Mesh(ribbon([{ pts: f, w: 0, y: 0.6, px: 2 }], ({ px }, s, dx, dz) => q.push(-dz * s, -dx * s, px)), borderMat);
         m.geometry.setAttribute('aE', new THREE.Float32BufferAttribute(q, 3));
