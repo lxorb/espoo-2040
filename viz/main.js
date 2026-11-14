@@ -207,7 +207,7 @@ addEventListener('keydown', e => {
 const UI = ['modes', 'right', 'time', 'sl', 'sr', 'card'].map(id => document.getElementById(id));
 let tags = [], shown = [], espoo = null;
 const HOME = -Math.PI / 4, turn = () => controls.getAzimuthalAngle();
-const VIEWS = { hype: [-1561, 1279, 3.91, HOME], o: [2275, 7610, 0.0733, HOME], O: [7437, 7120, 0.218, HOME], 0: [6369, 7760, 0.118, HOME], 1: [6369, 7760, 0.118, HOME], 2: [7267, 6620, 1.97, HOME] };
+const VIEWS = { hype: [-1561, 1279, 3.91, HOME], o: [2275, 7610, 0.0733, HOME], O: [7437, 7120, 0.218, HOME], 0: [6369, 7760, 0.118, HOME], 1: [6369, 7760, 0.118, HOME], 2: [7267, 6620, 2.03, HOME] };
 const go = (x, y, z1 = Math.max(camera.zoom, 2.5), r1 = turn()) => { fly = { t: 0, a: controls.target.clone(), b: new THREE.Vector3(x, 0, -y), z0: camera.zoom, z1, r0: turn(), r1 }; };
 function label(text, x, y, h, cls) {
   const el = document.createElement('div');
