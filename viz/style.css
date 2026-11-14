@@ -71,7 +71,8 @@ canvas, img { -webkit-user-drag: none; user-select: none; }
 #pf, #pp { inset: 0; display: flex; align-items: center; justify-content: center; }
 #pf img { max-width: min(980px, 92vw); max-height: 84vh; box-shadow: 0 8px 40px #000a; }
 #pp img { max-width: 92vw; max-height: 94vh; box-shadow: 0 8px 40px #000a; }
-#pa { width: 6px; height: 56px; margin-left: -3px; background: var(--hi); }
+#pa { width: 6px; height: 56px; margin-left: -3px; background: var(--hi); animation: bob .9s ease-in-out infinite alternate; }
+@keyframes bob { to { transform: translateY(-14px); } }
 #pa::after { content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%); border: 14px solid transparent; border-top: 20px solid var(--hi); border-bottom: 0; }
 #pc { left: 32px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
 #pc div { padding: 14px 20px; background: var(--ink); color: var(--hi); font-weight: 700; font-size: 18px; letter-spacing: .08em; text-transform: uppercase; border-radius: 10px; box-shadow: 0 4px 16px #0006; opacity: 0; animation: in .25s forwards; }
