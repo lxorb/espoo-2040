@@ -19,7 +19,7 @@ from data.geo import ROOT, VIZ
 C = np.array([-1511.7, 1239.2])
 S, PX, PAD, N = 96, 0.075, 0.12, 2048
 E = S * (1 + 2 * PAD)
-RAW, OUT = ROOT / "data/raw/ground", VIZ / "ground"
+RAW, OUT, ASSETS = ROOT / "data/raw/ground", VIZ / "ground", ROOT / "viz/assets/ground"
 WMS = "https://kartat.espoo.fi/teklaogcweb/wms.ashx"
 MODEL, OPT, CAP = "gpt-image-2.6-flare", {"size": "2048x2048", "quality": "high"}, 88.0
 PAL = {"land": (138, 140, 116), "grass": (110, 138, 74), "forest": (86, 80, 56), "sand": (192, 180, 146),
@@ -216,9 +216,9 @@ def api(method, path, **kw):
     return requests.request(method, "https://api.openai.com/v1/" + path, headers={"Authorization": f"Bearer {key}"}, timeout=900, **kw)
 
 
-def save(name, r, batch=False):
+def save(name, r):
     with open(RAW / "usage.jsonl", "a") as f:
-        f.write(json.dumps({"name": name, "usage": r.get("usage"), "error": r.get("error"), "batch": batch}) + "\n")
+        f.write(json.dumps({"name": name, "usage": r.get("usage"), "error": r.get("error")}) + "\n")
     if "data" not in r:
         return None
     Image.open(io.BytesIO(base64.b64decode(r["data"][0]["b64_json"]))).convert("RGB").resize((N, N), Image.LANCZOS).save(
@@ -228,13 +228,10 @@ def save(name, r, batch=False):
 
 def check(name):
     g = ndimage.gaussian_filter(np.asarray(Image.open(RAW / f"{name}.jpg").convert("L"), float), 0.7)
-    cls, k = np.asarray(Image.open(RAW / f"{name}_cls.png")), E / N
-    m, a = cls == CLS["line"], cls == CLS["asphalt"]
-    lit = (g > 175) & ndimage.binary_dilation(m | a, iterations=4)
-    ga = ndimage.binary_opening(g < 105, iterations=2)
-    d = [ndimage.distance_transform_edt(~lit)[m] * k,
-         ndimage.distance_transform_edt(~(ga ^ ndimage.binary_erosion(ga)))[a ^ ndimage.binary_erosion(a)] * k]
-    e = [round(float(np.percentile(x, q)), 2) if len(x) else 0.0 for x in d for q in (50, 90)]
+    cls = np.asarray(Image.open(RAW / f"{name}_cls.png"))
+    m = cls == CLS["line"]
+    d = ndimage.distance_transform_edt(~((g > 175) & ndimage.binary_dilation(m | (cls == CLS["asphalt"]), iterations=4)))[m] * E / N
+    e = [round(float(np.percentile(d, q)), 2) if len(d) else 0.0 for q in (50, 90)]
     with open(RAW / "align.jsonl", "a") as f:
         f.write(json.dumps({"name": name, "err": e}) + "\n")
     if e[1] > 0.3:
@@ -256,7 +253,7 @@ def prep(ij):
 def spent():
     rows = [json.loads(l) for l in (RAW / "usage.jsonl").read_text().splitlines()]
     return sum((u["input_tokens_details"]["text_tokens"] * 5 + u["input_tokens_details"].get("image_tokens", 0) * 8 + u["output_tokens"] * 30)
-               / 1e6 / (2 if r.get("batch") else 1) for r in rows if (u := r["usage"]))
+               / 1e6 for r in rows if (u := r["usage"]))
 
 
 def gen(ij):
@@ -380,6 +377,187 @@ def sprites():
             meta.append({"name": f"{name}{k}", "w": out.width, "h": out.height, "m": h, "base": base,
                          "crown": crown if name not in ("walker", "shrub") else base})
     (d / "sprites.json").write_text(json.dumps(meta, indent=0))
+
+
+BANK = {"grass": (["grass"], 20, 512, 2), "forest_floor": (["forest"], 24, 512, None), "asphalt": (["asphalt"], 10, 256, None),
+        "gravel": (["land", "sand"], 16, 256, "dry"), "meadow": (["land"], 24, 512, "green"), "sand": (["sand"], 16, 256, None),
+        "rock": (["rock"], 16, 256, None)}
+
+
+def windows(classes, m, rule, pure=0.999):
+    w, out = round(m / (E / N) / 8 * (1.45 if rule == 2 else 1)), []
+    for t in area(600):
+        f = RAW / f"{t[0]}_{t[1]}.jpg"
+        if not f.exists():
+            continue
+        c = np.asarray(Image.open(RAW / f"{t[0]}_{t[1]}_cls.png"))
+        good = np.isin(c, [CLS[k] for k in classes]) & ~ndimage.binary_dilation(c == CLS["line"], iterations=9)
+        ok = ndimage.uniform_filter(good.reshape(N // 8, 8, N // 8, 8).mean((1, 3)), w, mode="constant") >= pure
+        ok[:w // 2 + 2], ok[-w // 2 - 2:], ok[:, :w // 2 + 2], ok[:, -w // 2 - 2:] = False, False, False, False
+        for y, x in np.argwhere(ok)[::max(1, int(ok.sum()) // 6)]:
+            out.append((f, (x - w // 2) * 8, (y - w // 2) * 8, w * 8))
+    return out if len(out) >= 12 or pure < 0.955 else windows(classes, m, rule, pure - 0.01)
+
+
+def pick(cands, k, rule):
+    feats, crops = [], []
+    for f, x, y, w in cands:
+        im = np.asarray(Image.open(f).crop((x, y, x + w, y + w)).resize((64, 64)), float)
+        g = im[..., 1] - im[..., [0, 2]].mean(-1)
+        if rule == "dry" and g.mean() > 4 or rule == "green" and g.mean() < 10:
+            continue
+        hi = np.asarray(Image.open(f).crop((x, y, x + w, y + w)).convert("L"), float)
+        spec = np.abs(np.fft.fft2(hi - hi.mean()))[2:-2, 2:-2]
+        if spec.max() > 40 * spec.mean():
+            continue
+        feats.append(np.r_[im.mean((0, 1)), 3 * im.std(), 2 * g.mean(), (hi - ndimage.gaussian_filter(hi, 2)).std()])
+        crops.append((f, x, y, w))
+    if not crops:
+        return []
+    feats = np.array(feats)
+    keep = feats[:, -1] >= 0.75 * np.median(feats[:, -1])
+    feats, crops = feats[keep][:, :-1], [c for c, k in zip(crops, keep) if k]
+    chosen = []
+    for i in np.argsort(np.linalg.norm((feats - np.median(feats, 0)) / (feats.std(0) + 1e-6), axis=1)):
+        if len(chosen) < k and all(crops[i][0] != crops[c][0] or max(abs(crops[i][1] - crops[c][1]), abs(crops[i][2] - crops[c][2])) > crops[i][3] for c in chosen):
+            chosen.append(i)
+    return [crops[c] for c in chosen]
+
+
+def despeck(im):
+    a = np.asarray(im, np.float32)
+    for _ in range(6):
+        l = a.mean(-1)
+        m = ndimage.binary_dilation((l > l.mean() + 2.6 * l.std()) | (l < l.mean() - 3 * l.std()), iterations=4)
+        if not m.any():
+            break
+        for _ in range(6):
+            a[m] = np.roll(a, (37, 23), (0, 1))[m]
+            m &= np.roll(m, (37, 23), (0, 1))
+    return Image.fromarray(a.astype(np.uint8))
+
+
+def noise(n, sigma, seed):
+    z = ndimage.gaussian_filter(np.random.default_rng(seed).normal(size=n), sigma, mode="wrap")
+    return (z - z.mean()) / z.std()
+
+
+def bricks(n, ppm, w, h, bond, col, grain, seed, moss=0):
+    y, x = np.mgrid[0:n[0], 0:n[1]] / ppm
+    row = np.floor(y / h).astype(int)
+    xs = x + (row % 2) * w / 2 * bond
+    col_i = np.floor(xs / w).astype(int)
+    u, v = (xs % w) * ppm, (y % h) * ppm
+    e = np.minimum.reduce([u, w * ppm - u, v, h * ppm - v])
+    jit = np.random.default_rng(seed).normal(0, 0.035, (row.max() + 1, col_i.max() + 1))[row, col_i]
+    lum = (1 + jit + grain[0] * noise(n, 0.7, seed) + grain[1] * noise(n, 3, seed + 1)) * np.clip(0.55 + e / 5, 0, 1)
+    out = np.array(col, float) * lum[..., None]
+    if moss:
+        g = np.clip(1.2 - e / 2.5, 0, 1) * np.clip(noise(n, 12, seed + 2) + 0.3, 0, 1) * moss
+        out = out * (1 - g[..., None]) + np.array([72, 88, 52]) * g[..., None]
+    return out
+
+
+def stripes(a, ppm):
+    m = np.zeros(a.shape[:2])
+    y, x = np.mgrid[0:a.shape[0], 0:a.shape[1]] / ppm
+    m[(np.abs((x - 1.25) % 2.5 - 1.25) < 0.06) & (((y - 2) % 20) < 10)] = 1
+    m[np.abs((y - 7) % 20) < 0.06] = 1
+    m = ndimage.gaussian_filter(m, 0.6, mode="wrap") * np.clip(0.85 + 0.12 * noise(m.shape, 2, 5), 0, 1) * (noise(m.shape, 3, 6) > -2.2)
+    return a * (1 - m[..., None]) + np.array([228, 228, 222]) * m[..., None]
+
+
+def extras(d):
+    hp = []
+    for f, x, y, w in windows(["walk", "paving"], 6, None)[:40]:
+        a = np.asarray(Image.open(f).crop((x, y, x + w, y + w)), float)
+        hp.append(np.r_[a.mean((0, 1)), (a.mean(-1) - ndimage.gaussian_filter(a.mean(-1), 1.5)).std() / a.mean()])
+    st = np.median(hp, 0)
+    base, gr = st[:3], (0.6 * st[3], 0.5 * st[3])
+    warm = base * np.array([1.025, 1.0, 0.965])
+    yield "paving", 6, [bricks((512, 512), 512 / 6, w, h, bond, c, gr, k, moss) for k, (w, h, bond, c, moss) in enumerate(
+        [(0.4, 0.25, 1, base * 1.03, 0), (0.4, 0.25, 1, warm, 0), (0.4, 0.25, 1, base * 0.97, 0.35), (0.3, 0.3, 0, base, 0)])]
+    walk = []
+    for k, c in enumerate((base * 1.08, warm)):
+        a = bricks((512, 160), 64, 0.25, 0.4, 1, c, gr, 10 + k)
+        curb = bricks((512, 19), 64, 0.3, 1.0, 0, (205, 203, 197), (gr[0] * 1.5, gr[1]), 20 + k)
+        curb[:, :3] *= 0.75
+        a[:, :19] = curb
+        walk.append(a)
+    yield "sidewalk", 8, walk
+    yield "parking", 20, [stripes(np.tile(np.asarray(Image.open(f).convert("RGB"), float), (2, 2, 1)), 512 / 20) for f in sorted(d.glob("asphalt-*.webp"))]
+
+
+def put(d, meta, name, m, ims, norm=True):
+    for f in [*d.glob(f"{name}-*.webp"), d / f"{name}.webp"]:
+        f.unlink(missing_ok=True)
+    mu, sd = np.mean([a.mean((0, 1)) for a in ims], 0), np.mean([a.std((0, 1)) for a in ims], 0)
+    for k, a in enumerate(ims):
+        a = ((a - a.mean((0, 1))) * np.clip(sd / (a.std((0, 1)) + 1e-6), 0.8, 1.25) + mu) if norm else a
+        Image.fromarray(a.clip(0, 255).astype(np.uint8)).save(d / f"{name}-{k}.webp", quality=88, method=6)
+    meta[name] = {"name": name, "metres": m, "variants": len(ims)}
+    print(name, len(ims), flush=True)
+
+
+def orient(im, size):
+    g = ndimage.gaussian_filter(np.asarray(im.convert("L"), float), 1.5)
+    gy, gx = ndimage.sobel(g, 0), ndimage.sobel(g, 1)
+    phi, w = np.arctan2(gy, gx), gx ** 2 + gy ** 2
+    im = im.rotate(np.degrees(np.arctan2((w * np.sin(2 * phi)).sum(), (w * np.cos(2 * phi)).sum()) / 2) - 90, Image.BICUBIC)
+    c = (im.size[0] - size) // 2
+    return im.crop((c, c, c + size, c + size))
+
+
+def seamless(img):
+    b = np.asarray(img, np.float32)
+    n = len(b)
+    a, mu = np.roll(b, (n // 2, n // 2), (0, 1)), b.mean((0, 1))
+    g = b.mean(-1) - ndimage.gaussian_filter(b.mean(-1), n / 128, mode="wrap")
+    c = np.fft.ifft2(np.fft.fft2(np.roll(g, (n // 2, n // 2), (0, 1))) * np.conj(np.fft.fft2(g))).real
+    r = np.minimum(np.arange(n), n - np.arange(n))
+    c[(np.maximum.outer(r, r) > 0.3 * n)] = -np.inf
+    b = np.roll(b, np.unravel_index(c.argmax(), c.shape), (0, 1))
+    d = np.abs(np.arange(n) - n / 2 + 0.5)
+    w = np.clip((0.2 * n - np.minimum.outer(d, d)) / (0.12 * n), 0, 1)[..., None]
+    t = mu + ((1 - w) * (a - mu) + w * (b - mu)) / np.sqrt((1 - w) ** 2 + w ** 2)
+    low = ndimage.gaussian_filter(t, (n / 4, n / 4, 0), mode="wrap")
+    return Image.fromarray((t - low + low.mean((0, 1))).clip(0, 255).astype(np.uint8))
+
+
+def worn(alpha, seed):
+    n = ndimage.gaussian_filter(np.random.default_rng(seed).normal(size=alpha.shape), 2, mode="wrap")
+    n /= n.std()
+    return alpha * (n > -2.1) * np.clip(0.88 + 0.08 * n, 0, 1)
+
+
+def marks(d, P=64, k=4):
+    atlas, out = Image.new("L", (1024 * k, 512 * k)), {}
+    for name, x0, w, h, xs in (("zebra", 16, 2.5, 4, (-1.25, -0.25, 0.75)), ("stop", 200, 3.5, 0.5, (-1.75,))):
+        for x in xs:
+            ImageDraw.Draw(atlas).rectangle([(x0 + (x + w / 2) * P) * k, 16 * k, (x0 + (x + w / 2 + (0.5 if name == "zebra" else w)) * P) * k, (16 + h * P) * k], fill=255)
+        out[name] = {"uv": [x0 / 1024, 16 / 512, (x0 + w * P) / 1024, (16 + h * P) / 512], "metres": [w, h]}
+    a = worn(np.asarray(atlas.resize((1024, 512), Image.LANCZOS), float) / 255, 2)
+    Image.fromarray(np.dstack([np.full((512, 1024, 3), 238), a * 255]).astype(np.uint8), "RGBA").save(d / "marks.webp", lossless=True)
+    return out
+
+
+def bank(*only):
+    d = ASSETS
+    meta = {m["name"]: m for m in json.loads((d / "materials.json").read_text())["materials"]}
+    for name, (classes, m, px, rule) in BANK.items():
+        if only and name not in only:
+            continue
+        ims = []
+        for f, x, y, w in pick(windows(classes, m, rule), 4, rule):
+            im = Image.open(f).crop((x, y, x + w, y + w))
+            im = despeck(orient(im, round(w / 1.45)) if rule == 2 else im)
+            ims.append(np.asarray(despeck(seamless(im.resize((px, px), Image.LANCZOS))), float))
+        ims += [np.rot90(a, 2 if rule == 2 else 1).copy() for a in ims][:max(0, 4 - len(ims))]
+        put(d, meta, name, m, ims)
+    for name, m, ims in extras(d):
+        if not only or name in only:
+            put(d, meta, name, m, ims, name != "paving")
+    (d / "materials.json").write_text(json.dumps({"materials": list(meta.values()), "marks": marks(d)}))
 
 
 if __name__ == "__main__":

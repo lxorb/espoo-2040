@@ -1,7 +1,6 @@
 import io
 import json
 import re
-import sys
 import xml.etree.ElementTree as ET
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -21,7 +20,6 @@ from data.geo import BBOX, ORIGIN, PBF, RAW, VIZ, local
 
 S = 1000
 TOL = 0.3
-HYPE = local(24.6306, 60.1568)
 LAND = RAW / "land" / "land-polygons-split-4326" / "land_polygons.shp"
 WFS = "https://kartat.espoo.fi/teklaogcweb/wfs.ashx?service=WFS&version=1.1.0&request=GetFeature&typeName=bldg:building_lod1"
 LOD1 = RAW / "espoo_lod1.npy"
@@ -108,7 +106,7 @@ class Reader(osmium.SimpleHandler):
     def __init__(self):
         super().__init__()
         self.wkb = osmium.geom.WKBFactory()
-        self.b, self.g, self.r, self.t, self.p, self.muni = [], [], [], [], [], {}
+        self.b, self.g, self.r, self.t, self.p, self.muni = [], [], [], [], [], []
 
     def node(self, n):
         if k := lookup(PMAP, n.tags):
@@ -134,8 +132,8 @@ class Reader(osmium.SimpleHandler):
 
     def area(self, a):
         t = a.tags
-        if t.get("boundary") == "administrative" and t.get("admin_level") == "8" and t.get("name") in ("Espoo", "Kauniainen"):
-            self.muni[t["name"]] = self.polys(a)
+        if t.get("boundary") == "administrative" and t.get("admin_level") == "8" and t.get("name") == "Espoo":
+            self.muni = self.polys(a)
         if t.get("building", "no") != "no" and t.get("location") != "underground":
             lv = num(t.get("building:levels"))
             hs = [num(t.get("height")), lv and lv * 3.2]
@@ -159,11 +157,10 @@ def tile(x, y):
     return floor(x / S), floor(y / S)
 
 
-def region(r):
+def region():
     xs, ys = local(np.array([BBOX[0], BBOX[2], BBOX[0], BBOX[2]]), np.array([BBOX[1], BBOX[1], BBOX[3], BBOX[3]]))
     (i0, j0), (i1, j1) = tile(xs.min(), ys.min()), tile(xs.max(), ys.max())
-    hype = shapely.Point(HYPE)
-    return {(i, j) for i in range(i0, i1 + 1) for j in range(j0, j1 + 1) if not r or cell(i, j).distance(hype) <= r}
+    return {(i, j) for i in range(i0, i1 + 1) for j in range(j0, j1 + 1)}
 
 
 def cell(i, j):
@@ -208,12 +205,11 @@ def heights(b):
     pi, bi = shapely.STRtree([p for _, _, p in b]).query(shapely.points(m[:, :2]), predicate="intersects")
     espoo = np.zeros(len(b))
     np.maximum.at(espoo, bi, m[pi, 2])
-    src, out = {"height": 0, "espoo": 0, "levels": 0, "kind": 0}, []
+    out = []
     for (hs, k, p), e in zip(b, espoo):
-        s, h = next((s, h) for s, h in zip(src, [hs[0], e, hs[1], BH[k]]) if h)
-        src[s] += 1
+        h = next(h for h in [hs[0], e, hs[1], BH[k]] if h)
         out.append((round(max(h, 2.5), 1), "apartments" if k == "other" and h >= 12 else k, p))
-    return out, src
+    return out
 
 
 def split(g, keep):
@@ -245,23 +241,22 @@ def overview(polys, roads, muni):
             g += [(k, shapely.Polygon(q.exterior))] + [("land", shapely.Polygon(i)) for i in q.interiors]
     g = sorted((e for e in g if e[1].area > 3000), key=lambda e: -e[1].area)
     major = {}
-    [major.setdefault((k, n), []).append(l) for k, n, l, _ in roads if k in ("motorway", "trunk", "primary", "secondary", "rail")]
+    [major.setdefault((k, n), []).append(l) for k, n, l, _ in roads if k in ("motorway", "trunk", "primary", "secondary")]
     r = [[RKINDS.index(k), n, flat(l.simplify(15).coords, 0)] for (k, n), ls in major.items()
          for l in shapely.get_parts(shapely.line_merge(shapely.union_all(ls)))]
     g = [[GKINDS.index(k), flat(orient(q).exterior.coords[:-1], 0)] for k, q in g]
-    rim = {k: [flat(p.exterior.simplify(10).coords[:-1], 0) for p in muni.get(n, [])] for k, n in [("border", "Espoo"), ("inner", "Kauniainen")]}
-    (VIZ / "overview.json").write_text(json.dumps({"g": g, "r": r, **rim}, separators=(",", ":")))
+    border = [flat(p.exterior.simplify(10).coords[:-1], 0) for p in muni]
+    (VIZ / "overview.json").write_text(json.dumps({"g": g, "r": r, "border": border}, separators=(",", ":")))
     print("overview", len(g), "polygons", len(r), "lines")
 
 
 def main():
-    r = float(sys.argv[1]) if len(sys.argv) > 1 else 0
-    keep = region(r)
+    keep = region()
     h = Reader()
     h.apply_file(str(PBF), locations=True)
     tiles = {k: {"b": [], "g": [], "r": [], "t": [], "p": []} for k in keep}
     put = lambda k, layer, item: k in tiles and tiles[k][layer].append(item)
-    b, src = heights(h.b)
+    b = heights(h.b)
     for ht, k, p in b:
         put(tile(p.centroid.x, p.centroid.y), "b", [ht, BKINDS.index(k), flat(orient(p).exterior.coords[:-1])])
     polys = land() + h.g
@@ -293,7 +288,7 @@ def main():
             out.append([i, j])
     meta = {"size": S, "bkinds": BKINDS, "gkinds": GKINDS, "rkinds": RKINDS, "pkinds": PKINDS, "tiles": out}
     (VIZ / "tiles.json").write_text(json.dumps(meta, separators=(",", ":")))
-    print(len(out), "tiles", sum(len(v["b"]) for v in tiles.values()), "buildings", src)
+    print(len(out), "tiles", sum(len(v["b"]) for v in tiles.values()), "buildings")
 
 
 if __name__ == "__main__":
