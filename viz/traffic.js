@@ -69,7 +69,7 @@ const SURFACE = BAND_FRAG(`float wear = 1.0 - vK.x, v = vn(vW * 0.35);
     c = mix(vec3(0.15, 0.155, 0.16), vec3(0.47, 0.47, 0.45), smoothstep(0.0, 1.0, wear));
     float crack = (1.0 - smoothstep(0.0, 1.0, abs(v - 0.5) / max(fwidth(v), 1e-4))) * smoothstep(0.7, 0.9, wear) * step(0.62, vn(vW * 0.04 + 7.0));
     c *= 1.0 - 0.35 * crack * (1.0 - smoothstep(0.2, 0.5, length(fwidth(vW))));
-    if (uDetail > 0.0) c *= mix(vec3(1.0), detail(vW, vW, ${L.asphalt_worn}.0), uDetail);
+    if (uDetail > 0.0) c *= mix(vec3(1.0), detail(vW, vW, ${L.asphalt_worn}.0, -1.0), uDetail);
     al = mix(0.85, 0.7 * smoothstep(0.35, 1.0, wear), max(cover(vW), uDetail));
     if (vK.y < ${SHUT}) { float bar = step(fract(vU.x / 30.0), 0.07); c = mix(vec3(0.09), uMark, max(step(0.5, fract((vW.x + vW.y) / 5.0)), bar)); al = 0.95; }
     else if (vK.y < 0.999) { c = mix(c, uMark, stripe); al = max(al, 0.85 * stripe); }`);
@@ -94,7 +94,7 @@ export class Net {
     net.links.forEach((l, i) => this.byOsm.set(l.osm, [...(this.byOsm.get(l.osm) || []), i]));
     const twin = new Set(net.links.map(l => l.a + ',' + l.b));
     this.two = net.links.map(l => twin.has(l.b + ',' + l.a) ? 1 : 0);
-    this.uni = { uPx: { value: 1 }, uRef: { value: 1 }, uClip: { value: new THREE.Vector3(0, 0, 1) }, uYear: { value: 0 }, uOy: { value: -99 }, uT: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat, uCover: looks.cover, uCbox: looks.cbox, uMark: looks.mark, uMats: looks.mats, uMat: looks.mat, uDetail: looks.detail };
+    this.uni = { uPx: { value: 1 }, uRef: { value: 1 }, uClip: { value: new THREE.Vector3(0, 0, 1) }, uYear: { value: 0 }, uOy: { value: -99 }, uT: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat, uCover: looks.cover, uCbox: looks.cbox, uMark: looks.mark, uMats: looks.mats, uMat: looks.mat, uVar: looks.var, uDetail: looks.detail };
     this.heatRT = target();
     this.heatOld = target();
     this.xf = -1e9;
@@ -623,7 +623,7 @@ export class Net {
       const e = [g[0], g[g.length - 1]].map(p => p.join()).sort().join();
       return !seen.has(e) && seen.add(e);
     }).map(({ geom, w }) => ({ geom, w: w + 5, k: [0, 0, 0] }));
-    const m = new THREE.Mesh(band(lines, 0.6), new THREE.ShaderMaterial({ uniforms: this.uni, vertexShader: BAND_VERT, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+    const m = new THREE.Mesh(band(lines, 0.6), new THREE.ShaderMaterial({ uniforms: this.uni, vertexShader: BAND_VERT.replace('max(aS.y, 4.0 * uPx)', 'aS.y + 10.0 * uPx'), transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
       fragmentShader: `uniform float uPx; uniform vec3 uMark; varying vec2 vU; varying float vS; ${CLIP}
         void main() { clip(); if ((1.0 - abs(vS)) / max(fwidth(vS), 1e-5) > 2.0 || fract(vU.x / (12.0 * uPx)) > 0.6) discard; gl_FragColor = vec4(uMark, 1.0); }` }));
     m.frustumCulled = false;
