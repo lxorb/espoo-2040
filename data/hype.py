@@ -210,4 +210,4 @@ def build(skin=True):
 
 if __name__ == "__main__":
     from data.district import glb
-    GLB.write_bytes(glb(build()[0], 75))
+    GLB.write_bytes(glb(build()[0]))

@@ -207,7 +207,7 @@ addEventListener('keydown', e => {
 const UI = ['modes', 'right', 'time', 'sl', 'sr', 'card'].map(id => document.getElementById(id));
 let tags = [], shown = [], espoo = null;
 const HOME = -Math.PI / 4, turn = () => controls.getAzimuthalAngle();
-const VIEWS = { hype: [-1561, 1279, 3.91, HOME], o: [2275, 7610, 0.0733, HOME], O: [7437, 7120, 0.218, HOME], 0: [6369, 7760, 0.118, HOME], 1: [6369, 7760, 0.118, HOME] };
+const VIEWS = { hype: [-1561, 1279, 3.91, HOME], o: [2275, 7610, 0.0733, HOME], O: [7437, 7120, 0.218, HOME], 0: [6369, 7760, 0.118, HOME], 1: [6369, 7760, 0.118, HOME], 2: [7267, 6620, 1.97, HOME] };
 const go = (x, y, z1 = Math.max(camera.zoom, 2.5), r1 = turn()) => { fly = { t: 0, a: controls.target.clone(), b: new THREE.Vector3(x, 0, -y), z0: camera.zoom, z1, r0: turn(), r1 }; };
 function label(text, x, y, h, cls) {
   const el = document.createElement('div');
@@ -464,7 +464,7 @@ fm.onclick = e => { if (e.target === fm) fm.hidden = true; };
 addEventListener('keydown', e => { if (e.key === 'Escape') fm.hidden = true; });
 
 present({
-  warm: () => { for (const w of state.list) get(w); },
+  warm: () => { for (const w of state.list) get(w); for (const d of ['tiles', 'detail-clean']) for (const i of [-1, 0, 1]) for (const j of [-1, 0, 1]) fetch(`data/${d}/${Math.floor(VIEWS[2][0] / 1000) + i}_${Math.floor(VIEWS[2][1] / 1000) + j}.${d === 'tiles' ? 'json' : 'glb'}`).catch(() => {}); },
   go: k => go(...VIEWS[k]),
   set: o => { Object.assign(state, o); if ('who' in o || 'split' in o || 'pair' in o) loadRun(); if ('f' in o) paint(); apply(); },
   slide: to => { const a = state.cut, t0 = performance.now(), step = () => { const t = Math.min((performance.now() - t0) / 1500, 1); state.cut = a + (to - a) * t * t * (3 - 2 * t); if (t < 1) requestAnimationFrame(step); }; step(); }

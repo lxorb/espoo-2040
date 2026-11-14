@@ -20,7 +20,8 @@ export function present(v) {
     () => v.set({ mode: 'heat' }),
     () => v.set({ play: true }),
     () => v.go('O'),
-    () => { v.go(0); v.set({ split: true, pair: ['rl', 'gpt-6.1'], cut: 0.2635 }); },
+    () => { v.go(2); v.set({ mode: 'cars' }); },
+    () => { v.go(0); v.set({ mode: 'heat', split: true, pair: ['rl', 'gpt-6.1'], cut: 0.2635 }); },
     () => { v.go(1); v.slide(0.7955); },
     () => v.set({ pair: ['gemma', 'gpt-6.1'] }),
     () => show('pp', el('img', { src: 'assets/paper.jpg' }))

@@ -295,7 +295,7 @@ def model(bs, lib, ortho, A, f=1.0, pages=99, crops={}):
     return [(p, np.vstack(v), np.vstack(uv)) for p, v, uv in out if v]
 
 
-def glb(prims, q=85):
+def glb(prims, q=80, shrink=1.0):
     lo = np.min([v.min(0) for _, v, _ in prims], 0)
     span = np.maximum(np.max([v.max(0) for _, v, _ in prims], 0) - lo, 1e-3)
     views, acc, prim, bins, images, mats = [], [], [], [], [], []
@@ -312,8 +312,8 @@ def glb(prims, q=85):
             uv = np.zeros((len(v), 0))
         else:
             if not ext:
-                img.save(buf := io.BytesIO(), "JPEG", quality=q)
-            images.append({"uri": img} if ext else {"bufferView": view(buf.getvalue()), "mimeType": "image/jpeg"})
+                img.resize((round(img.width * shrink), round(img.height * shrink)), Image.LANCZOS).save(buf := io.BytesIO(), "WEBP", quality=q, method=6)
+            images.append({"uri": img} if ext else {"bufferView": view(buf.getvalue()), "mimeType": "image/webp"})
             m = {"pbrMetallicRoughness": {"baseColorTexture": {"index": len(images) - 1}, "metallicFactor": 0, "roughnessFactor": 0.9}}
             uv = uv if ext else np.round(np.clip(uv, 0, 1) * 65535)
         mats += [m] if m not in mats else []
@@ -328,9 +328,10 @@ def glb(prims, q=85):
             acc.append({"bufferView": view(t.tobytes(), target=34962), "componentType": 5126 if ext else 5123, "normalized": not ext, "count": len(a), "type": "VEC2"})
             attr["TEXCOORD_0"] = len(acc) - 1
         prim.append({"material": mats.index(m), "indices": attr["POSITION"] - 1, "attributes": attr})
-    js = {"asset": {"version": "2.0"}, "extensionsUsed": ["KHR_mesh_quantization"], "extensionsRequired": ["KHR_mesh_quantization"], "scene": 0,
+    need = ["KHR_mesh_quantization"] + ["EXT_texture_webp"] * any("bufferView" in im for im in images)
+    js = {"asset": {"version": "2.0"}, "extensionsUsed": need, "extensionsRequired": need, "scene": 0,
           "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0, "translation": [lo[0], lo[2], -lo[1] - span[1]], "scale": [span[0], span[2], span[1]]}],
-          "meshes": [{"primitives": prim}], "images": images, "materials": mats, "textures": [{"sampler": 0, "source": n} for n in range(len(images))],
+          "meshes": [{"primitives": prim}], "images": images, "materials": mats, "textures": [{"sampler": 0, **({"extensions": {"EXT_texture_webp": {"source": n}}} if "bufferView" in im else {"source": n})} for n, im in enumerate(images)],
           "samplers": [{"magFilter": 9729, "minFilter": 9987}], "accessors": acc, "bufferViews": views, "buffers": [{"byteLength": len(body := b"".join(bins))}]}
     head = (lambda h: h + b" " * (-len(h) % 4))(json.dumps(js, separators=(",", ":")).encode())
     return struct.pack("<4sIII4s", b"glTF", 2, 28 + len(head) + len(body), len(head), b"JSON") + head + struct.pack("<I4s", len(body), b"BIN\0") + body
@@ -354,7 +355,7 @@ def build():
         prims = model(part, lib, o, 4096, crops=crops) if part else []
         for k in range(0, len(prims), 5):
             files.append(name if len(prims) <= 5 else name.replace(".glb", f"-{k // 5}.glb"))
-            (OUT / files[-1]).write_bytes(glb(prims[k:k + 5]))
+            (OUT / files[-1]).write_bytes(glb(prims[k:k + 5], shrink=0.7))
     hide = [list(np.round(np.array(p.exterior.coords)[:-1], 1).ravel()) for b in bs for p in getattr(b["foot"], "geoms", [b["foot"]]) if not p.is_empty] + rings
     (OUT / "district.json").write_text(json.dumps({"models": files, "hide": hide}, separators=(",", ":")))
 
