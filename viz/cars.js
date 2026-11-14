@@ -83,9 +83,10 @@ export class Cars {
       const s = (this.t - start) / this.meta.dt, k = Math.floor(s);
       if (k < 0 || k >= n - 1) return;
       const a = 2 * (off + k), f = s - k;
-      const x = (P[a] + (P[a + 2] - P[a]) * f) / 10, y = (P[a + 1] + (P[a + 3] - P[a + 1]) * f) / 10;
-      const dx = P[a + 2] - P[a], dy = P[a + 3] - P[a + 1];
-      if (dx * dx + dy * dy > 4) this.heading[id] = Math.atan2(dy, dx);
+      const dx = P[a + 2] - P[a], dy = P[a + 3] - P[a + 1], d = dx * dx + dy * dy;
+      if (d > 2e5 * this.meta.dt ** 2) return;
+      const x = (P[a] + dx * f) / 10, y = (P[a + 1] + dy * f) / 10;
+      if (d > 4) this.heading[id] = Math.atan2(dy, dx);
       if (!nets.find(n => n.keep(x, y))?.blocked(x, y)) put(type, x, y, this.heading[id], id);
     });
     for (const n of nets) if (px < 2.25) this.macro(n, rect, dt, put); else if (n.carState) n.carState.mac = [];
