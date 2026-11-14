@@ -1,3 +1,5 @@
+import { globe } from './globe.js';
+
 const el = (tag, props, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const CARDS = ['Build road', 'Widen road', 'Set maintenance level', 'Area access upgrade', 'Rebuild junction'];
 const hide = id => document.getElementById(id)?.remove();
@@ -23,10 +25,11 @@ export function present(v) {
     () => { v.go(2); v.set({ mode: 'cars' }); },
     () => { v.go(0); v.set({ mode: 'heat', split: true, pair: ['rl', 'gpt-6.1'], cut: 0.2635 }); },
     () => { v.go(1); v.slide(0.7955); },
-    () => show('pp', el('img', { src: 'assets/paper.jpg' }))
+    () => show('pp', el('img', { src: 'assets/paper.jpg' })),
+    () => { hide('pp'); v.go('far'); g.show(); setTimeout(() => n > 0 && v.hold(true), 950); }
   ];
-  let n = -1, taps = [];
-  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp'].forEach(hide); if (on) { v.warm(); for (const f of ['formulas.png', 'paper.jpg']) new Image().src = `assets/${f}`; } };
+  let n = -1, taps = [], g;
+  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp'].forEach(hide); g?.hide(); v.hold(false); if (on) { g ||= globe(); v.warm(); for (const f of ['formulas.png', 'paper.jpg']) new Image().src = `assets/${f}`; } };
   addEventListener('keydown', e => {
     if (e.key === 'ArrowRight' && n >= 0) n < steps.length ? steps[n++]() : mode(false);
     if (e.key !== 'p') return;
