@@ -6,19 +6,19 @@ const show = (id, ...kids) => { hide(id); return document.body.appendChild(el('d
 export function present(v) {
   const steps = [
     () => { v.set({ mode: 'cars', who: 'gpt-6.1', split: false, play: false, f: 0 }); v.go('o'); },
-    () => v.go('hype'),
+    () => show('pc', ...CARDS.map((t, k) => el('div', { textContent: t, style: `animation-delay: ${k * 0.12}s` }))),
+    () => { hide('pc'); v.go('hype'); },
     () => v.set({ mode: 'flow' }),
     () => show('pf', el('img', { src: 'assets/formulas.png' })),
     () => {
       hide('pf');
       v.set({ mode: 'cars', f: 1 });
+      v.go('o');
       const r = document.getElementById('ylab').getBoundingClientRect();
       Object.assign(show('pa').style, { left: `${r.left + r.width / 2}px`, bottom: `${innerHeight - r.top + 32}px` });
     },
-    () => { hide('pa'); show('pc', ...CARDS.map((t, k) => el('div', { textContent: t, style: `animation-delay: ${k * 0.12}s` }))); },
-    () => { hide('pc'); v.go('o'); },
     () => v.set({ mode: 'heat' }),
-    () => v.set({ play: true }),
+    () => { hide('pa'); v.set({ play: true }); },
     () => v.go('O'),
     () => { v.go(2); v.set({ mode: 'cars' }); },
     () => { v.go(0); v.set({ mode: 'heat', split: true, pair: ['rl', 'gpt-6.1'], cut: 0.2635 }); },
