@@ -95,7 +95,8 @@ fetch('assets/district.json').then(r => r.json()).then(d => {
 }).catch(() => {});
 
 const runs = {}, get = who => runs[who] ||= fetch(`data/runs/${who}.json`).then(r => r.json());
-const runList = fetch('data/runs/index.json').then(r => r.json()).catch(() => RUNS).then(list => {
+const runList = fetch('data/runs/index.json').then(r => r.json()).catch(() => RUNS).then(all => Promise.all(all.map(r => fetch(`data/runs/${r}.json`, { method: 'HEAD' }).then(x => x.ok && r, () => false)))).then(ok => {
+  const list = ok.filter(Boolean);
   const box = document.getElementById('runs');
   for (const r of list) box.insertAdjacentHTML('beforeend', `<button data-v="${r}">${r.toUpperCase()}</button>`);
   box.insertAdjacentHTML('beforeend', '<button id="split" title="split screen (S)">split</button>');
@@ -103,6 +104,7 @@ const runList = fetch('data/runs/index.json').then(r => r.json()).catch(() => RU
   state.split &&= state.pair.length === 2 && !state.who;
   state.who ||= list[0];
   sync();
+  return list;
 });
 get('nothing').then(r => { state.ref = r; for (const m of nets) m.calib(r); paint(); sync(); }).catch(() => {});
 const paint = () => nets.forEach((m, k) => {
@@ -188,7 +190,7 @@ addEventListener('keydown', e => {
   if (m) { state.mode = m; apply(); }
 });
 
-const UI = ['modes', 'runs', 'time', 'sl', 'sr'].map(id => document.getElementById(id));
+const UI = ['modes', 'right', 'time', 'sl', 'sr', 'card'].map(id => document.getElementById(id));
 let tags = [], shown = [], hold = 0, espoo = null;
 function tag(text, x, y, cls) {
   const el = document.createElement('div');
@@ -344,6 +346,75 @@ function frame() {
   frames++;
   requestAnimationFrame(frame);
 }
+const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids); return e; };
+const card = document.getElementById('card');
+let hp = null, hk = 0, tap = null;
+function pick() {
+  const g = hp && ground(...hp), m = g && nets.find(m => m.on && m.links && m.keep(...g));
+  let best = 12 * 1.8 / camera.zoom, k = -1;
+  if (m) m.links.forEach((l, i) => {
+    const b = m.box[i];
+    if (g[0] < b[0] - best || g[0] > b[2] + best || g[1] < b[1] - best || g[1] > b[3] + best) return;
+    const off = m.two[i] ? (Math.max(l.lanes || 1, 1) * 3.3 + 1) / 2 : 0;
+    for (let s = 1; s < l.geom.length; s++) {
+      const [ax, ay] = l.geom[s - 1], [bx, by] = l.geom[s], dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy) || 1, ox = dy / d * off, oy = -dx / d * off;
+      const t = Math.min(Math.max(((g[0] - ax - ox) * dx + (g[1] - ay - oy) * dy) / (d * d), 0), 1), e = Math.hypot(ax + ox + dx * t - g[0], ay + oy + dy * t - g[1]);
+      if (e < best) { best = e; k = i; }
+    }
+  });
+  card.hidden = k < 0;
+  if (k < 0) return;
+  const l = m.links[k], pc = v => `${Math.round(v * 100)}%`;
+  card.replaceChildren(el('b', '', l.name || l.ref || l.cls), ...[['flow', `${Math.round(m.flow[k])} veh/h`], ['speed', `${Math.round(m.speed[k] * 3.6)} / ${l.kmh} km/h`], ['queue', pc(m.loss[k])], ['condition', pc(m.cond[k])],
+    ...m.cap[k] < 1 ? [['works', `${pc(m.cap[k])} capacity`]] : []].map(([a, b]) => el('div', '', el('span', '', a), el('span', '', b))));
+}
+const cv = renderer.domElement;
+cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') hp = [e.clientX, e.clientY]; });
+cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hp = null; });
+cv.addEventListener('pointerdown', e => { tap = [e.clientX, e.clientY]; });
+cv.addEventListener('pointerup', e => { if (e.pointerType !== 'mouse' && tap && Math.hypot(e.clientX - tap[0], e.clientY - tap[1]) < 8) hp = tap; });
+setInterval(() => { if (hp || !card.hidden) pick(); }, 60);
+
+const fm = document.getElementById('fm'), rules = fetch('data/rules.json').then(r => r.json()).catch(() => ({}));
+const span = (a, u = '') => { const lo = Math.min(...a), hi = Math.max(...a); return a.length ? `${lo === hi ? lo : `${lo} to ${hi}`}${u}` : '?'; };
+const KINDS = [[p => /-access$/.test(p.id), 'Area access upgrade', 'areas', 'near one growth area'], [p => p.kind === 'road', 'New road', 'roads'],
+  [p => p.kind === 'lanes', 'Widen road', 'roads', 'on one road'], [p => p.kind === 'junction', 'Rebuild junction', 'junctions', 'at one junction']];
+function table(head, rows, cls = '') {
+  const t = el('table', '', ...head ? [el('tr', '', ...head.map(h => el('th', '', h)))] : [], ...rows.map(([c, ...r]) => el('tr', c, ...r.map(v => el('td', '', v)))));
+  return el('div', `t ${cls}`, t);
+}
+async function formal() {
+  const [cat, R] = await Promise.all([catalogue, rules]), q = v => v ?? '?', loss = ps => ps.flatMap(p => (p.works || []).map(w => Math.round((1 - w.cap) * 100)));
+  const groups = [], left = new Set(cat);
+  for (const [f, name, noun, where] of KINDS) { const ps = cat.filter(p => left.has(p) && f(p)); ps.forEach(p => left.delete(p)); if (ps.length) groups.push([name, noun, where, ps]); }
+  for (const p of left) groups.push([p.kind, 'projects', '', [p]]);
+  const rows = groups.map(([name, noun, where, ps]) => {
+    const caps = ps.flatMap(p => (p.mod || []).map(m => m.cap).filter(Boolean)), w = loss(ps);
+    const what = where ? (caps.every(c => c === 2) ? 'Doubles capacity' : `${span(caps)} times the capacity`) + ` ${where}` : `Adds a new ${span(ps.flatMap(p => (p.new || []).map(n => n.lanes)))} lane road`;
+    return ['i', name, `${ps.length} ${noun}`, `${span(ps.map(p => p.cost), ' MEUR')}, ${span(ps.map(p => p.years), ' years')}`, what + (w.length ? `; roads lose ${span(w, '%')} capacity while it is built` : '')];
+  });
+  const M = R.maint || [];
+  document.getElementById('fmc').replaceChildren(
+    el('p', '', `Each year, for ${q(R.years)} years, the planner makes one decision.`),
+    el('h3', '', 'Actions'),
+    table(['What', 'Options', 'Cost', 'Effect'], [['g', 'Start a road project', `${cat.length} projects, up to ${q(R.builds)} per year`, '', ''], ...rows,
+      ['', 'Set maintenance level', `${M.length || '?'} levels`, `${M.join(' / ') || '?'} MEUR per year`, 'Repairs worn roads; worn roads are slower'],
+      ['', 'Save money', 'Spend nothing', '0', 'Unspent money carries over to the next year']]),
+    el('h3', '', 'Limits'),
+    table(null, [['', 'Budget', `${q(R.income)} MEUR per year`], ['', 'Projects', `At most ${q(R.builds)} new projects per year`], ['', 'Building', `Roads under works lose ${span(loss(cat), '%')} capacity`],
+      ['', 'Time', `${q(R.years)} years of decisions, then ${q(R.runout)} more years are scored`],
+      ['', 'Hidden growth', `${R.booms ? span(R.booms) : '?'} of ${q(R.areas)} areas grow ${R.boom_growth ? span(R.boom_growth) : '?'} times in ${q(R.years)} years, without warning`]], 'n'),
+    el('h3', '', 'What it sees'),
+    table(null, [['', 'Areas', 'Population and jobs of every area, year by year'], ['', 'Projects', 'Cost, build time and share of delay on its roads'],
+      ['', 'Roads', 'The most congested roads'], ['', 'Forecasts', `Up to ${q(R.forecasts)} forecasts, ${q(R.forecast_years)} years ahead each`]], 'n'),
+    el('p', 's', `Score: total hours lost in traffic over ${R.years && R.runout ? R.years + R.runout : '?'} years. Doing nothing scores 0, the best known plan scores 1.`));
+  fm.hidden = false;
+}
+document.getElementById('formal').onclick = formal;
+document.getElementById('fx').onclick = () => { fm.hidden = true; };
+fm.onclick = e => { if (e.target === fm) fm.hidden = true; };
+addEventListener('keydown', e => { if (e.key === 'Escape') fm.hidden = true; });
+
 apply();
 const fps = Object.assign(document.createElement('div'), { id: 'fps' }), rgb = v => [1, 3, 5].map(i => parseInt(v.slice(i, i + 2), 16) / 255);
 document.body.append(fps);
