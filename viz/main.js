@@ -293,7 +293,8 @@ function frame() {
   close = state.mode !== 'flow' && camera.zoom > (close ? 0.8 : 1.0) * opt.dz;
   looks.near.value = Math.min(Math.max(looks.near.value + (close ? dt : -dt) / 0.25, 0), 1);
   looks.far.value = 1 - looks.near.value;
-  looks.detail.value = looks.near.value * opt.gd * looks.ready.value;
+  looks.gtex.value = Math.min(Math.max(looks.gtex.value + (state.mode !== 'flow' && camera.zoom > (looks.gtex.value > 0 ? 0.45 : 0.5) ? dt : -dt) / 0.25, 0), 1);
+  looks.detail.value = (state.mode !== 'flow') * Math.min(Math.max((camera.zoom - 0.25) / 0.25, 0), 1) * opt.gd * looks.ready.value;
   controls.update();
   const px = 1 / camera.zoom;
   const [x0, y0, x1, y1] = view();

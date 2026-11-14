@@ -5,12 +5,12 @@ import { MATS, L, DETAIL, materials } from './ground.js';
 export const HYPE = [-1511.7, 1239.2];
 export const looks = { dim: { value: 1 }, sat: { value: 1 }, tree: { value: 1 }, lane: { value: 1 }, path: { value: 1 }, one: { value: 1 }, px: { value: 1 }, coarse: { value: 0 }, fine: { value: 1 }, near: { value: 0 }, far: { value: 1 }, out: { value: 0.3 }, mark: { value: new THREE.Vector3(1, 1, 1) }, trees: { value: 1 }, sky: { value: new THREE.Vector3() },
   cover: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, cbox: { value: new THREE.Vector4() },
-  mats: { value: null }, mat: { value: MATS.map(() => new THREE.Vector4(1, 1, 1, 8)) }, detail: { value: 0 }, ready: { value: 0 } };
+  mats: { value: null }, mat: { value: MATS.map(() => new THREE.Vector4(1, 1, 1, 8)) }, detail: { value: 0 }, ready: { value: 0 }, gtex: { value: 0 } };
 materials(looks);
 
-const GROUND = { land: '#8e8f8b', water: '#15191c', forest: '#4f6339', park: '#667f48', grass: '#6f864e', field: '#959872',
-  wetland: '#6d7a58', sand: '#b5ad92', rock: '#97958f', paved: '#9a9b97', rail: '#7d7a74', pitch: '#7a9c56',
-  parking: '#8b8c88', playground: '#bfa98a', scrub: '#5f7342', garden: '#6b8449', hedge: '#3e5530', sidewalk: '#a9aaa6', conifer_forest: '#3d5236' };
+const GROUND = { land: '#7a7e66', water: '#15191c', forest: '#524e34', park: '#646c3c', grass: '#666e3c', field: '#7a7650',
+  wetland: '#646a4a', sand: '#b5ad92', rock: '#97958f', paved: '#9a9b97', rail: '#7d7a74', pitch: '#6c7541',
+  parking: '#8b8c88', playground: '#bfa98a', scrub: '#575e37', garden: '#656d3c', hedge: '#3e4628', sidewalk: '#a9aaa6', conifer_forest: '#45432d' };
 const BASE = new THREE.Color(GROUND.water);
 
 const hash = `float hash(float n){return fract(sin(n*12.9898)*43758.5453);}`;
@@ -80,11 +80,10 @@ const groundMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexCol
   if (uDetail > 0.0) {
     vec2 p = vec2(vW.x, -vW.y); float c = cos(vG.y), s = sin(vG.y);
     vec2 q = mat2(c, -s, s, c) * p; vec3 d = detail(q, p, vG.x);
-    if (vG.z > 1.5) d = mix(d, detail(q, p, ${L.meadow}.0), smoothstep(0.3, 0.7, gn(p / 90.0 + 11.0)));
+    if (vG.z > 0.5) d = mix(d, detail(q, p, ${L.meadow}.0), smoothstep(0.3, 0.7, gn(p / 90.0 + 11.0)));
     if (sky > 0.5) sky = 1.0 + 0.25 * uDetail * (d.g - 1.0);
-    else diffuseColor.rgb = mix(diffuseColor.rgb, (vG.z > 0.5 ? vec3(0.134, 0.157, 0.048) * uDim : diffuseColor.rgb) * d, uDetail);
+    else diffuseColor.rgb = mix(diffuseColor.rgb, (vG.z > 0.5 ? mix(vec3(0.134, 0.157, 0.048), vec3(0.171, 0.155, 0.061), 0.8 * gn(p / 80.0 + 7.0)) * (0.85 + 0.25 * gn(p / 31.0)) * uDim : diffuseColor.rgb) * d, uDetail);
   }`, 'attribute vec3 aG; varying vec3 vG; varying vec2 vW;');
-const OLIVE = { land: 2, park: 1, grass: 1, pitch: 1, garden: 1 };
 const GL = { land: 'grass', water: 'water', forest: 'forest_floor', park: 'grass', grass: 'grass', field: 'meadow', wetland: 'meadow', sand: 'sand', rock: 'rock', paved: 'paving', rail: 'rail',
   pitch: 'pitch', parking: 'parking', playground: 'sand', garden: 'grass', scrub: 'scrub', hedge: 'scrub', sidewalk: 'paving', conifer_forest: 'forest_floor' };
 const treeMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true }), 'transformed *= uTree;', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.far);
@@ -166,7 +165,7 @@ function ground(list, kinds, size, i, j, trees) {
     let a = 0, best = 0;
     p.forEach((v, i) => { const u = p[(i + 1) % p.length], l = v.distanceToSquared(u); if (l > best) { best = l; a = Math.atan2(u.y - v.y, u.x - v.x); } });
     for (const t of tris(p))
-      for (const v of t) { pos.push(p[v].x, 0, -p[v].y); col.push(c.r, c.g, c.b); ag.push(L[GL[name] || 'grass'], a, OLIVE[name || 'land'] || 0); }
+      for (const v of t) { pos.push(p[v].x, 0, -p[v].y); col.push(c.r, c.g, c.b); ag.push(L[GL[name] || 'grass'], a, +(name === 'land' || !name)); }
     const sc = SCATTER[name];
     if (!sc || !trees) return;
     const n = Math.min(3000, (b[2] - b[0]) * (b[3] - b[1]) / sc[1]);
@@ -186,7 +185,7 @@ function ground(list, kinds, size, i, j, trees) {
 }
 
 const roadStyle = k => /rail|tram|subway|metro/.test(k) ? [2.4, '#55524d', 0.48] : /foot|path|cycle|steps|pedestrian|track|bridleway/.test(k) ? [1.2, '#979893', 0.4]
-  : /service|living/.test(k) ? [3.5, '#5f6264', 0.42] : [0, '#4c4f52', 0.45];
+  : /service|living/.test(k) ? [3.5, '#5a5b5c', 0.42] : [0, '#555658', 0.45];
 
 export function ribbon(lines, extra) {
   const pos = [], ab = [], col = [], idx = [], c = new THREE.Color();

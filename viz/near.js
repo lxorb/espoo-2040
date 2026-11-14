@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { looks, patch, up, DITHER, HYPE, COVER, junctions } from './city.js';
 import { lengths, along } from './traffic.js';
 
-export const caps = { marks: 4000, ground: 64, texels: 40e6, cache: 80e6, sprites: 10000, walkers: 300, props: 3000, loads: 4 };
+export const caps = { marks: 4000, texels: 24e6, cache: 40e6, sprites: 10000, walkers: 300, props: 3000, loads: 8 };
 const GROUPS = [['birch', 'linden'], ['pine', 'spruce'], ['linden', 'linden', 'birch'], ['pine', 'spruce', 'birch'], ['pine', 'spruce'], ['shrub']];
 const SHADOW = [0.51, 0.86];
 const v = new THREE.Vector3();
@@ -41,11 +41,10 @@ class Ground {
   update(camera, dt) {
     const m = this.meta;
     if (!m) return;
-    const s = m.size, near = looks.near.value;
+    const s = m.size, near = looks.gtex.value;
     if (near) {
-      const res = [160, 320, 640, 1280].find(r => r >= s * camera.zoom * this.renderer.getPixelRatio() * 1.3) || 1280;
-      const key = stamp(camera, res, this.busy);
-      if (key !== this.key) { this.key = key; this.plan(camera, res); }
+      const key = stamp(camera, this.busy);
+      if (key !== this.key) { this.key = key; this.plan(camera, [80, 160, 320, 640, 1280].find(r => r >= s * camera.zoom * this.renderer.getPixelRatio() * 1.3) || 1280); }
     } else if (!this.busy && this.pre.length && performance.now() - this.born > 4000) {
       const [, i, j] = this.pre.shift(), k = `${i}_${j}`, t = this.tile(k, i, j);
       if (!t.res) this.load(k, t, 160);
@@ -70,12 +69,12 @@ class Ground {
       if (Math.abs(v.x) < 1 + r && Math.abs(v.y) < 1 + r) want.push([v.x * v.x + v.y * v.y, k, i, j]);
     }
     want.sort((a, b) => a[0] - b[0]);
-    want.length = Math.min(want.length, caps.ground, Math.floor(caps.texels / res / res));
+    while (res > 80 && want.length * res * res > caps.texels) res /= 2;
     for (const t of this.tiles.values()) t.on = false;
     const ts = want.map(([, k, i, j]) => Object.assign(this.tile(k, i, j), { on: true, used: now, k }));
-    for (const t of [...ts.filter(t => !t.res), ...ts.filter(t => t.res && t.res < res)]) {
+    for (const t of [...ts.filter(t => !t.res), ...ts.filter(t => t.res && t.res !== res)]) {
       if (this.busy >= caps.loads) break;
-      if (!t.busy) this.load(t.k, t, t.res ? res : 160);
+      if (!t.busy) this.load(t.k, t, t.res ? res : Math.min(res, 160));
     }
     let sum = 0;
     for (const t of this.tiles.values()) sum += t.res * t.res;
@@ -91,7 +90,7 @@ class Ground {
     const blob = this.blobs.get(k) || fetch(`data/ground/${k}.webp`).then(r => r.blob());
     this.blobs.set(k, blob);
     blob.then(b => createImageBitmap(b, { resizeWidth: res, resizeHeight: res, resizeQuality: 'high' })).then(img => {
-      if (this.tiles.get(k) !== t || t.res >= res) return img.close();
+      if (this.tiles.get(k) !== t || t.res === res) return img.close();
       const tex = new THREE.Texture(img), s = this.meta.size;
       Object.assign(tex, { colorSpace: THREE.SRGBColorSpace, flipY: false, anisotropy: this.aniso, needsUpdate: true, onUpdate: () => img.close() });
       if (t.mesh) { t.mesh.material.map.dispose(); t.mesh.material.map = tex; }
@@ -111,6 +110,7 @@ class Ground {
   drop(k) {
     const t = this.tiles.get(k);
     this.tiles.delete(k);
+    this.blobs.delete(k);
     if (this.cover) this.cover.image.data[(t.j - this.j0) * this.ni + t.i - this.i0] = 0, this.cover.needsUpdate = true;
     if (!t.mesh) return;
     this.scene.remove(t.mesh);

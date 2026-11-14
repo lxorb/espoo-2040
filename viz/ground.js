@@ -91,6 +91,8 @@ export const DETAIL = `uniform highp sampler2DArray uMats; uniform vec4 uMat[${M
   vec3 detail(vec2 p, vec2 w, float l) {
     vec4 m = uMat[int(l + 0.5)];
     vec2 u = p / m.a;
-    vec3 a = texture(uMats, vec3(u, l)).rgb, b = texture(uMats, vec3(u + vec2(0.5, 0.0), l)).rgb;
-    return mix(a, b, smoothstep(0.3, 0.7, gn(w / 23.0))) / m.rgb * (0.9 + 0.2 * gn(w / 47.0 + 5.0));
+    float f = smoothstep(0.08, 0.4, length(fwidth(u)));
+    vec3 a = f < 1.0 ? mix(texture(uMats, vec3(u, l)).rgb, texture(uMats, vec3(u + vec2(0.5, 0.0), l)).rgb, smoothstep(0.3, 0.7, gn(w / 23.0))) : vec3(0.0);
+    if (f > 0.0) a = mix(a, texture(uMats, vec3(u / 6.0 + 0.3, l)).rgb, f);
+    return a / m.rgb * (0.9 + 0.2 * gn(w / 47.0 + 5.0)) * (0.92 + 0.16 * gn(w / 211.0 + 3.0));
   }`;
