@@ -34,6 +34,7 @@ runs = json.loads((DATA / "runs.json").read_text())
 growth = json.loads((DATA / "growth.json").read_text())
 ASEEDS = sorted(runs.get("agent", {}), key=int) or ["0", "1", "2"]
 LEVEL, macros = {}, {}
+GRPO_SEEDS = []
 
 
 def mac(name, value):
@@ -251,6 +252,11 @@ def table(vals):
             lost = [norms[s][0] if k == "nothing" else tot(runs[k][s]) for s in ASEEDS]
             last = np.mean([runs[k][s]["delay"][-1] for s in ASEEDS]) / 1e6
             spend = np.mean([sum(runs[k][s]["spent"]) for s in ASEEDS])
+        elif k == "grpo" and GRPO_SEEDS:
+            sc = GRPO_SEEDS
+            rows.append(f"{name} & {np.mean(sc):.2f} & {np.mean([sc[int(x)] for x in ASEEDS]):.2f} & -- & -- & -- & -- & -- \\\\")
+            mac("grpoScoreAgentSeeds", f"{np.mean([sc[int(x)] for x in ASEEDS]):.2f}")
+            continue
         else:
             s16 = f"{np.mean(vals[k]):.2f}" if k in vals and len(vals[k]) == 16 else pend
             rows.append(f"{name} & {s16} & " + " & ".join([pend] * 6) + " \\\\")
@@ -371,21 +377,20 @@ def strategy():
     gsp = fig.add_gridspec(3, 3, hspace=0.6, wspace=0.45, height_ratios=[1, 1, 1.5])
     ax = fig.add_subplot(gsp[0, :])
     if gs:
-        x = [r.get("step", i) for i, r in enumerate(gs)]
-        mx = lambda r: (r["maintain"][2] if isinstance(r.get("maintain"), list) else (r.get("maintain") or {}).get("2", 0))
-        for key, lab, c, fn in (("score", "score", COL["grpo"], lambda r: r.get("score")), ("distinct", "distinct plans / 16", INK, lambda r: r.get("distinct", 0) / 16),
-                                ("m2", "share $m=2$", COL["reactive"], mx), ("boom_hit", "boom hit", COL["agent"], lambda r: r.get("boom_hit"))):
-            y = [fn(r) for r in gs]
-            if any(v is not None for v in y):
-                ax.plot(x, [np.nan if v is None else v for v in y], color=c, lw=1.4, label=lab)
-        one = first(gs, "step", lambda r: r.get("distinct") == 1)
-        flat = first(gs, "step", lambda r: r.get("std", r.get("reward_std", 1)) == 0)
+        gs = [r for r in gs if r.get("run", "A") == "A" and r["step"] >= 0]
+        x = [r["step"] for r in gs]
+        for lab, c, fn, ls in (("score", COL["grpo"], lambda r: r["score"], "-"), ("distinct samples / 8", INK, lambda r: r["sample_distinct"] / 8, "-"),
+                               ("share $m=2$", COL["reactive"], lambda r: r["maintain"]["2"], "-"), ("boom hit", COL["agent"], lambda r: r["boom_hit"], "-"),
+                               ("reward std (train)", MUTED, lambda r: r["train_std"], "--")):
+            ax.plot(x, [fn(r) for r in gs], color=c, lw=1.4, ls=ls, marker="o", ms=2.5, label=lab)
+        one = first(gs, "step", lambda r: r["sample_distinct"] <= 1.5)
+        flat = first(gs, "step", lambda r: r["train_std"] == 0)
         for v, t in ((one, "one plan"), (flat, "std 0")):
             if v is not None:
-                ax.axvline(v, color=MUTED, lw=0.8, ls="--")
-                ax.text(v, 1.02, t, fontsize=8, color=MUTED, ha="center")
-        ax.legend(loc="lower right", ncol=2)
-        ax.set(xlabel="GRPO step", ylim=(-0.02, 1.08))
+                ax.axvline(v, color=MUTED, lw=0.8, ls=":")
+                ax.text(v, 1.03, t, fontsize=8, color=MUTED, ha="center")
+        ax.legend(loc="center right", ncol=1, fontsize=7)
+        ax.set(xlabel="GRPO step", ylim=(-0.02, 1.1))
     else:
         ax.text(0.5, 0.5, "TBD: runs/grpo/strategy.json", transform=ax.transAxes, ha="center", color=TBD)
     ax.set_title("(a) GRPO on Gemma")
@@ -445,6 +450,15 @@ def strategy():
             mac(f"evo{t}ScoreOne", f"{r1['score']:.2f}")
             mac(f"evo{t}MtwoOne", f"{r1['maintain'][2]:.2f}")
             mac(f"evo{t}BuildsOne", f"{r1['builds']:.1f}")
+        acc = next((r for r in rows if r["access_share"] > 0), None)
+        if acc:
+            mac(f"evo{t}AccAt", str(acc["episodes"]))
+            mac(f"evo{t}AccYear", f"{2026 + acc['first_access_year']:.0f}")
+            mac(f"evo{t}AccScore", f"{acc['score']:.2f}")
+            mac(f"evo{t}AccShare", f"{acc['access_share']:.2f}")
+            prev = [r for r in rows if r["episodes"] < acc["episodes"]]
+            mac(f"evo{t}NoAccUntil", str(prev[-1]["episodes"]) if prev else "0")
+        mac(f"evo{t}ScoreMax", f"{max(r['score'] for r in rows):.2f}")
         ot = [r["freq"].get("otaniemi-access", 0) for r in rows]
         mac(f"evo{t}OtaZero", f"{ot[0]:.2f}")
         mac(f"evo{t}Ota", f"{ot[-1]:.2f}")
@@ -455,12 +469,31 @@ def strategy():
         if v is not None:
             mac(f"evo{t}HalfAt", str(v))
     if gs:
-        for key, nm, cond in (("step", "grpoOneAt", lambda r: r.get("distinct") == 1), ("step", "grpoFlatAt", lambda r: r.get("std", r.get("reward_std", 1)) == 0),
-                              ("step", "grpoValidAt", lambda r: r.get("valid", 0) >= 0.9)):
-            v = first(gs, key, cond)
+        val = lambda st, k: next(r[k] for r in gs if r["step"] == st)
+        for nm, cond in (("grpoValidAt", lambda r: r["valid"] >= 0.9), ("grpoOneAt", lambda r: r["sample_distinct"] <= 1.5),
+                         ("grpoFlatAt", lambda r: r["train_std"] == 0), ("grpoMtwoAt", lambda r: r["maintain"]["2"] == 1)):
+            v = first(gs, "step", cond)
             if v is not None:
                 mac(nm, str(v))
-
+        w, z = gs[0], gs[-1]
+        GRPO_SEEDS[:] = z["scores"]
+        mac("grpoWarmMzero", f"{w['maintain']['0']:.2f}")
+        mac("grpoSdWarm", f"{w['sample_distinct']:.1f}")
+        mac("grpoStdWarm", f"{w['train_std']:.2f}")
+        mac("grpoBoomShare", f"{z['boom_share']:.2f}")
+        mac("grpoBoomHitEnd", f"{z['boom_hit']:.2f}")
+        mac("grpoBoomHitMax", f"{max(r['boom_hit'] for r in gs):.2f}")
+        mac("grpoLastStep", str(z["step"]))
+        mac("grpoScoreEnd", f"{z['score']:.2f}")
+        mac("grpoScoreWarmS", f"{w['score']:.2f}")
+        s1 = gs[1]
+        dropped = [p for p in w["freq"] if w["freq"][p] > 0 and s1["freq"].get(p, 0) == 0]
+        mac("grpoDropFirst", ", ".join(f"\\texttt{{{p}}}" for p in dropped) or "none")
+        mac("grpoDropStep", str(s1["step"]))
+        kept = [p for p in z["freq"] if z["freq"][p] >= 0.999]
+        mac("grpoKept", ", ".join(f"\\texttt{{{p}}}" for p in kept))
+        ks = first(gs, "step", lambda r: all(r["freq"].get(p, 0) >= 0.999 for p in kept))
+        mac("grpoKeptAt", str(ks))
 
 def main():
     rescore()
@@ -489,10 +522,10 @@ def main():
     fig_bars(vals)
     fig_years()
     fig_curves(rl, gr)
+    strategy()
     table(vals)
     facts()
     cats()
-    strategy()
     used = set(re.findall(r"\\([a-zA-Z]+)\{\}", (HERE.parent / "main.tex").read_text()))
     for u in sorted(used):
         if re.match(r"(planner|reactive|greedy|random|agent|best|nothing|grpo|rl|rlcheck|rlsearch|refrl|refold|gapRl|n|cat|evo)[A-Z]", u) and u not in macros:
