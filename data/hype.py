@@ -10,12 +10,6 @@ TEX = ROOT / "data" / "hype"
 
 HYPE_SW, HYPE_SE, HYPE_NW = (-1540.8, 1212.7), (-1495.8, 1203.2), (-1527.5, 1275.3)
 PARKING = [(-1494.8, 1202.9), (-1481.3, 1266.8), (-1445.7, 1259.3), (-1457.5, 1203.8), (-1467.7, 1197.1)]
-EXIT = [(-1553.0, 1250.7), (-1546.1, 1263.7), (-1535.8, 1258.2), (-1542.7, 1245.2)]
-STATION = [(-1159.8, 1007.7), (-1148.8, 1028.1), (-1152.9, 1030.3), (-1145.0, 1044.5), (-1140.5, 1053.7),
-           (-1129.5, 1047.8), (-1132.6, 1042.0), (-1121.2, 1035.9), (-1145.3, 991.0)]
-STATION_HALL = [(-1138.0, 1031.8), (-1149.0, 1037.6), (-1152.9, 1030.3), (-1148.8, 1028.1), (-1142.0, 1024.4)]
-STATION_SHAFT = [(-1145.3, 1044.7), (-1134.3, 1038.7), (-1129.5, 1047.8), (-1140.5, 1053.7)]
-STATION_CAP = [(-1133.4, 1041.6), (-1132.3, 1043.7), (-1138.2, 1046.9), (-1139.4, 1044.8)]
 
 W, D = 46.0, 64.0
 G, L2, L3, TOP, NTOP = 6.3, 15.7, 25.3, 30.0, 31.5
@@ -35,8 +29,6 @@ MATS = {
     "sign": (1.0, 1.0, 1.0, 0.0, 0.5),
     "dark": (0.36, 0.37, 0.38, 0.0, 0.9),
     "roof": (0.55, 0.56, 0.56, 0.0, 0.95),
-    "green": (0.38, 0.52, 0.30, 0.0, 1.0),
-    "station": (0.58, 0.60, 0.62, 0.3, 0.6),
 }
 
 parts = []
@@ -175,15 +167,6 @@ def parking():
         box(3, width - 9, 6 + i * 10.5, 12 + i * 10.5, P_LEVELS[-1] + 0.3, P_LEVELS[-1] + 1.1, "solar", P)
 
 
-def metro():
-    prism(EXIT, 0, 4.8, "dark")
-    prism(STATION, 0, 5.3, "station")
-    prism(STATION, 5.3, 5.5, "green")
-    prism(STATION_HALL, 5.5, 12.0, "station")
-    prism(STATION_SHAFT, 5.5, 16.0, "station")
-    prism(STATION_CAP, 16.0, 18.5, "station")
-
-
 def merge(chunks):
     off = np.cumsum([0] + [len(c[1]) for c in chunks])[:-1]
     return (np.vstack([c[1] for c in chunks]), np.vstack([c[2] for c in chunks]),
@@ -220,7 +203,7 @@ def keys(group, chunks, tri, skin):
 def build(skin=True):
     parts.clear()
     groups, scene = {}, trimesh.Scene()
-    for group, fn in (("hype", hype), ("parking", parking), ("metro", metro)):
+    for group, fn in (("hype", hype), ("parking", parking)):
         n = len(parts)
         fn()
         groups[group] = chunks = parts[n:]
