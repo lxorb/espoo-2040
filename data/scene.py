@@ -15,6 +15,7 @@ import shapely
 from pyproj import Transformer
 from shapely.geometry import box, shape
 from shapely.geometry.polygon import orient
+from shapely.ops import substring
 
 from data.geo import BBOX, ORIGIN, PBF, RAW, VIZ, local
 
@@ -37,14 +38,21 @@ BMAP = {
 }
 BMAP = {v: k for k, vs in BMAP.items() for v in vs.split()}
 BH = {"residential": 6, "apartments": 15, "commercial": 10, "industrial": 8, "public": 11, "garage": 3, "other": 5}
-GKINDS = ["land", "water", "forest", "park", "grass", "field", "wetland", "sand", "rock", "paved", "rail", "pitch"]
+GKINDS = ["land", "water", "forest", "park", "grass", "field", "wetland", "sand", "rock", "paved", "rail", "pitch",
+          "parking", "playground", "garden", "scrub", "hedge", "sidewalk", "conifer_forest"]
+BASE = {"parking": "paved", "playground": "paved", "sidewalk": "paved", "garden": "park", "scrub": "grass", "conifer_forest": "forest"}
 GMAP = {
-    "natural": {"water": "water", "wood": "forest", "scrub": "grass", "grassland": "grass", "heath": "grass", "sand": "sand", "beach": "sand", "wetland": "wetland", "bare_rock": "rock", "scree": "rock"},
+    "natural": {"water": "water", "wood": "forest", "scrub": "scrub", "grassland": "grass", "heath": "grass", "sand": "sand", "beach": "sand", "wetland": "wetland", "bare_rock": "rock", "scree": "rock"},
     "landuse": {"forest": "forest", "grass": "grass", "meadow": "field", "farmland": "field", "orchard": "field", "recreation_ground": "park", "cemetery": "park", "village_green": "park",
                 "allotments": "park", "railway": "rail", "reservoir": "water", "basin": "water", "quarry": "sand", "construction": "sand"},
-    "leisure": {"park": "park", "garden": "park", "golf_course": "grass", "pitch": "pitch", "track": "pitch", "swimming_pool": "water", "playground": "paved"},
-    "amenity": {"parking": "paved"}, "place": {"square": "paved"}, "highway": {"pedestrian": "paved"},
+    "leisure": {"park": "park", "garden": "garden", "golf_course": "grass", "pitch": "pitch", "track": "pitch", "swimming_pool": "water", "playground": "playground"},
+    "amenity": {"parking": "parking"}, "place": {"square": "paved"}, "highway": {"pedestrian": "sidewalk", "footway": "sidewalk"},
+    "area:highway": {"footway": "sidewalk", "pedestrian": "sidewalk", "sidewalk": "sidewalk"},
 }
+PKINDS = ["crossing", "signal", "lamp", "bus_stop", "bench", "bollard", "pole", "conifer", "broadleaf"]
+PMAP = {"natural": {"tree": "tree"}, "highway": {"crossing": "crossing", "traffic_signals": "signal", "street_lamp": "lamp", "bus_stop": "bus_stop"},
+        "amenity": {"bench": "bench"}, "barrier": {"bollard": "bollard"}, "power": {"pole": "pole", "tower": "pole"}}
+LEAF = {"needleleaved": "conifer", "broadleaved": "broadleaf"}
 RKINDS = ["motorway", "trunk", "primary", "secondary", "tertiary", "residential", "service", "track", "footway", "cycleway", "rail", "subway", "light_rail", "tram", "tunnel"]
 RMAP = {"residential": "residential", "unclassified": "residential", "living_street": "residential", "road": "residential", "pedestrian": "footway", "path": "footway",
         "steps": "footway", "bridleway": "footway", "footway": "footway", "cycleway": "cycleway", "service": "service", "track": "track", "busway": "service"}
@@ -79,31 +87,50 @@ def bkind(t):
     return BMAP.get(t.get("building")) or ("public" if t.get("amenity") in ("school", "kindergarten", "hospital", "place_of_worship") else "other")
 
 
+def lookup(maps, t):
+    return next((m[t.get(key)] for key, m in maps.items() if t.get(key) in m), None)
+
+
 def gkind(t):
-    return next((m[t.get(key)] for key, m in GMAP.items() if t.get(key) in m), None)
+    k = lookup(GMAP, t)
+    if k == "sidewalk" and t.get("highway") and t.get("area") != "yes":
+        return None
+    return "conifer_forest" if k == "forest" and t.get("leaf_type") == "needleleaved" else k
+
+
+def flags(k, t):
+    side = t.get("sidewalk") in ("both", "left", "right", "yes") or (k == "residential" and t.get("sidewalk") is None and t.get("lit") == "yes")
+    oneway = t.get("oneway") in ("yes", "1", "-1") or t.get("junction") == "roundabout" or k == "motorway"
+    return oneway | 2 * (t.get("bridge", "no") != "no") | 4 * side | 8 * (t.get("lit") == "yes")
 
 
 class Reader(osmium.SimpleHandler):
     def __init__(self):
         super().__init__()
         self.wkb = osmium.geom.WKBFactory()
-        self.b, self.g, self.r, self.t, self.muni = [], [], [], [], {}
+        self.b, self.g, self.r, self.t, self.p, self.muni = [], [], [], [], [], {}
 
     def node(self, n):
-        if n.tags.get("natural") == "tree":
-            self.t.append(local(n.location.lon, n.location.lat))
+        if k := lookup(PMAP, n.tags):
+            xy = local(n.location.lon, n.location.lat)
+            k = LEAF.get(n.tags.get("leaf_type")) if k == "tree" else k
+            self.p.append((k, *xy)) if k else self.t.append(xy)
 
     def way(self, w):
         t, k = w.tags, rkind(w.tags)
-        row = t.get("natural") == "tree_row"
-        if not (line := (k or row) and self.geom(self.wkb.create_linestring, w)):
+        row, hedge = t.get("natural") == "tree_row", t.get("barrier") == "hedge"
+        if not (line := (k or row or hedge) and self.geom(self.wkb.create_linestring, w)):
+            return
+        if hedge:
+            self.g += [("hedge", substring(line, a, a + 0.5, normalized=True).buffer(0.75, cap_style="flat")) for a in (0, 0.5) if line.length > 1]
             return
         if row:
             n = max(int(line.length / 8), 1)
             self.t += [(p.x, p.y) for p in line.interpolate(np.linspace(0, line.length, n + 1))]
             return
         lanes = int(num(t.get("lanes")) or (1 if k in RAIL or "_link" in t.get("highway", "") else RLANES.get(k, 1)))
-        self.r.append((k, lanes, line.simplify(TOL)))
+        line = line.reverse() if t.get("oneway") == "-1" else line
+        self.r.append((k, lanes, line.simplify(TOL), flags(k, t)))
 
     def area(self, a):
         t = a.tags
@@ -197,7 +224,19 @@ def split(g, keep):
     return [(k, p) for k in keys if k in keep for p in parts(g.intersection(cell(*k)))]
 
 
+def angles(p, roads):
+    lines = np.array([l for k, _, l, _ in roads if RKINDS.index(k) <= RKINDS.index("service")])
+    pts = shapely.points([(x, y) for _, x, y in p])
+    pi, li = shapely.STRtree(lines).query_nearest(pts, max_distance=30, all_matches=False)
+    d = shapely.line_locate_point(lines[li], pts[pi])
+    q0, q1 = (shapely.line_interpolate_point(lines[li], np.maximum(d + o, 0)) for o in (-1, 1))
+    a = np.zeros(len(p))
+    a[pi] = np.arctan2(shapely.get_y(q1) - shapely.get_y(q0), shapely.get_x(q1) - shapely.get_x(q0))
+    return a
+
+
 def overview(polys, roads, muni):
+    polys = [(BASE.get(k, k), p) for k, p in polys if k != "hedge"]
     g = []
     for k in GKINDS:
         ps = shapely.make_valid(np.array([p.simplify(5) for kk, p in polys if kk == k and p.area > 500] or [shapely.Polygon()]))
@@ -206,7 +245,7 @@ def overview(polys, roads, muni):
             g += [(k, shapely.Polygon(q.exterior))] + [("land", shapely.Polygon(i)) for i in q.interiors]
     g = sorted((e for e in g if e[1].area > 3000), key=lambda e: -e[1].area)
     major = {}
-    [major.setdefault((k, n), []).append(l) for k, n, l in roads if k in ("motorway", "trunk", "primary", "secondary", "rail")]
+    [major.setdefault((k, n), []).append(l) for k, n, l, _ in roads if k in ("motorway", "trunk", "primary", "secondary", "rail")]
     r = [[RKINDS.index(k), n, flat(l.simplify(15).coords, 0)] for (k, n), ls in major.items()
          for l in shapely.get_parts(shapely.line_merge(shapely.union_all(ls)))]
     g = [[GKINDS.index(k), flat(orient(q).exterior.coords[:-1], 0)] for k, q in g]
@@ -220,7 +259,7 @@ def main():
     keep = region(r)
     h = Reader()
     h.apply_file(str(PBF), locations=True)
-    tiles = {k: {"b": [], "g": [], "r": [], "t": []} for k in keep}
+    tiles = {k: {"b": [], "g": [], "r": [], "t": [], "p": []} for k in keep}
     put = lambda k, layer, item: k in tiles and tiles[k][layer].append(item)
     b, src = heights(h.b)
     for ht, k, p in b:
@@ -236,9 +275,11 @@ def main():
     for key, k, q, _ in ground:
         if q.area > 4:
             put(key, "g", [GKINDS.index(k), flat(orient(q).exterior.coords[:-1])])
-    for k, lanes, line in h.r:
+    for k, lanes, line, f in h.r:
         c = line.interpolate(0.5, normalized=True)
-        put(tile(c.x, c.y), "r", [RKINDS.index(k), lanes, flat(line.coords)])
+        put(tile(c.x, c.y), "r", [RKINDS.index(k), lanes, flat(line.coords)] + [f] * bool(f))
+    for (k, x, y), a in zip(h.p, angles(h.p, h.r)):
+        put(tile(x, y), "p", [PKINDS.index(k), round(x, 1), round(y, 1), round(float(a), 2)])
     for x, y in h.t:
         put(tile(x, y), "t", [round(x, 1), round(y, 1)])
     d = VIZ / "tiles"
@@ -250,7 +291,7 @@ def main():
             v["t"] = [c for xy in v["t"] for c in xy]
             (d / f"{i}_{j}.json").write_text(json.dumps(v, separators=(",", ":")))
             out.append([i, j])
-    meta = {"size": S, "bkinds": BKINDS, "gkinds": GKINDS, "rkinds": RKINDS, "tiles": out}
+    meta = {"size": S, "bkinds": BKINDS, "gkinds": GKINDS, "rkinds": RKINDS, "pkinds": PKINDS, "tiles": out}
     (VIZ / "tiles.json").write_text(json.dumps(meta, separators=(",", ":")))
     print(len(out), "tiles", sum(len(v["b"]) for v in tiles.values()), "buildings", src)
 
