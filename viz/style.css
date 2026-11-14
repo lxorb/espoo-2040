@@ -1,0 +1,25 @@
+:root { --ink: #141414; --hi: #f6d32d; --mute: #8a8a85; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #24272a; font-family: "JetBrains Mono", ui-monospace, monospace; }
+canvas { display: block; }
+.seg { position: fixed; display: flex; gap: 2px; padding: 4px; background: var(--ink); border-radius: 10px; box-shadow: 0 4px 16px #0006; }
+.seg button, #play { font: 700 12px "JetBrains Mono", monospace; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); background: none; border: 0; padding: 8px 12px; border-radius: 7px; cursor: pointer; }
+.seg button:hover { color: #ddd; }
+.seg button.on { color: var(--ink); background: var(--hi); }
+#modes { top: 16px; left: 16px; }
+#runs { top: 16px; right: 16px; }
+#time { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; align-items: center; gap: 12px; padding: 6px 14px 6px 6px; background: var(--ink); border-radius: 10px; box-shadow: 0 4px 16px #0006; }
+#play { width: 36px; height: 32px; padding: 0; color: var(--hi); position: relative; }
+#play::before { content: ""; position: absolute; left: 13px; top: 9px; border-left: 12px solid currentColor; border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
+#play.on::before { left: 12px; width: 4px; height: 14px; border: 0; border-left: 4px solid currentColor; border-right: 4px solid currentColor; }
+#year { flex: 1; accent-color: var(--hi); }
+#ylab { color: var(--hi); font-weight: 700; font-size: 14px; min-width: 40px; text-align: right; }
+#speed { font: 700 12px "JetBrains Mono", monospace; color: var(--hi); background: #222; border: 0; border-radius: 6px; padding: 6px 4px; cursor: pointer; }
+#news { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+#news .lab { position: static; transform: none; }
+#news .lab::after { display: none; }
+#labels { position: fixed; inset: 0; pointer-events: none; }
+.lab { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; user-select: none; padding: 5px 8px; background: var(--ink); color: var(--hi); font-weight: 700; font-size: 11px; letter-spacing: .08em; border-radius: 4px; white-space: nowrap; }
+.lab::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: 8px; background: var(--ink); }
+.lab.big { font-size: 13px; padding: 7px 11px; }
+@media (max-width: 640px) { #runs { top: 64px; left: 16px; right: auto; } .seg button { padding: 7px 9px; } }
