@@ -322,7 +322,7 @@ export class City {
 
   update(x0, y0, x1, y1) {
     const m = this.meta;
-    if (!m) return;
+    if (!m || this.pin) return;
     const s = m.size, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
     const want = m.tiles.filter(([i, j]) => i * s < x1 && (i + 1) * s > x0 && j * s < y1 && (j + 1) * s > y0)
       .sort((a, b) => Math.hypot(a[0] * s - cx, a[1] * s - cy) - Math.hypot(b[0] * s - cx, b[1] * s - cy)).slice(0, 300);

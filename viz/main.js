@@ -282,14 +282,17 @@ function view() {
 }
 
 let fly = null;
-function flying(dt) {
-  fly.t = Math.min(fly.t + dt / 1.2, 1);
-  const e = fly.t * fly.t * (3 - 2 * fly.t), p = fly.a.clone().lerp(fly.b, e);
-  const d = fly.r1 - fly.r0;
+const aim = (p, zoom, turn) => {
   controls.target.copy(p);
-  camera.position.setFromSphericalCoords(60000 * Math.sqrt(3), controls.maxPolarAngle, fly.r0 + Math.atan2(Math.sin(d), Math.cos(d)) * e).add(p);
-  camera.zoom = fly.z0 * (fly.z1 / fly.z0) ** e;
+  camera.position.setFromSphericalCoords(60000 * Math.sqrt(3), controls.maxPolarAngle, turn).add(p);
+  camera.zoom = zoom;
   camera.updateProjectionMatrix();
+};
+function flying(dt) {
+  fly.t = Math.min(fly.t + dt / 0.9, 1);
+  const e = fly.t * fly.t * (3 - 2 * fly.t), d = fly.r1 - fly.r0, zoom = fly.z0 * (fly.z1 / fly.z0) ** e;
+  const pan = Math.abs(fly.z1 / fly.z0 - 1) < 0.01 ? e : (1 / zoom - 1 / fly.z0) / (1 / fly.z1 - 1 / fly.z0);
+  aim(fly.a.clone().lerp(fly.b, pan), zoom, fly.r0 + Math.atan2(Math.sin(d), Math.cos(d)) * e);
   if (fly.t === 1) fly = null;
 }
 
@@ -331,7 +334,7 @@ function frame() {
   if (state.play && state.run) {
     state.f = Math.min(state.f + dt / opt.tl, +year.max);
     if (state.f >= +year.max) state.play = false;
-    paint();
+    if (!fly || !state.play) paint();
     sync();
   }
   split();
@@ -466,7 +469,14 @@ addEventListener('keydown', e => { if (e.key === 'Escape') fm.hidden = true; });
 
 present({
   hold: on => { held = on; },
-  warm: () => { for (const w of state.list) get(w); for (const d of ['tiles', 'detail-clean']) for (const i of [-1, 0, 1]) for (const j of [-1, 0, 1]) fetch(`data/${d}/${Math.floor(VIEWS[2][0] / 1000) + i}_${Math.floor(VIEWS[2][1] / 1000) + j}.${d === 'tiles' ? 'json' : 'glb'}`).catch(() => {}); },
+  warm: async () => {
+    const idle = () => new Promise(done => { let n = 0; const t = setInterval(() => { n = city.busy || near.ground.busy || detail.busy ? 0 : n + 1; if (n > 5) { clearInterval(t); done(); } }, 150); });
+    const at = (k, o) => { fly = null; aim(new THREE.Vector3(VIEWS[k][0], 0, -VIEWS[k][1]), VIEWS[k][2], HOME); Object.assign(state, o); loadRun(); apply(); return idle(); };
+    await Promise.all(state.list.map(get));
+    for (const [k, o] of [['o', { mode: 'cars' }], [2, {}], ['O', { mode: 'heat' }], [0, { split: true }], ['hype', { mode: 'flow', split: false }], ['hype', { mode: 'cars' }]]) await at(k, o);
+    city.pin = true;
+  },
+  free: () => { city.pin = false; },
   go: k => go(...VIEWS[k]),
   set: o => { Object.assign(state, o); if ('who' in o || 'split' in o || 'pair' in o) loadRun(); if ('f' in o) paint(); apply(); },
   slide: to => { const a = state.cut, t0 = performance.now(), step = () => { const t = Math.min((performance.now() - t0) / 1500, 1); state.cut = a + (to - a) * t * t * (3 - 2 * t); if (t < 1) requestAnimationFrame(step); }; step(); }

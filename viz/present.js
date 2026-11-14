@@ -28,10 +28,10 @@ export function present(v) {
     () => show('pp', el('img', { src: 'assets/paper.jpg' })),
     () => { hide('pp'); v.go('far'); g.show(); setTimeout(() => n > 0 && v.hold(true), 950); }
   ];
-  let n = -1, taps = [], g;
-  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp', 'pl'].forEach(hide); g?.hide(); v.hold(false); if (on) { g ||= globe(); v.warm(); for (const f of ['formulas.png', 'paper.jpg']) new Image().src = `assets/${f}`; } };
+  let n = -1, taps = [], g, ready = false;
+  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp', 'pl', 'pw'].forEach(hide); g?.hide(); v.hold(false); v.free(); ready = false; if (on) { g ||= globe(); show('pw', 'Preloading'); v.warm().then(() => { hide('pw'); ready = true; }); for (const f of ['formulas.png', 'paper.jpg']) new Image().src = `assets/${f}`; } };
   addEventListener('keydown', e => {
-    if (e.key === 'ArrowRight' && n >= 0) n < steps.length ? steps[n++]() : mode(false);
+    if (e.key === 'ArrowRight' && n >= 0 && ready) n < steps.length ? steps[n++]() : mode(false);
     if (e.key !== 'p') return;
     taps = [...taps, performance.now()].slice(-3);
     if (taps.length < 3 || taps[2] - taps[0] > 900) return;

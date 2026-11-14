@@ -85,5 +85,6 @@ canvas, img { -webkit-user-drag: none; user-select: none; }
 #fm p.r { white-space: pre; }
 #pg { inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .9s; }
 #pg.on { opacity: 1; }
-#pl { left: 24px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 14px; background: var(--ink); color: #ddd; font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; border-radius: 10px; box-shadow: 0 4px 16px #0006; animation: in .25s; }
-#pl i { width: 22px; height: 240px; border-radius: 4px; background: linear-gradient(#f21a0f, #ffe026, #29b357); }
+#pl { left: 24px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 22px 20px; background: var(--ink); color: #ddd; font-weight: 700; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; border-radius: 10px; box-shadow: 0 4px 16px #0006; animation: in .25s; }
+#pl i { width: 30px; height: 340px; border-radius: 4px; background: linear-gradient(#f21a0f, #ffe026, #29b357); }
+#pw { left: 16px; bottom: 16px; padding: 8px 12px; background: var(--ink); color: var(--hi); font-weight: 700; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; border-radius: 8px; }
