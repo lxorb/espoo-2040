@@ -245,7 +245,8 @@ def overview(polys, roads, muni):
     r = [[RKINDS.index(k), n, flat(l.simplify(15).coords, 0)] for (k, n), ls in major.items()
          for l in shapely.get_parts(shapely.line_merge(shapely.union_all(ls)))]
     g = [[GKINDS.index(k), flat(orient(q).exterior.coords[:-1], 0)] for k, q in g]
-    border = [flat(p.exterior.simplify(10).coords[:-1], 0) for p in muni]
+    coast = shapely.union_all([p.simplify(20) for k, p in polys if k == "land"]).buffer(1500).buffer(-800)
+    border = [flat(q.exterior.simplify(10).coords[:-1], 0) for p in muni for q in parts(shapely.Polygon(p.exterior).intersection(coast))]
     (VIZ / "overview.json").write_text(json.dumps({"g": g, "r": r, "border": border}, separators=(",", ":")))
     print("overview", len(g), "polygons", len(r), "lines")
 
