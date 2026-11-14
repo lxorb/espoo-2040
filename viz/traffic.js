@@ -104,11 +104,10 @@ export class Net {
       void main() {
         clip();
         float t = log2(max(mix(texture2D(tOld, vU).r, texture2D(tMap, vU).r, uMix) * uHeat / uRef, 1e-6));
-        vec3 c = mix(vec3(0.2, 0.75, 0.35), vec3(1.0, 0.88, 0.15), smoothstep(-2.3, -1.7, t));
-        c = mix(c, vec3(1.0, 0.5, 0.08), smoothstep(-1.2, -0.8, t));
-        c = mix(c, vec3(0.92, 0.06, 0.06), smoothstep(-0.2, 0.2, t));
-        c = mix(c, vec3(0.5, 0.0, 0.42), smoothstep(1.5, 2.5, t));
-        gl_FragColor = vec4(c, smoothstep(-5.5, -4.5, t) * mix(0.7, 0.92, smoothstep(-2.0, 0.0, t)));
+        vec3 c = mix(vec3(0.16, 0.7, 0.34), vec3(1.0, 0.88, 0.15), smoothstep(-3.6, -1.6, t));
+        c = mix(c, vec3(0.95, 0.1, 0.06), smoothstep(-1.6, 0.4, t));
+        c = mix(c, vec3(0.5, 0.0, 0.42), smoothstep(1.2, 2.8, t));
+        gl_FragColor = vec4(c, smoothstep(-6.0, -3.6, t) * mix(0.55, 0.92, smoothstep(-3.6, 0.0, t)));
       }`);
     this.heatView.material.uniforms = { tMap: { value: this.heatRT.texture }, tOld: { value: this.heatOld.texture }, uRef: this.uni.uRef, uClip: this.uni.uClip, uHeat: { value: 1 }, uMix: { value: 1 } };
     this.flowView = full(`uniform sampler2D tMap; varying vec2 vU; ${CLIP}
