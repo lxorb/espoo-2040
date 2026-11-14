@@ -34,8 +34,10 @@ canvas { display: block; }
 #play { width: 36px; height: 32px; padding: 0; color: var(--hi); position: relative; }
 #play::before { content: ""; position: absolute; left: 13px; top: 9px; border-left: 12px solid currentColor; border-top: 7px solid transparent; border-bottom: 7px solid transparent; }
 #play.on::before { left: 12px; width: 4px; height: 14px; border: 0; border-left: 4px solid currentColor; border-right: 4px solid currentColor; }
+#time, #modes, #right { z-index: 5; user-select: none; -webkit-user-select: none; }
+canvas, img { -webkit-user-drag: none; user-select: none; }
 #track { flex: 1; }
-#year { width: 100%; margin: 0; accent-color: var(--hi); }
+#year { width: 100%; margin: 0; accent-color: var(--hi); touch-action: none; cursor: pointer; }
 .lab.tag { font-size: 10px; padding: 3px 6px; letter-spacing: .06em; text-transform: uppercase; color: var(--mark, #fff); pointer-events: none; }
 #split { padding: 8px 7px; font-size: 10px; }
 #cut { position: fixed; top: 50%; width: 21px; height: 130vmax; margin-left: -10px; transform: translateY(-50%) rotate(15deg); cursor: ew-resize; touch-action: none; z-index: 1; }
