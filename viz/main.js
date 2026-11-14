@@ -196,7 +196,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
   if (fly) flying(dt);
   coarse = camera.zoom < (coarse ? 1.0 : 0.8);
-  const lt = Math.min(Math.max(lod + (coarse ? dt : -dt) / 0.4, 0), 1);
+  const lt = coarse ? 1 : 0;
   if (lt !== lod) {
     lod = lt;
     city.setLod(lod);
