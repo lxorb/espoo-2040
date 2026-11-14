@@ -66,12 +66,9 @@ def grpo_curve():
     zs = zero["score"] if zero["score"] == zero["score"] else 0.0
     M.update(grpoZero=f"{zs:.2f}", grpoWarm=f"{ev[0]['score']:.2f}", grpoFinal=f"{ev[-1]['score']:.2f}", grpoValid=f"{ev[-1]['valid']:.2f}",
              grpoSteps=str(ev[-1]["step"]))
-    for nm, e in (("Warm", ev[0]), ("Final", ev[-1])):
-        M[f"grpoDistinct{nm}"] = str(len({tuple((x.get("greedy") or {}).get("plan", [])) for x in e["seeds"]}))
     last = [x.get("greedy") or {} for x in ev[-1]["seeds"]]
     plans = [tuple(g_.get("plan", [])) for g_ in last]
     M["grpoPlan"] = ", ".join(f"\\texttt{{{q}}}" for q in max(set(plans), key=plans.count))
-    M["grpoMaint"] = str(sum(g_.get("maintain") == 2 for g_ in last))
     return ev, zs, [x["score"] for x in ev[-1]["seeds"]]
 
 
