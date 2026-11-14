@@ -428,6 +428,26 @@ def strategy():
         mac(f"evo{t}BoomYear", f"{2026 + rows[-1]['boom_access_year']:.0f}")
         mac(f"evo{t}BoomYearZero", f"{2026 + rows[0]['boom_access_year']:.0f}")
         mac(f"evo{t}Distinct", str(rows[-1]["distinct"]))
+        mac(f"evo{t}DistinctZero", str(rows[0]["distinct"]))
+        mac(f"evo{t}Builds", f"{rows[-1]['builds']:.0f}")
+        mac(f"evo{t}Spend", f"{rows[-1]['spend']:.0f}")
+        mac(f"evo{t}Acc", f"{rows[-1]['access_share']:.2f}")
+        mac(f"evo{t}Ent", f"{rows[-1]['entropy']:.2f}")
+        mac(f"evo{t}EntZero", f"{rows[0]['entropy']:.2f}")
+        mac(f"evo{t}Mone", f"{rows[-1]['maintain'][1]:.2f}")
+        mac(f"evo{t}MaxAcc", f"{max(r['access_share'] for r in rows):.2f}")
+        mac(f"evo{t}Ckpts", str(len(rows)))
+        top = sorted(rows[-1]["freq"].items(), key=lambda x: -x[1])
+        mac(f"evo{t}Top", ", ".join(f"\\texttt{{{p}}}" for p, v in top[:3] if v > 0))
+        if len(rows) > 1:
+            r1 = rows[1]
+            mac(f"evo{t}EpsOne", str(r1["episodes"]))
+            mac(f"evo{t}ScoreOne", f"{r1['score']:.2f}")
+            mac(f"evo{t}MtwoOne", f"{r1['maintain'][2]:.2f}")
+            mac(f"evo{t}BuildsOne", f"{r1['builds']:.1f}")
+        ot = [r["freq"].get("otaniemi-access", 0) for r in rows]
+        mac(f"evo{t}OtaZero", f"{ot[0]:.2f}")
+        mac(f"evo{t}Ota", f"{ot[-1]:.2f}")
         v = first(rows, "episodes", lambda r: r["maintain"][2] >= 0.9)
         if v is not None:
             mac(f"evo{t}MtwoAt", str(v))

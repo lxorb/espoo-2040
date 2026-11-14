@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex main"] 1794680100.96952 "main.aux" "main.bbl" "main" 1794680118.78724 0
+["bibtex main"] 1794681654.83734 "main.aux" "main.bbl" "main" 1794681673.34835 0
   "./refs.bib" 1794675279.72091 17983 15a36dbac09329c3920271b1163b2f42 ""
   "/usr/share/texlive/texmf-dist/bibtex/bst/natbib/plainnat.bst" 1233624470 26816 ffe5423d2019860bad9f54bc402fac15 ""
-  "main.aux" 1794680118.62883 9502 368686a07b0a85d9b45df311eee3d7c9 "pdflatex"
+  "main.aux" 1794681673.12838 9502 ef3b1650099de12e0868775b82c8079f "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1794680117.99284 "main.tex" "main.pdf" "main" 1794680118.78754 0
+["pdflatex"] 1794681672.35172 "main.tex" "main.pdf" "main" 1794681673.34876 0
   "/etc/texmf/web2c/texmf.cnf" 1794674786.26196 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/home/nib/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt0900.600pk" 1794675537.03984 17492 52aa8fdf48bd6d3be7b1ef0ac95cf813 ""
   "/home/nib/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt1000.600pk" 1794675537.98984 20008 3748b9663ff3218519cc77741ca03611 ""
@@ -141,23 +141,23 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1794674798.5939 128028 f533b797fba58d231669ea19e894e23e ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1794674809 6800791 b8d217b40cf1f3da36638a120d976fa8 ""
-  "figs/bars.pdf" 1794680116.43084 24081 fab97b965e123b0ffaada08ccfac6e21 ""
-  "figs/cats.tex" 1794680116.89484 185 db5cf597ea03d8fe5462c907cf4abc17 ""
-  "figs/curves.pdf" 1794680116.89184 20390 1063b4ad62c3541a9eff78d8b94c390b ""
-  "figs/evolution.pdf" 1794680117.65184 30927 fac0389679f10a89c431f9aec582d716 ""
-  "figs/numbers.tex" 1794680117.65284 5573 385b9a3e7b3669cf74c749801dd553ff ""
-  "figs/problem.pdf" 1794680115.99384 16449 08ccc3dd5a5cc74a828e841c27ef66f5 ""
+  "figs/bars.pdf" 1794681670.14139 24083 df7875f1e65fffb7c4a4eb8cb6e6db39 ""
+  "figs/cats.tex" 1794681670.77339 185 db5cf597ea03d8fe5462c907cf4abc17 ""
+  "figs/curves.pdf" 1794681670.76839 21234 237212afd4cb45f44936976171b7f03d ""
+  "figs/evolution.pdf" 1794681671.90739 34975 131ab0542a71f573103d47dabf2a313a ""
+  "figs/numbers.tex" 1794681671.91039 7605 5cac1bd0c343ecc5e7d846577bb9bbd1 ""
+  "figs/problem.pdf" 1794681669.5624 16449 95bc34cf27b8158e484d98da070e6ae9 ""
   "figs/shot_cars.jpg" 1794680041.63815 530133 a1e2cf00c59f5a7af616e53d8f557024 ""
   "figs/shot_flow.jpg" 1794680041.50215 386103 94494723d0bb41be03b8d7e13c9c4155 ""
   "figs/shot_heat0.jpg" 1794680041.40615 335743 1e49abea63b1f47b51cdf2c2a2da877e ""
   "figs/shot_heat19.jpg" 1794680041.46115 343245 73420cc6ebf6f8acfd952ed985ddab1d ""
   "figs/shot_split.jpg" 1794680041.56215 361060 a1425eeed4feae8bd09d1c907f9c0773 ""
-  "figs/table.tex" 1794680116.89384 942 98ee6be30c117aee7f3e9e827eb52cc5 ""
-  "figs/years.pdf" 1794680116.61884 12126 2fdce09298b1d522f0787172034087b7 ""
-  "main.aux" 1794680118.62883 9502 368686a07b0a85d9b45df311eee3d7c9 "pdflatex"
-  "main.bbl" 1794680100.99891 11585 d431793df2b385c70662bac5c2fccd18 "bibtex main"
-  "main.out" 1794680118.62983 895 4f94058f29ea9eca11679f6476e4dbc7 "pdflatex"
-  "main.tex" 1794680093.45794 22393 2b594f3dd0e475907f9e24a3fcc655a4 ""
+  "figs/table.tex" 1794681670.77139 942 6d9db728652b09072805885ac0373da0 ""
+  "figs/years.pdf" 1794681670.39539 12126 28bc91c0b1e6207138e0ce9d989a86a2 ""
+  "main.aux" 1794681673.12838 9502 ef3b1650099de12e0868775b82c8079f "pdflatex"
+  "main.bbl" 1794681654.86346 11585 d431793df2b385c70662bac5c2fccd18 "bibtex main"
+  "main.out" 1794681673.12938 895 4f94058f29ea9eca11679f6476e4dbc7 "pdflatex"
+  "main.tex" 1794681664.88342 23942 5fd8f4dd6e2c511622a56fbb9119785f ""
   "neurips_2026.sty" 1794675279.75291 13704 f447d3302c8719cb27619a074c876b44 ""
   (generated)
   "main.aux"
