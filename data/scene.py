@@ -37,39 +37,31 @@ BMAP = {
 }
 BMAP = {v: k for k, vs in BMAP.items() for v in vs.split()}
 BH = {"residential": 6, "apartments": 15, "commercial": 10, "industrial": 8, "public": 11, "garage": 3, "other": 5}
-
 GKINDS = ["land", "water", "forest", "park", "grass", "field", "wetland", "sand", "rock", "paved", "rail", "pitch"]
 GMAP = {
-    "natural": {"water": "water", "wood": "forest", "scrub": "grass", "grassland": "grass", "heath": "grass",
-                "sand": "sand", "beach": "sand", "wetland": "wetland", "bare_rock": "rock", "scree": "rock"},
-    "landuse": {"forest": "forest", "grass": "grass", "meadow": "field", "farmland": "field", "orchard": "field",
-                "recreation_ground": "park", "cemetery": "park", "village_green": "park", "allotments": "park",
-                "railway": "rail", "reservoir": "water", "basin": "water", "quarry": "sand", "construction": "sand"},
-    "leisure": {"park": "park", "garden": "park", "golf_course": "grass", "pitch": "pitch", "track": "pitch",
-                "swimming_pool": "water", "playground": "paved"},
+    "natural": {"water": "water", "wood": "forest", "scrub": "grass", "grassland": "grass", "heath": "grass", "sand": "sand", "beach": "sand", "wetland": "wetland", "bare_rock": "rock", "scree": "rock"},
+    "landuse": {"forest": "forest", "grass": "grass", "meadow": "field", "farmland": "field", "orchard": "field", "recreation_ground": "park", "cemetery": "park", "village_green": "park",
+                "allotments": "park", "railway": "rail", "reservoir": "water", "basin": "water", "quarry": "sand", "construction": "sand"},
+    "leisure": {"park": "park", "garden": "park", "golf_course": "grass", "pitch": "pitch", "track": "pitch", "swimming_pool": "water", "playground": "paved"},
     "amenity": {"parking": "paved"}, "place": {"square": "paved"}, "highway": {"pedestrian": "paved"},
 }
-
-RKINDS = ["motorway", "trunk", "primary", "secondary", "tertiary", "residential", "service", "track",
-          "footway", "cycleway", "rail", "subway", "light_rail", "tram", "tunnel"]
-RMAP = {"residential": "residential", "unclassified": "residential", "living_street": "residential", "road": "residential",
-        "pedestrian": "footway", "path": "footway", "steps": "footway", "bridleway": "footway", "footway": "footway",
-        "cycleway": "cycleway", "service": "service", "track": "track", "busway": "service"}
+RKINDS = ["motorway", "trunk", "primary", "secondary", "tertiary", "residential", "service", "track", "footway", "cycleway", "rail", "subway", "light_rail", "tram", "tunnel"]
+RMAP = {"residential": "residential", "unclassified": "residential", "living_street": "residential", "road": "residential", "pedestrian": "footway", "path": "footway",
+        "steps": "footway", "bridleway": "footway", "footway": "footway", "cycleway": "cycleway", "service": "service", "track": "track", "busway": "service"}
 RLANES = {"motorway": 4, "trunk": 4, "primary": 2, "secondary": 2, "tertiary": 2, "residential": 2}
 RAIL = {"rail", "subway", "light_rail", "tram"}
 
 
 def num(v):
-    m = re.match(r"\d+(\.\d+)?", (v or "").replace(",", "."))
-    return float(m[0]) if m else None
+    return float(m[0]) if (m := re.match(r"\d+(\.\d+)?", (v or "").replace(",", "."))) else None
 
 
 def proj(g):
     return shapely.transform(g, lambda c: np.column_stack(local(c[:, 0], c[:, 1])))
 
 
-def flat(coords):
-    return [round(float(v), 1) for p in coords for v in p]
+def flat(coords, nd=1):
+    return [round(float(v), nd or None) for p in coords for v in p]
 
 
 def parts(g):
@@ -84,8 +76,7 @@ def rkind(t):
 
 
 def bkind(t):
-    public = t.get("amenity") in ("school", "kindergarten", "hospital", "place_of_worship")
-    return BMAP.get(t.get("building")) or ("public" if public else "other")
+    return BMAP.get(t.get("building")) or ("public" if t.get("amenity") in ("school", "kindergarten", "hospital", "place_of_worship") else "other")
 
 
 def gkind(t):
@@ -96,7 +87,7 @@ class Reader(osmium.SimpleHandler):
     def __init__(self):
         super().__init__()
         self.wkb = osmium.geom.WKBFactory()
-        self.b, self.g, self.r, self.t = [], [], [], []
+        self.b, self.g, self.r, self.t, self.muni = [], [], [], [], {}
 
     def node(self, n):
         if n.tags.get("natural") == "tree":
@@ -105,11 +96,7 @@ class Reader(osmium.SimpleHandler):
     def way(self, w):
         t, k = w.tags, rkind(w.tags)
         row = t.get("natural") == "tree_row"
-        try:
-            line = (k or row) and proj(shapely.from_wkb(self.wkb.create_linestring(w)))
-        except Exception:
-            return
-        if not line:
+        if not (line := (k or row) and self.geom(self.wkb.create_linestring, w)):
             return
         if row:
             n = max(int(line.length / 8), 1)
@@ -120,6 +107,8 @@ class Reader(osmium.SimpleHandler):
 
     def area(self, a):
         t = a.tags
+        if t.get("boundary") == "administrative" and t.get("admin_level") == "8" and t.get("name") in ("Espoo", "Kauniainen"):
+            self.muni[t["name"]] = self.polys(a)
         if t.get("building", "no") != "no" and t.get("location") != "underground":
             lv = num(t.get("building:levels"))
             hs = [num(t.get("height")), lv and lv * 3.2]
@@ -130,10 +119,13 @@ class Reader(osmium.SimpleHandler):
             self.g += [(k, p) for p in self.polys(a)]
 
     def polys(self, a):
+        return parts(self.geom(self.wkb.create_multipolygon, a) or shapely.Polygon())
+
+    def geom(self, make, o):
         try:
-            return parts(proj(shapely.from_wkb(self.wkb.create_multipolygon(a))))
+            return proj(shapely.from_wkb(make(o)))
         except Exception:
-            return []
+            return None
 
 
 def tile(x, y):
@@ -162,9 +154,8 @@ def land():
 
 
 def lod1_cell(x, y):
-    xml = requests.get(f"{WFS}&bbox={x},{y},{x + 2000},{y + 2000}", timeout=600).content
     out = []
-    for _, e in ET.iterparse(io.BytesIO(xml)):
+    for _, e in ET.iterparse(io.BytesIO(requests.get(f"{WFS}&bbox={x},{y},{x + 2000},{y + 2000}", timeout=600).content)):
         if e.tag.endswith("}Building"):
             h = e.find("{http://www.opengis.net/citygml/building/2.0}measuredHeight")
             p = [a[0].text.split() for a in e if a.get("name") == "sijainti"]
@@ -177,8 +168,7 @@ def lod1_cell(x, y):
 def lod1():
     if not LOD1.exists():
         e, n = Transformer.from_crs(4326, 3879, always_xy=True).transform([BBOX[0], BBOX[2]], [BBOX[1], BBOX[3]])
-        cells = [(x, y) for x in range(int(e[0]) // 2000 * 2000, int(e[1]) + 1, 2000)
-                 for y in range(int(n[0]) // 2000 * 2000, int(n[1]) + 1, 2000)]
+        cells = [(x, y) for x in range(int(e[0]) // 2000 * 2000, int(e[1]) + 1, 2000) for y in range(int(n[0]) // 2000 * 2000, int(n[1]) + 1, 2000)]
         with ThreadPoolExecutor(6) as ex:
             rows = np.array([r for c in ex.map(lod1_cell, *zip(*cells)) for r in c])
         x, y = Transformer.from_crs(3879, 3067, always_xy=True).transform(rows[:, 0], rows[:, 1])
@@ -207,6 +197,24 @@ def split(g, keep):
     return [(k, p) for k in keys if k in keep for p in parts(g.intersection(cell(*k)))]
 
 
+def overview(polys, roads, muni):
+    g = []
+    for k in GKINDS:
+        ps = shapely.make_valid(np.array([p.simplify(5) for kk, p in polys if kk == k and p.area > 500] or [shapely.Polygon()]))
+        u = shapely.union_all(ps)
+        for q in parts(u.simplify(15)):
+            g += [(k, shapely.Polygon(q.exterior))] + [("land", shapely.Polygon(i)) for i in q.interiors]
+    g = sorted((e for e in g if e[1].area > 3000), key=lambda e: -e[1].area)
+    major = {}
+    [major.setdefault((k, n), []).append(l) for k, n, l in roads if k in ("motorway", "trunk", "primary", "secondary", "rail")]
+    r = [[RKINDS.index(k), n, flat(l.simplify(15).coords, 0)] for (k, n), ls in major.items()
+         for l in shapely.get_parts(shapely.line_merge(shapely.union_all(ls)))]
+    g = [[GKINDS.index(k), flat(orient(q).exterior.coords[:-1], 0)] for k, q in g]
+    rim = {k: [flat(p.exterior.simplify(10).coords[:-1], 0) for p in muni.get(n, [])] for k, n in [("border", "Espoo"), ("inner", "Kauniainen")]}
+    (VIZ / "overview.json").write_text(json.dumps({"g": g, "r": r, **rim}, separators=(",", ":")))
+    print("overview", len(g), "polygons", len(r), "lines")
+
+
 def main():
     r = float(sys.argv[1]) if len(sys.argv) > 1 else 0
     keep = region(r)
@@ -214,12 +222,13 @@ def main():
     h.apply_file(str(PBF), locations=True)
     tiles = {k: {"b": [], "g": [], "r": [], "t": []} for k in keep}
     put = lambda k, layer, item: k in tiles and tiles[k][layer].append(item)
-
     b, src = heights(h.b)
     for ht, k, p in b:
         put(tile(p.centroid.x, p.centroid.y), "b", [ht, BKINDS.index(k), flat(orient(p).exterior.coords[:-1])])
+    polys = land() + h.g
+    overview(polys, h.r, h.muni)
     ground = []
-    for k, p in land() + h.g:
+    for k, p in polys:
         for key, q in split(p, keep):
             ground += [(key, k, shapely.Polygon(q.exterior).simplify(TOL), 1)]
             ground += [(key, "land", shapely.Polygon(i).simplify(TOL), 0) for i in q.interiors]
