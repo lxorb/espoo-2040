@@ -73,7 +73,7 @@ function place(url, footprint) {
       if (!o.isMesh) return;
       o.castShadow = o.receiveShadow = true;
       o.customDepthMaterial = fineDepth;
-      for (const m of [o.material].flat()) { m.userData.base = m.color.clone(); hypeMats.push(patch(m, '', '', '', looks.one, looks.fine)); }
+      for (const m of [o.material].flat()) { m.userData.base = m.color.clone(); hypeMats.push(patch(m, '', '', '', looks.one, looks.fine, !footprint)); }
       if (!footprint) return;
       const a = o.geometry.attributes.position, w = new THREE.Vector3(), pts = [];
       for (let i = 0; i < a.count; i++) { w.fromBufferAttribute(a, i).applyMatrix4(o.matrixWorld); pts.push([w.x, -w.z]); }
@@ -106,22 +106,28 @@ const runList = fetch('data/runs/index.json').then(r => r.json()).then(all => Pr
   return list;
 });
 get('nothing').then(r => { state.ref = r; for (const m of nets) m.calib(r); paint(); sync(); }).catch(() => {});
-const paint = () => nets.forEach((m, k) => {
-  m.on = !!state.shown[k];
-  if (m.on) m.set(state.shown[k], state.f);
-  m.show(state.mode);
-});
+const blank = looks.clr[0].value, paint = () => {
+  wake = 30;
+  nets.forEach((m, k) => {
+    m.on = !!state.shown[k];
+    if (m.on) m.set(state.shown[k], state.f);
+    m.show(state.mode);
+    looks.clr[k].value = m.on && m.clr ? m.clr.tex : blank;
+    if (m.on && m.clr) looks.cb[k].value.copy(m.clr.box); else looks.cb[k].value.set(0, 0, 0, 0);
+  });
+};
 function loadRun() {
   const want = state.split ? state.pair : [state.who], key = want.join();
   Promise.all(want.map(get)).then(rs => {
     if (key !== (state.split ? state.pair : [state.who]).join()) return;
     state.shown = rs;
+    sel = null;
     state.run = rs[0];
     year.max = Math.min(...rs.map(r => r.years.length)) - 1;
     state.f = Math.min(state.f, year.max);
     paint();
     sync();
-  }).catch(() => want.forEach(w => { const b = document.querySelector(`#runs [data-v=${w}]`); if (b) b.disabled = true; }));
+  }).catch(() => want.forEach(w => { const b = document.querySelector(`#runs [data-v="${w}"]`); if (b) b.disabled = true; }));
 }
 const year = document.getElementById('year'), ylab = document.getElementById('ylab'), play = document.getElementById('play');
 const cut = document.getElementById('cut'), sides = [...document.querySelectorAll('.side')];
@@ -152,6 +158,8 @@ cut.ondblclick = () => { state.cut = 0.5; };
 const ground = (cx, cy) => { ray.setFromCamera({ x: cx / innerWidth * 2 - 1, y: 1 - cy / innerHeight * 2 }, camera); return ray.ray.intersectPlane(plane, hit) ? [hit.x, -hit.z] : null; };
 function split() {
   const on = state.split && state.shown.length === 2, W = innerWidth, H = innerHeight, X = state.cut * W, pr = renderer.getPixelRatio();
+  renderer.getDrawingBufferSize(looks.res.value);
+  looks.ccl.value.set(0, 0, -1);
   if (!on) { if (nets[0]) { nets[0].uni.uClip.value.set(0, 0, 1); nets[0].cut = null; } return; }
   cut.style.left = `${X}px`;
   const top = X + (H / 2 - 30) * TILT;
@@ -164,8 +172,10 @@ function split() {
     m.uni.uClip.value.set(g / pr, -g * TILT / pr, g * (H / 2 * TILT - X));
     m.cut = s ? [...a, ...b, -g * s] : null;
   });
+  looks.ccl.value.copy(nets[1].uni.uClip.value);
 }
 function apply() {
+  wake = 30;
   looks.dim.value = { cars: 1, heat: opt.heat, flow: opt.flow }[state.mode];
   const c = new THREE.Color(SKY).multiplyScalar(state.mode === 'flow' ? 0 : looks.dim.value).getRGB({}, THREE.SRGBColorSpace);
   looks.sky.value.set(c.r, c.g, c.b);
@@ -190,7 +200,7 @@ addEventListener('keydown', e => {
 });
 
 const UI = ['modes', 'right', 'time', 'sl', 'sr', 'card'].map(id => document.getElementById(id));
-let tags = [], shown = [], hold = 0, espoo = null;
+let tags = [], shown = [], espoo = null;
 function label(text, x, y, h, cls) {
   const el = document.createElement('div');
   el.className = `lab ${cls}`;
@@ -201,12 +211,13 @@ function label(text, x, y, h, cls) {
 }
 const WORDS = { road: ['BUILD ROAD', 'NEW ROAD'], lanes: ['WIDEN ROAD', 'WIDER ROAD'], junction: ['REBUILD JUNCTION', 'NEW JUNCTION'] };
 const words = (t, f) => f < t.a - 1e-6 || f >= t.b + 2.5 ? '' : (WORDS[t.what] || WORDS.road)[+(f >= t.b - 1e-6)];
-let lit = null;
+let lit = null, sel = null;
+const outlines = () => { wake = 30; for (const m of nets) m.outline(lit?.net === m ? lit : sel?.m === m ? sel : null); };
 function hover(t) {
   lit?.el.classList.remove('hi');
   lit = t;
   t?.el.classList.add('hi');
-  for (const m of nets) m.outline(m === t?.net ? t : null);
+  outlines();
 }
 function projectTags(put) {
   const live = nets.filter(m => m.on && m.tags);
@@ -275,6 +286,7 @@ function flying(dt) {
 
 const sunDir = new THREE.Vector3(-0.45, 0.8, 0.75).normalize(), sunX = new THREE.Vector3(0, 1, 0).cross(sunDir).normalize(), sunY = sunDir.clone().cross(sunX), snap = new THREE.Vector3();
 const clock = new THREE.Clock();
+let lastKey = '', wake = 0;
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
   if (fly) flying(dt);
@@ -306,10 +318,8 @@ function frame() {
   sun.target.position.copy(t);
   Object.assign(sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: 100, far: 12000 });
   sun.shadow.camera.updateProjectionMatrix();
-  if (state.play && state.run && (hold -= dt) < 0) {
-    let f = Math.min(state.f + dt / opt.tl, +year.max);
-    if (Math.floor(f) > Math.floor(state.f + 1e-6) && nets.some(m => m.on && m.opens?.has(Math.floor(f)))) { f = Math.floor(f); hold = 1.3; }
-    state.f = f;
+  if (state.play && state.run) {
+    state.f = Math.min(state.f + dt / opt.tl, +year.max);
     if (state.f >= +year.max) state.play = false;
     paint();
     sync();
@@ -318,7 +328,15 @@ function frame() {
   if (state.mode === 'cars') cars.tick(dt * state.speed, nets.filter(m => m.on && m.links), [x0, y0, x1, y1], px, city.loaded);
   for (const m of nets) m.draw(state.mode, [x0, y0, x1, y1], dt * (state.mode === 'flow' ? FLOW[state.flow] : state.speed), px, city.loaded);
   if (city.tag && !espoo) labels.push(espoo = Object.assign(label('ESPOO', ...city.tag, 20, 'big'), { far: true }));
-  const w = innerWidth, h = innerHeight, put = [];
+  const w = innerWidth, h = innerHeight, now = performance.now();
+  const key = [camera.position.x, camera.position.z, camera.zoom, state.f, state.mode, state.cut, state.split, w, h, city.loaded.size, city.busy, near.ground.busy, detail.busy, looks.ready.value, lod].join();
+  if (key !== lastKey || fly) wake = 30;
+  lastKey = key;
+  if (wake-- > 0 || state.mode !== 'heat' || looks.near.value > 0 || nets.some(m => now - m.xf < 600)) draw(w, h, []);
+  frames++;
+  requestAnimationFrame(frame);
+}
+function draw(w, h, put) {
   for (const l of labels) {
     v.copy(l.p).project(camera);
     l.on = Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && (!l.el.classList.contains('st') || camera.zoom > 0.12) && (!l.far || camera.zoom < 0.35);
@@ -334,37 +352,39 @@ function frame() {
   for (const l of all.filter(l => l.on && over(l.el.getBoundingClientRect()))) l.el.style.display = 'none';
   renderer.render(scene, camera);
   for (const m of nets) m.overlay(state.mode);
-  frames++;
-  requestAnimationFrame(frame);
 }
 const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids); return e; };
 const card = document.getElementById('card');
-let hp = null, hk = 0, tap = null;
-function pick() {
-  const g = hp && ground(...hp), m = g && nets.find(m => m.on && m.links && m.keep(...g));
+let hp = null, tap = null;
+function find(p) {
+  const g = p && ground(...p), m = g && nets.find(m => m.on && m.links && m.keep(...g)), W = l => Math.max(l.lanes || 1, 1) * 3.3 + 1;
   let best = 12 * 1.8 / camera.zoom, k = -1;
   if (m) m.links.forEach((l, i) => {
     const b = m.box[i];
     if (g[0] < b[0] - best || g[0] > b[2] + best || g[1] < b[1] - best || g[1] > b[3] + best) return;
-    const off = m.two[i] ? (Math.max(l.lanes || 1, 1) * 3.3 + 1) / 2 : 0;
+    const off = m.two[i] ? W(l) / 2 : 0;
     for (let s = 1; s < l.geom.length; s++) {
       const [ax, ay] = l.geom[s - 1], [bx, by] = l.geom[s], dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy) || 1, ox = dy / d * off, oy = -dx / d * off;
       const t = Math.min(Math.max(((g[0] - ax - ox) * dx + (g[1] - ay - oy) * dy) / (d * d), 0), 1), e = Math.hypot(ax + ox + dx * t - g[0], ay + oy + dy * t - g[1]);
       if (e < best) { best = e; k = i; }
     }
   });
-  card.hidden = k < 0;
-  if (k < 0) return;
-  const l = m.links[k], pc = v => `${Math.round(v * 100)}%`;
+  return k < 0 ? null : { m, k, hl: [m.two[k] !== undefined ? k : { geom: m.links[k].geom, w: W(m.links[k]) }] };
+}
+function pick() {
+  const r = sel || find(hp);
+  card.hidden = !r;
+  if (!r) return;
+  const { m, k } = r, l = m.links[k], pc = v => `${Math.round(v * 100)}%`;
   card.replaceChildren(el('b', '', l.name || l.ref || l.cls), ...[['flow', `${Math.round(m.flow[k])} veh/h`], ['queue', pc(m.loss[k])], ['condition', pc(m.cond[k])],
     ...m.cap[k] < 1 ? [['works', `${pc(m.cap[k])} capacity`]] : []].map(([a, b]) => el('div', '', el('span', '', a), el('span', '', b))));
 }
 const cv = renderer.domElement;
 cv.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') hp = [e.clientX, e.clientY]; });
-cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hp = null; });
+cv.addEventListener('pointerleave', () => { hp = null; });
 cv.addEventListener('pointerdown', e => { tap = [e.clientX, e.clientY]; });
-cv.addEventListener('pointerup', e => { if (e.pointerType !== 'mouse' && tap && Math.hypot(e.clientX - tap[0], e.clientY - tap[1]) < 8) hp = tap; });
-setInterval(() => { if (hp || !card.hidden) pick(); }, 60);
+cv.addEventListener('pointerup', e => { if (tap && Math.hypot(e.clientX - tap[0], e.clientY - tap[1]) < 6) { sel = find(tap); outlines(); pick(); } });
+setInterval(() => { if (hp || sel || !card.hidden) pick(); }, 60);
 
 const fm = document.getElementById('fm'), rules = fetch('data/rules.json').then(r => r.json()).catch(() => ({}));
 const span = (a, u = '') => { const lo = Math.min(...a), hi = Math.max(...a); return a.length ? `${lo === hi ? lo : `${lo} to ${hi}`}${u}` : '?'; };
@@ -385,20 +405,19 @@ async function formal() {
     return ['i', name, `${ps.length} ${noun}`, `${span(ps.map(p => p.cost), ' MEUR')}, ${span(ps.map(p => p.years), ' years')}`, what + (w.length ? `; roads lose ${span(w, '%')} capacity while it is built` : '')];
   });
   const M = R.maint || [];
-  document.getElementById('fmc').replaceChildren(
-    el('p', '', `Each year, for ${q(R.years)} years, the planner makes one decision.`),
-    el('h3', '', 'Actions'),
-    table(['What', 'Options', 'Cost', 'Effect'], [['g', 'Start a road project', `${cat.length} projects, up to ${q(R.builds)} per year`, '', ''], ...rows,
+  const parts = [['Action Space', table(['What', 'Options', 'Cost', 'Effect'], [['g', 'Start a road project', `${cat.length} projects, up to ${q(R.builds)} per year`, '', ''], ...rows,
       ['', 'Set maintenance level', `${M.length || '?'} levels`, `${M.join(' / ') || '?'} MEUR per year`, 'Repairs worn roads; worn roads are slower'],
-      ['', 'Save money', 'Spend nothing', '0', 'Unspent money carries over to the next year']]),
-    el('h3', '', 'Limits'),
-    table(null, [['', 'Budget', `${q(R.income)} MEUR per year`], ['', 'Projects', `At most ${q(R.builds)} new projects per year`], ['', 'Building', `Roads under works lose ${span(loss(cat), '%')} capacity`],
+      ['', 'Save money', 'Spend nothing', '0', 'Unspent money carries over to the next year']])],
+    ['Observation Space', table(null, [['', 'Areas', 'Population and jobs of every area, year by year'], ['', 'Projects', 'Cost, build time and share of delay on its roads'],
+      ['', 'Roads', 'The most congested roads'], ['', 'Forecasts', `Up to ${q(R.forecasts)} forecasts, ${q(R.forecast_years)} years ahead each`]], 'n')],
+    ['Limits', table(null, [['', 'Budget', `${q(R.income)} MEUR per year`], ['', 'Projects', `At most ${q(R.builds)} new projects per year`], ['', 'Building', `Roads under works lose ${span(loss(cat), '%')} capacity`],
       ['', 'Time', `${q(R.years)} years of decisions, then ${q(R.runout)} more years are scored`],
       ['', 'Hidden growth', `${R.booms ? span(R.booms) : '?'} of ${q(R.areas)} areas grow ${R.boom_growth ? span(R.boom_growth) : '?'} times in ${q(R.years)} years, without warning`]], 'n'),
-    el('h3', '', 'What it sees'),
-    table(null, [['', 'Areas', 'Population and jobs of every area, year by year'], ['', 'Projects', 'Cost, build time and share of delay on its roads'],
-      ['', 'Roads', 'The most congested roads'], ['', 'Forecasts', `Up to ${q(R.forecasts)} forecasts, ${q(R.forecast_years)} years ahead each`]], 'n'),
-    el('p', 's', `Score: total hours lost in traffic over ${R.years && R.runout ? R.years + R.runout : '?'} years. Doing nothing scores 0, the best known plan scores 1.`));
+      el('p', 's', `Score: total hours lost in traffic over ${R.years && R.runout ? R.years + R.runout : '?'} years. Doing nothing scores 0, the best known plan scores 1.`)]];
+  const tabs = parts.map(([name], k) => Object.assign(el('button', '', name), { onclick: () => show(k) })), body = el('div', '');
+  const show = k => { tabs.forEach((b, j) => b.classList.toggle('on', j === k)); body.replaceChildren(...parts[k].slice(1)); };
+  show(0);
+  document.getElementById('fmc').replaceChildren(el('p', '', `Each year, for ${q(R.years)} years, the planner makes one decision.`), el('div', 'seg tabs', ...tabs), body);
   fm.hidden = false;
 }
 document.getElementById('formal').onclick = formal;
@@ -431,7 +450,7 @@ settings([
   knob('fp', 'flow particles', 'range', [0.1, 1, 0.05], 1, v => { flowOpt.particles = v; }),
   knob('ft', 'flow trail', 'range', [0.25, 4, 0.05], 1, v => { flowOpt.trail = v; }),
   knob('fc', 'flow color', 'choice', ['relative', 'absolute'], 'relative', v => { flowOpt.abs = v === 'absolute'; }),
-  knob('cv', 'congestion against', 'choice', ['2026', 'free flow'], '2026', v => { flowOpt.free = v === 'free flow'; }),
+  knob('cv', 'congestion against', 'choice', ['2026', 'free flow'], '2026', v => { flowOpt.free = v === 'free flow'; for (const m of nets) m.lastF = NaN; paint(); }),
   knob('hb', 'heat background', 'range', [0.05, 1, 0.05], 0.2, v => { opt.heat = v; apply(); }),
   knob('fb', 'flow background', 'range', [0.02, 1, 0.01], 0.2, v => { opt.flow = v; apply(); }),
   knob('spy', 'seconds per year', 'range', [0.1, 5, 0.05], 0.35, v => { opt.tl = v; }),

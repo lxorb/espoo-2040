@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { looks, patch, up, DITHER, HYPE, COVER, junctions } from './city.js';
+import { looks, patch, up, DITHER, HYPE, COVER, CLEAR, junctions } from './city.js';
 import { lengths, along } from './traffic.js';
 
 const caps = { marks: 4000, texels: 24e6, cache: 40e6, sprites: 10000, walkers: 300, props: 3000, loads: 8 };
@@ -119,13 +119,15 @@ class Ground {
   }
 }
 
-const SPRITE_VERT = `attribute vec4 aI; uniform vec4 uRect[NS]; uniform vec4 uInfo[NS]; varying vec2 vUv;
+const HIDE = 'if (clr(aI.xy, (gl_Position.xy / gl_Position.w * 0.5 + 0.5) * uRes) > 0.5) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);';
+const SPRITE_VERT = `attribute vec4 aI; uniform vec4 uRect[NS]; uniform vec4 uInfo[NS]; varying vec2 vUv; ${CLEAR}
   void main() {
     int k = int(aI.z); vec4 r = uRect[k], f = uInfo[k]; float sc = abs(aI.w), flip = step(aI.w, 0.0), bx = mix(f.x, 1.0 - f.x, flip);
     vec3 right = normalize(vec3(viewMatrix[0][0], 0.0, viewMatrix[2][0]));
     vec3 p = vec3(aI.x, 0.3, -aI.y) + right * (position.x - bx) * f.z * sc + vec3(0.0, position.y * f.y * sc, 0.0);
     vUv = vec2(mix(r.x, r.z, mix(position.x, 1.0 - position.x, flip)), mix(r.y, r.w, position.y));
     gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+    ${HIDE}
   }`;
 const SPRITE_FRAG = `uniform sampler2D uMap; uniform float uDim, uSat, uShow; varying vec2 vUv;
   void main() {
@@ -136,13 +138,14 @@ const SPRITE_FRAG = `uniform sampler2D uMap; uniform float uDim, uSat, uShow; va
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }`;
-const BLOB_VERT = `attribute vec4 aI; uniform vec4 uInfo[NS]; varying vec2 vQ;
+const BLOB_VERT = `attribute vec4 aI; uniform vec4 uInfo[NS]; varying vec2 vQ; ${CLEAR}
   void main() {
     vec4 f = uInfo[int(aI.z)]; float sc = abs(aI.w), h = f.y * sc, w = f.z * sc * 0.4;
     vec2 d = vec2(${SHADOW}), n = vec2(-d.y, d.x);
     vQ = position.xy * 2.0 - 1.0;
     vec2 c = aI.xy + d * (0.12 * h + vQ.x * (w + 0.1 * h)) + n * vQ.y * w * 0.85;
     gl_Position = projectionMatrix * viewMatrix * vec4(c.x, 0.56, -c.y, 1.0);
+    ${HIDE}
   }`;
 const BLOB_FRAG = `uniform float uShow, uDim; varying vec2 vQ;
   void main() { float r = dot(vQ, vQ); if (r > 1.0) discard; gl_FragColor = vec4(0.0, 0.0, 0.0, 0.55 * smoothstep(1.0, 0.2, r) * uShow * uDim); }`;
@@ -173,7 +176,7 @@ class Sprites {
     this.list = list;
     this.groups = GROUPS.map(g => g.map(p => list.flatMap((s, k) => s.name.startsWith(p) ? [k] : [])));
     this.walkers = list.flatMap((s, k) => s.name.startsWith('walker') ? [k] : []);
-    const uni = { uMap: { value: map }, uDim: looks.dim, uSat: looks.sat, uShow: looks.near,
+    const uni = { uMap: { value: map }, uDim: looks.dim, uSat: looks.sat, uShow: looks.near, uClr0: looks.clr[0], uClr1: looks.clr[1], uCb0: looks.cb[0], uCb1: looks.cb[1], uCcl: looks.ccl, uRes: looks.res,
       uRect: { value: list.map(s => new THREE.Vector4(s.x / W, 1 - (s.y + s.h) / H, (s.x + s.w) / W, 1 - s.y / H)) },
       uInfo: { value: list.map(s => new THREE.Vector4(s.base[0], s.m, s.m * s.w / s.h, 0)) } };
     const defines = { NS: list.length };
@@ -331,7 +334,7 @@ export class Near {
     this.sprites = new Sprites(scene);
     this.walkers = new Walkers();
     this.o = new THREE.Object3D();
-    const mat = patch(new THREE.MeshStandardMaterial({ roughness: 0.8, vertexColors: true }), '', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.near);
+    const mat = patch(new THREE.MeshStandardMaterial({ roughness: 0.8, vertexColors: true }), '', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.near, true);
     this.props = Object.entries(props()).map(([name, parts]) => {
       const m = new THREE.InstancedMesh(mergeGeometries(parts), mat, caps.props);
       m.count = 0;

@@ -5,7 +5,8 @@ import { MATS, L, DETAIL, materials } from './ground.js';
 export const HYPE = [-1511.7, 1239.2];
 export const looks = { dim: { value: 1 }, sat: { value: 1 }, tree: { value: 1 }, lane: { value: 1 }, path: { value: 1 }, one: { value: 1 }, px: { value: 1 }, coarse: { value: 0 }, fine: { value: 1 }, near: { value: 0 }, far: { value: 1 }, out: { value: 0.3 }, mark: { value: new THREE.Vector3(1, 1, 1) }, trees: { value: 1 }, sky: { value: new THREE.Vector3() },
   cover: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, cbox: { value: new THREE.Vector4() },
-  mats: { value: null }, mat: { value: MATS.map(() => new THREE.Vector4(1, 1, 1, 8)) }, var: { value: MATS.map(() => new THREE.Vector4(0, 1, 0, 0)) }, detail: { value: 0 }, ready: { value: 0 }, gtex: { value: 0 } };
+  mats: { value: null }, mat: { value: MATS.map(() => new THREE.Vector4(1, 1, 1, 8)) }, var: { value: MATS.map(() => new THREE.Vector4(0, 1, 0, 0)) }, detail: { value: 0 }, ready: { value: 0 }, gtex: { value: 0 },
+  clr: [0, 1].map(() => ({ value: Object.assign(new THREE.DataTexture(new Uint8Array(4), 1, 1), { needsUpdate: true }) })), cb: [0, 1].map(() => ({ value: new THREE.Vector4() })), ccl: { value: new THREE.Vector3(0, 0, -1) }, res: { value: new THREE.Vector2(1, 1) } };
 materials(looks);
 
 const GROUND = { land: '#8e8f8b', water: '#15191c', forest: '#4f6339', park: '#667f48', grass: '#6f864e', field: '#959872',
@@ -19,24 +20,33 @@ const hash = `float hash(float n){return fract(sin(n*12.9898)*43758.5453);}`;
 export const DITHER = 'fract(dot(gl_FragCoord.xy, vec2(0.7548777, 0.5698403)))';
 export const COVER = 'uniform sampler2D uCover; uniform vec4 uCbox; float cover(vec2 w) { return texture2D(uCover, (vec2(w.x, -w.y) - uCbox.xy) * uCbox.zw).r; }';
 
+export const CLEAR = 'uniform sampler2D uClr0, uClr1; uniform vec4 uCb0, uCb1; uniform vec3 uCcl; uniform vec2 uRes; float clr(vec2 w, vec2 f) { bool b = dot(vec3(f, 1.0), uCcl) > 0.0; vec2 u = (w - (b ? uCb1 : uCb0).xy) * (b ? uCb1 : uCb0).zw; return b ? texture2D(uClr1, u).r : texture2D(uClr0, u).r; }';
+const clears = s => {
+  Object.assign(s.uniforms, { uClr0: looks.clr[0], uClr1: looks.clr[1], uCb0: looks.cb[0], uCb1: looks.cb[1], uCcl: looks.ccl, uRes: looks.res });
+  s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vClw;').replace('#include <project_vertex>', 'vec4 cw = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\ncw = instanceMatrix * cw;\n#endif\nvClw = (modelMatrix * cw).xz;\n#include <project_vertex>');
+  s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec2 vClw;\n${CLEAR}`).replace('void main() {', 'void main() {\nif (clr(vec2(vClw.x, -vClw.y), gl_FragCoord.xy) > 0.5) discard;');
+};
+
 export function fadeDepth(show) {
   const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   m.customProgramCacheKey = () => 'fade';
   m.onBeforeCompile = s => {
     s.uniforms.uShow = show;
     s.fragmentShader = 'uniform float uShow;\n' + s.fragmentShader.replace('#include <alphatest_fragment>', `#include <alphatest_fragment>\nif (${DITHER} >= uShow) discard;`);
+    clears(s);
   };
   return m;
 }
 
-export function patch(mat, vert = '', frag = '', pars = '', fade = looks.one, show = looks.one) {
-  mat.customProgramCacheKey = () => vert + frag + pars;
+export function patch(mat, vert = '', frag = '', pars = '', fade = looks.one, show = looks.one, clear = false) {
+  mat.customProgramCacheKey = () => vert + frag + pars + clear;
   mat.onBeforeCompile = s => {
     Object.assign(s.uniforms, { uDim: looks.dim, uSat: looks.sat, uTree: looks.tree, uLane: looks.lane, uFade: fade, uPx: looks.px, uShow: show, uSky: looks.sky, uCover: looks.cover, uCbox: looks.cbox, uMats: looks.mats, uMat: looks.mat, uVar: looks.var, uDetail: looks.detail });
     s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>\nuniform float uTree;\n${pars}`).replace('#include <begin_vertex>', `#include <begin_vertex>\n${vert}`);
     s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\nuniform float uDim, uSat, uLane, uFade, uShow;\nuniform vec3 uSky;\n${hash}\n${COVER}\n${DETAIL}\n${pars.replace(/attribute[^;]*;/g, '')}`)
       .replace('#include <dithering_fragment>', '#include <dithering_fragment>\nif (sky > 0.5) gl_FragColor.rgb = uSky * sky;')
       .replace('#include <color_fragment>', `#include <color_fragment>\nfloat sky = 0.0;\nif (${DITHER} >= uShow) discard;\n${frag}\ndiffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, uSat);`);
+    if (clear) clears(s);
   };
   return mat;
 }
@@ -50,9 +60,9 @@ const buildingLook = show => patch(new THREE.MeshStandardMaterial({ roughness: 0
   win = mix(0.27, win, clamp(1.6 - 4.0 * max(fwidth(vB.x / fw), fwidth(vB.y / fh)), 0.0, 1.0));
   c *= 1.0 - (1.0 - roof) * (0.2 * win + 0.4 * (1.0 - smoothstep(0.0, 6.0, vB.y)));
   c *= 1.0 - roof * 0.05 * mix(0.5, step(0.5, fract(vB.x * 0.25)), clamp(1.6 - 4.0 * fwidth(vB.x * 0.25), 0.0, 1.0));
-  diffuseColor.rgb = c * uDim;`, 'attribute vec3 aB; varying vec3 vB;', looks.one, show);
-const buildingMat = buildingLook(looks.one), coarseMat = buildingLook(looks.coarse), coarseDepth = fadeDepth(looks.coarse);
-const dress = (m, mat) => { m.material = mat; m.customDepthMaterial = mat === coarseMat ? coarseDepth : undefined; };
+  diffuseColor.rgb = c * uDim;`, 'attribute vec3 aB; varying vec3 vB;', looks.one, show, true);
+const buildingMat = buildingLook(looks.one), coarseMat = buildingLook(looks.coarse), coarseDepth = fadeDepth(looks.coarse), solidDepth = fadeDepth(looks.one);
+const dress = (m, mat) => { m.material = mat; m.customDepthMaterial = mat === coarseMat ? coarseDepth : solidDepth; };
 
 const RIB = ['attribute vec3 aB, aR, aJ; varying vec3 vB, vR, vJ; varying vec2 vW; float line(float d, float h, float f) { float e = max(h, 0.6 * f); return (1.0 - smoothstep(e - 0.5 * f, e + 0.5 * f, d)) * h / e; }',
   'vB = aB; vR = aR; vJ = aJ; vW = (modelMatrix * vec4(position, 1.0)).xz;', `if (${DITHER} < cover(vW)) discard;
@@ -88,7 +98,7 @@ const groundMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexCol
   }`, 'attribute vec4 aG; attribute vec3 aC; varying vec4 vG; varying vec3 vC; varying vec2 vW;');
 const GL = { land: 'grass', water: 'water', forest: 'forest_floor', park: 'grass', grass: 'grass', field: 'meadow', wetland: 'meadow', sand: 'sand', rock: 'rock', paved: 'paving', rail: 'rail',
   pitch: 'pitch', parking: 'parking', playground: 'sand', garden: 'grass', scrub: 'scrub', hedge: 'scrub', sidewalk: 'paving', conifer_forest: 'forest_floor' };
-const treeMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true }), 'transformed *= uTree;', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.far);
+const treeMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true }), 'transformed *= uTree;', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.far, true);
 const SCATTER = { forest: [3, 140], conifer_forest: [4, 140], hedge: [5, 6], scrub: [5, 40], garden: [5, 90] };
 
 const treeGeo = (() => {
@@ -264,6 +274,7 @@ function forest(all) {
     m.setColorAt(k, c.setHSL(0.22 + Math.random() * 0.08, 0.35 + Math.random() * 0.15, 0.27 + Math.random() * 0.1));
   }
   m.castShadow = true;
+  m.customDepthMaterial = solidDepth;
   return m;
 }
 

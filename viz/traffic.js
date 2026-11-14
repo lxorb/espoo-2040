@@ -51,7 +51,7 @@ const BAND_VERT = `attribute vec3 aS; attribute vec2 aN; attribute vec3 aK; attr
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   }`;
 const CLIP = 'uniform vec3 uClip; void clip() { if (dot(vec3(gl_FragCoord.xy, 1.0), uClip) < 0.0) discard; }';
-const BAND_FRAG = (body, mark) => `uniform float uYear, uDim, uSat, uOy, uT, uPx; uniform vec3 uMark; varying vec3 vK; varying vec2 vW, vU; varying float vS;
+const BAND_FRAG = (body, mark) => `uniform float uYear, uDim, uSat, uPx; uniform vec3 uMark; varying vec3 vK; varying vec2 vW, vU; varying float vS;
   ${CLIP}
   ${COVER}
   ${DETAIL}
@@ -73,15 +73,10 @@ const SURFACE = BAND_FRAG(`float wear = 1.0 - vK.x, v = vn(vW * 0.35);
     al = mix(0.85, 0.7 * smoothstep(0.35, 1.0, wear), max(cover(vW), uDetail));
     if (vK.y < ${SHUT}) { float bar = step(fract(vU.x / 30.0), 0.07); c = mix(vec3(0.09), uMark, max(step(0.5, fract((vW.x + vW.y) / 5.0)), bar)); al = 0.95; }
     else if (vK.y < 0.999) { c = mix(c, uMark, stripe); al = max(al, 0.85 * stripe); }`);
-const PROJECT = BAND_FRAG(`float st = vK.z, age = uYear - vK.y, f = vU.x / max(vU.y, 1.0), p = abs(vK.y - uOy) < 0.01 ? uT / 1.2 : 9.0, d = p - f;
-    if (uYear < vK.x) discard;
-    bool done = age >= 0.0 && d > 0.0;
-    float glow = done ? exp(-d * 14.0) * step(p, 1.1) : 0.0;
-    c = uMark;
-    if (!done) { if (st > 1.5 && st < 2.5 && e < 0.7) al = 0.15; else if (stripe < 0.5) discard; }
-    else if (st < 0.5) discard;
-    else if (e < 0.8 && glow < 0.05) { if (st < 1.5 || st > 2.5) discard; c = vec3(0.2, 0.21, 0.22); }
-    c = mix(c, uMark, glow);`, true);
+const PROJECT = BAND_FRAG(`float st = vK.z, k = clamp((uYear - vK.y) / 0.2, 0.0, 1.0);
+    c = mix(uMark, vec3(0.2, 0.21, 0.22), k);
+    al = clamp((uYear - vK.x) / 0.2, 0.0, 1.0) * mix(st > 1.5 && e < 0.7 ? 0.15 : stripe, step(1.5, st) * step(e, 0.8), k);
+    if (al < 0.01) discard;`, true);
 
 export class Net {
   constructor(scene, net, renderer, camera, cat) {
@@ -90,7 +85,7 @@ export class Net {
     net.links.forEach((l, i) => this.byOsm.set(l.osm, [...(this.byOsm.get(l.osm) || []), i]));
     const twin = new Set(net.links.map(l => l.a + ',' + l.b));
     this.two = net.links.map(l => twin.has(l.b + ',' + l.a) ? 1 : 0);
-    this.uni = { uPx: { value: 1 }, uRef: { value: 1 }, uClip: { value: new THREE.Vector3(0, 0, 1) }, uYear: { value: 0 }, uOy: { value: -99 }, uT: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat, uCover: looks.cover, uCbox: looks.cbox, uMark: looks.mark, uMats: looks.mats, uMat: looks.mat, uVar: looks.var, uDetail: looks.detail };
+    this.uni = { uPx: { value: 1 }, uRef: { value: 1 }, uClip: { value: new THREE.Vector3(0, 0, 1) }, uYear: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat, uCover: looks.cover, uCbox: looks.cbox, uMark: looks.mark, uMats: looks.mats, uMat: looks.mat, uVar: looks.var, uDetail: looks.detail };
     this.heatRT = target();
     this.heatOld = target();
     this.xf = -1e9;
@@ -153,7 +148,7 @@ export class Net {
 
   queue() {
     const L = this.links, n = L.length, room = Float32Array.from(L, l => l.len * Math.max(l.lanes || 1, 1)), full = new Float32Array(n);
-    if (this.into?.n !== n) { this.into = Object.assign([], { n }); L.forEach((l, i) => (this.into[l.b] ||= []).push(i)); }
+    if (this.pre?.length !== n) { const into = []; L.forEach((l, i) => (into[l.b] ||= []).push(i)); this.pre = L.map(l => (into[l.a] || []).filter(j => L[j].a !== l.b)); }
     let wait = this.loss.slice();
     for (let pass = 0; pass < 40; pass++) {
       const next = new Float32Array(n);
@@ -163,7 +158,9 @@ export class Net {
         const put = Math.min(wait[i], room[i] - full[i]), over = wait[i] - put;
         full[i] += put;
         if (over < 1) continue;
-        const pre = (this.into[L[i].a] || []).filter(j => L[j].a !== L[i].b), sum = pre.reduce((a, j) => a + this.flow[j], 0);
+        const pre = this.pre[i];
+        let sum = 0;
+        for (const j of pre) sum += this.flow[j];
         if (!(sum > 0)) continue;
         for (const j of pre) next[j] += over * this.flow[j] / sum;
         any = true;
@@ -182,6 +179,7 @@ export class Net {
     this.scale = this.uni.uRef.value = 0.8;
     this.fref = fl[Math.floor(fl.length * 0.9)] || 1;
     this.dirty = true;
+    this.lastF = NaN;
   }
 
   projects(run) {
@@ -214,7 +212,7 @@ export class Net {
       if (!seen.has(id)) { seen.add(id); ext.push(l); }
     }));
     const L = this.base.concat(ext), n = L.length, F = () => new Float32Array(n);
-    const c = { links: L, id: this.cache.size, ff: Float32Array.from(L, l => l.len / (l.kmh / 3.6)), speed: F(), flow: F(), loss: F(), ratio: F(), cap: F().fill(1), cond: F(), cum: L.map(l => lengths(l.geom)), pl: [], opens: new Set(), tags: [] };
+    const c = { links: L, id: this.cache.size, ff: Float32Array.from(L, l => l.len / (l.kmh / 3.6)), speed: F(), flow: F(), loss: F(), ratio: F(), cap: F().fill(1), cond: F(), cum: L.map(l => lengths(l.geom)), pl: [], tags: [], proj: this.projects(run), clrKey: null };
     c.box = L.map(l => { const xs = l.geom.map(p => p[0]), ys = l.geom.map(p => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; });
     const P = [], link = [];
     L.forEach((l, i) => {
@@ -237,8 +235,7 @@ export class Net {
     c.heat.frustumCulled = false;
     c.dots = q.attributes.aI;
     const lines = [], at = l => this.base[l].geom;
-    for (const { p, a: k, b } of this.projects(run)) {
-      c.opens.add(b);
+    for (const { p, a: k, b } of c.proj) {
       const key = st => [k, b, st], ways = [], hl = [];
       const link = (osm, st) => osm.forEach(o => (this.byOsm.get(o) || []).forEach(i => { ways.push(at(i)); hl.push(i); lines.push({ geom: at(i), w: W(this.base[i]), k: key(st), shift: this.two[i] }); }));
       for (const m of p.works || []) link(m.osm, 0);
@@ -257,6 +254,7 @@ export class Net {
   }
 
   set(run, f) {
+    if (run === this.lastRun && f === this.lastF) return;
     if (run !== this.run) this.use(run);
     const ys = run.years, a = Math.min(Math.floor(f), ys.length - 1), b = Math.min(a + 1, ys.length - 1), t = f - a, A = ys[a], B = ys[b];
     for (let i = 0; i < this.links.length; i++) {
@@ -269,8 +267,7 @@ export class Net {
       this.cond[i] = (A.cond?.[i] ?? 1) * (1 - t) + (B.cond?.[i] ?? 1) * t;
     }
     this.queue();
-    const yr = Math.floor(f + 1e-6);
-    if (run === this.lastRun && yr > Math.floor(this.lastF + 1e-6) && f - this.lastF < 1.5 && this.opens.has(yr)) this.anim = { y: yr, t0: performance.now() };
+    this.clearing(f);
     this.kick += run === this.lastRun ? Math.abs(f - this.lastF) : 1;
     this.lastRun = run; this.lastF = f;
     const base = (this.scale || 0) * 0.06;
@@ -281,6 +278,26 @@ export class Net {
     k.needsUpdate = true;
     this.uni.uYear.value = f;
     if (Math.abs(f - (this.fieldF ?? -9)) > 0.25 || run !== this.fieldRun) { this.fieldF = f; this.fieldRun = run; this.dirty = true; }
+  }
+
+  clearing(f) {
+    const ws = this.proj.filter(q => q.a < f).flatMap(q => (q.p.new || []).map(n => [n.geom, (n.oneway ? 1 : 2) * Math.max(n.lanes || 1, 1) * 3.3 + 12])), key = ws.length;
+    if (key === this.clrKey) return;
+    this.clrKey = key;
+    this.clr?.tex.dispose();
+    this.clr = null;
+    if (!ws.length) return;
+    const P = ws.flatMap(([g]) => g), x0 = Math.min(...P.map(p => p[0])) - 50, y0 = Math.min(...P.map(p => p[1])) - 50;
+    const R = Math.max(Math.max(...P.map(p => p[0])) + 50 - x0, Math.max(...P.map(p => p[1])) + 50 - y0) / 2048, W = Math.ceil((Math.max(...P.map(p => p[0])) + 50 - x0) / R), H = Math.ceil((Math.max(...P.map(p => p[1])) + 50 - y0) / R);
+    const cv = Object.assign(document.createElement('canvas'), { width: W, height: H }), x = cv.getContext('2d');
+    Object.assign(x, { strokeStyle: '#fff', lineCap: 'round', lineJoin: 'round' });
+    for (const [g, w] of ws) {
+      x.lineWidth = w / R;
+      x.beginPath();
+      g.forEach(([px, py], k) => x[k ? 'lineTo' : 'moveTo']((px - x0) / R, H - (py - y0) / R));
+      x.stroke();
+    }
+    this.clr = { tex: new THREE.CanvasTexture(cv), box: new THREE.Vector4(x0, y0, 1 / (W * R), 1 / (H * R)) };
   }
 
   field(rect, span, fresh) {
@@ -404,8 +421,6 @@ export class Net {
     this.uni.uSigma.value = Math.max(Math.min(Math.max(14 - 1.5 * px, 5), 12) * px, 7) * this.opt.radius;
     if (!this.run || !this.on) return;
     const now = performance.now(), hv = this.heatView.material.uniforms;
-    this.uni.uOy.value = this.anim ? this.anim.y : -99;
-    this.uni.uT.value = this.anim ? (now - this.anim.t0) / 1000 : 0;
     if (this.run !== this.heatRun) {
       if (this.heatRun) { [this.heatRT, this.heatOld] = [this.heatOld, this.heatRT]; this.xf = now; }
       this.heatRun = this.run;

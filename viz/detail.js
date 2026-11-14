@@ -72,7 +72,7 @@ export class Detail {
         }
         o.castShadow = o.receiveShadow = true;
         o.customDepthMaterial = depth;
-        o.material = [o.material].flat().map(mt => { mt.flatShading = true; return patch(mt, '', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.fine); });
+        o.material = [o.material].flat().map(mt => { mt.flatShading = true; return patch(mt, '', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.fine, true); });
         if (o.material.length === 1) o.material = o.material[0];
       });
       t.g = g.scene;
