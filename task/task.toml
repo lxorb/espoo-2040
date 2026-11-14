@@ -6,7 +6,7 @@ artifacts = [
 [task]
 name = "espoo/planner"
 version = "0.1.0"
-description = "Plan fifteen years of road, transit and pricing investment for Espoo to minimise total travel delay."
+description = "Plan fifteen years of road projects and maintenance for Espoo to minimise total traffic delay."
 
 [verifier]
 timeout_sec = 900.0
