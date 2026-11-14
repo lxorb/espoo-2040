@@ -19,17 +19,17 @@ export function present(v) {
       const r = document.getElementById('ylab').getBoundingClientRect();
       Object.assign(show('pa').style, { left: `${r.left + r.width / 2}px`, bottom: `${innerHeight - r.top + 32}px` });
     },
-    () => v.set({ mode: 'heat' }),
+    () => { v.set({ mode: 'heat' }); show('pl', el('span', { textContent: 'Bad traffic' }), el('i'), el('span', { textContent: 'Good traffic' })); },
     () => { hide('pa'); v.set({ play: true }); },
     () => v.go('O'),
-    () => { v.go(2); v.set({ mode: 'cars' }); },
+    () => { hide('pl'); v.go(2); v.set({ mode: 'cars' }); },
     () => { v.go(0); v.set({ mode: 'heat', split: true, pair: ['rl', 'gpt-6.1'], cut: 0.2635 }); },
     () => { v.go(1); v.slide(0.7955); },
     () => show('pp', el('img', { src: 'assets/paper.jpg' })),
     () => { hide('pp'); v.go('far'); g.show(); setTimeout(() => n > 0 && v.hold(true), 950); }
   ];
   let n = -1, taps = [], g;
-  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp'].forEach(hide); g?.hide(); v.hold(false); if (on) { g ||= globe(); v.warm(); for (const f of ['formulas.png', 'paper.jpg']) new Image().src = `assets/${f}`; } };
+  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp', 'pl'].forEach(hide); g?.hide(); v.hold(false); if (on) { g ||= globe(); v.warm(); for (const f of ['formulas.png', 'paper.jpg']) new Image().src = `assets/${f}`; } };
   addEventListener('keydown', e => {
     if (e.key === 'ArrowRight' && n >= 0) n < steps.length ? steps[n++]() : mode(false);
     if (e.key !== 'p') return;
