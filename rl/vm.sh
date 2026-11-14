@@ -1,30 +1,45 @@
 #!/bin/bash
 set -e
-case "$1" in
+H=${H:-espoo-vm2}
+cmd=$1
+shift || true
+case "$cmd" in
 start)
-  ~/espoo-ops/sync.sh
-  ssh espoo-vm 'bash -s' <<'EOF'
+  ~/espoo-ops/sync.sh $H
+  ssh $H "bash -s -- $*" <<'EOF'
 set -e
-V=$(cd ~/espoo && .venv/bin/python -c "from rl.env import version; print(version())")
+cd ~/espoo
+V=$(.venv/bin/python -c "from rl.train import version; print(version())")
 D=~/rlrun/$V
 mkdir -p $D/runs/rl
 rsync -a --exclude .venv --exclude runs ~/espoo/ $D/
+mkdir -p $D/runs/expert && rsync -a ~/espoo/runs/expert/ $D/runs/expert/ 2>/dev/null || true
 ln -sfn ~/espoo/.venv $D/.venv
 cd $D
-export PYTHONUNBUFFERED=1
-.venv/bin/python -c "from rl.eval import warm; warm(range(16))"
-export NUMBA_NUM_THREADS=1
-nohup .venv/bin/python -m rl.train --workers 22 --episodes 660 --sims 4 --consider 4 --depth 3 --steps 50 --keep 150 --search-every 5 >> runs/rl/gumbel.out 2>&1 &
-nohup .venv/bin/python -m rl.ppo --episodes 600 --every 25 >> runs/rl/ppo.out 2>&1 &
-nohup .venv/bin/python -m rl.eval --policies nothing,random,greedy --workers 6 --out base >> runs/rl/base.out 2>&1 &
+export PYTHONUNBUFFERED=1 RL_EXPERT=~/espoo/runs/expert
+ulimit -n 65536
+nohup .venv/bin/python -m rl.train "$@" >> runs/rl/train-$(date +%H%M%S).out 2>&1 &
 echo $D
 EOF
   ;;
+ppo|eval)
+  ssh $H "bash -s -- $cmd $*" <<'EOF'
+m=$1
+shift
+cd ~/rlrun/$(cd ~/espoo && .venv/bin/python -c "from rl.train import version; print(version())")
+ulimit -n 65536
+PYTHONUNBUFFERED=1 nohup .venv/bin/python -m rl.$m "$@" >> runs/rl/$m-$(date +%H%M%S).out 2>&1 &
+EOF
+  ;;
+code)
+  V=$(ssh $H 'cd ~/espoo && .venv/bin/python -c "from rl.train import version; print(version())"')
+  rsync -a --exclude __pycache__ ~/espoo/rl/ $H:rlrun/$V/rl/
+  ;;
 stop)
-  ssh espoo-vm 'pkill -f "[p]ython -m rl\.(train|ppo|eval)" || true'
+  ssh $H 'pkill -f "[p]ython -m rl\.(train|ppo|eval)"; pkill -f "[r]lrun/.*multiprocessing"; true'
   ;;
 pull)
   mkdir -p ~/espoo/runs/rl/vm
-  rsync -az espoo-vm:rlrun/ ~/espoo/runs/rl/vm/ --include '*/' --include '*.json' --include '*.pt' --include '*.out' --exclude '*' --prune-empty-dirs
+  rsync -az --prune-empty-dirs --include '*/' --include '*.json' --include '*.npz' --include '*.out' --exclude '*' $H:rlrun/ ~/espoo/runs/rl/vm/
   ;;
 esac

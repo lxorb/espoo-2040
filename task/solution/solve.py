@@ -23,7 +23,7 @@ def call(tool, **args):
 
 
 def learned(st, projects, tried):
-    proj = [dict(id=p[0], kind=p[2], cost=p[3], years=p[4], opex=p[5]) for p in projects]
+    proj = [dict(id=p[0], kind=p[2], cost=p[3], years=p[4], opex=p[5], jam=p[7]) for p in projects]
     h = min(st["rules"]["forecast_years"], st["years_left"] + st["runout_left"])
     fc = lambda a: call("forecast", plan={"0": a}, years=h)["total_loss_kh"]
     return POLICY(st, proj, [p["id"] in st["startable"] for p in proj], fc, st["forecasts_left"], st["rules"]["years"])
@@ -46,7 +46,8 @@ def greedy(st, projects, tried):
 
 
 sys.path.insert(0, str(Path(__file__).parent))
-POLICY = __import__("policy").Policy() if Path(__file__).with_name("policy.npz").exists() else None
+POLICY = __import__("policy").Policy() if os.environ.get("REF") == "rl" and Path(__file__).with_name("policy.npz").exists() else None
+DECIDE = __import__("plan").decide
 rpc("initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "oracle", "version": "0"}})
 stop = 3 if os.environ.get("MODE") == "early" else None
 tried = set()
@@ -55,5 +56,6 @@ while True:
     if not st["years_left"] or stop == 0:
         break
     projects = call("list_projects")["rows"]
-    print(call("commit_year", actions=(learned if POLICY else greedy)(st, projects, tried)))
+    acts = learned(st, projects, tried) if POLICY else greedy(st, projects, tried) if os.environ.get("REF") == "greedy" else DECIDE(st, projects)
+    print(call("commit_year", actions=acts))
     stop = stop and stop - 1
