@@ -65,6 +65,10 @@ class City:
         self.od0, self.truck0 = (np.where(same, 0.0, np.load(self.data / f)) for f in ("od.npy", "truck.npy"))
         s["fp"], s["fj"] = np.ones(len(zs)), np.ones(len(zs))
         self.ff0 = skim(self._graph(), self._t0()[L])
+        xy = self.nodes[s["a"].astype(int)]
+        self.foot = {k: np.isin(s["osm"], [o for e in p.get("mod", []) + p.get("works", []) for o in e["osm"]])
+                     | (np.linalg.norm(xy[:, None] - np.array([e["geom"][i] for e in p.get("new", []) for i in (0, -1)] or [[1e9, 1e9]])[None], axis=2) < 300).any(1)
+                     for k, p in self.cat.items()}
         self.share = 1 / (1 + np.exp(P.THETA * (self.ff0 + P.ASC_CAR + P.TERMINAL - np.load(self.data / "pt.npy")[0])))
         if str(self.data) not in WARM:
             f = self.fork(False)
@@ -248,9 +252,12 @@ class City:
                     done=self.done)
 
     def catalogue(self):
-        s = self.s
+        s, r = self.s, self.recs[-1] if self.recs else None
+        n = self.foot[self.menu[0]].size
+        late = np.maximum(r["flow"][:n] * (r["time"][:n] - s["len"][:n] / s["kmh"][:n] * 3600 / 1000), 0) if r else np.zeros(n)
         return [dict(id=k, name=p["name"], kind=p["kind"], cost=p["cost"], years=p["years"], opex=p.get("opex", 0),
-                     afford=self._afford(p["cost"], max(p["years"], 1))) for k, p in self.cat.items() if k not in s["prog"] and k not in s["built"]]
+                     afford=self._afford(p["cost"], max(p["years"], 1)), jam=round(float(late[self.foot[k]].sum() / max(late.sum(), 1e-9)), 3))
+                for k, p in self.cat.items() if k not in s["prog"] and k not in s["built"]]
 
     def mask(self):
         s = self.s

@@ -108,16 +108,17 @@ async def get_state():
 
 @mcp.tool(description=(
     "The project menu: id, name, kind, cost (MEUR, equal instalments over the build years), build years, opex (MEUR per "
-    "year once open), status (open, building N = years left, built) and the existing roads it changes."
+    "year once open), status (open, building N = years left, built), jam (share of last year's network delay on the roads it "
+    "changes, 0 once started) and the existing roads it changes."
 ))
 async def list_projects():
     async with lock:
-        rows = []
+        rows, jam = [], {p["id"]: p["jam"] for p in c.catalogue()}
         for k in c.menu:
             p = c.cat[k]
             osm = {o for e in p.get("mod", []) + p.get("works", []) + [p.get("toll") or {"osm": []}] for o in e["osm"]}
-            rows.append([k, p["name"], p["kind"], p["cost"], p["years"], p.get("opex", 0), status(k), sorted({road[o] for o in osm if o in road})[:6]])
-        return out({"cols": ["id", "name", "kind", "cost", "years", "opex", "status", "roads"], "rows": rows})
+            rows.append([k, p["name"], p["kind"], p["cost"], p["years"], p.get("opex", 0), status(k), jam.get(k, 0), sorted({road[o] for o in osm if o in road})[:6]])
+        return out({"cols": ["id", "name", "kind", "cost", "years", "opex", "status", "jam", "roads"], "rows": rows})
 
 
 @mcp.tool(description=(
