@@ -14,7 +14,7 @@ HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
 DATA = HERE / "data"
 Y0 = 2026
-RLDIR = os.environ.get("RLDIR", "0fa5d0cd")
+RLDIR = os.environ.get("RLDIR", "6fae939a")
 
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Times", "Nimbus Roman", "DejaVu Serif"], "font.size": 8, "axes.titlesize": 8,
                      "axes.labelsize": 8, "legend.fontsize": 8, "xtick.labelsize": 8, "ytick.labelsize": 8, "axes.spines.top": False,
@@ -85,11 +85,13 @@ def latest(pattern):
 
 def rl_curves():
     out = {}
-    for k in ("ppo", "gumbel"):
-        f = latest(f"runs/rl/vm/{RLDIR}/runs/rl/{k}-*.json")
-        if f:
-            c = json.loads(f.read_text())
-            out[k] = [(r.get("episodes", r["it"]), r["mean_net"]) for r in c if "mean_net" in r]
+    for k, names in (("ppo", ("ppocold2", "ppocold")), ("gumbel", ("gz2", "gz"))):
+        for n in names:
+            f = latest(f"runs/rl/vm/{RLDIR}/runs/rl/{n}-*.json")
+            if f:
+                c = json.loads(f.read_text())
+                out[k] = [(r.get("episodes", r["it"]), r["mean_net"]) for r in c if "mean_net" in r]
+                break
     return out
 
 
@@ -318,6 +320,8 @@ def facts():
             if "rl" in runs:
                 mac(f"rlLost{L}", f"{tot(runs['rl'][s]) / 1e6:.1f}")
                 mac(f"gapRl{L}", f"{(tot(a[s]) - tot(runs['rl'][s])) / 1e6:.0f}")
+            if s in runs.get("refold", {}):
+                mac(f"refoldLost{L}", f"{tot(runs['refold'][s]) / 1e6:.1f}")
     f = [(n - b) / n for n, b in norms.values()]
     mac("bestPctMin", f"{100 * min(f):.1f}")
     mac("bestPctMax", f"{100 * max(f):.1f}")
@@ -345,6 +349,97 @@ def cats():
     rng = lambda v: f"{min(v):g}" if min(v) == max(v) else f"{min(v):g} to {max(v):g}"
     rows = [f"{k} & {len(v)} & {rng([p['cost'] for p in v])} & {rng([p['years'] for p in v])} \\\\" for k, v in groups.items()]
     (HERE / "cats.tex").write_text("\n".join(rows) + "\n")
+
+
+def first(rows, key, cond):
+    for r in rows:
+        if cond(r):
+            return r[key]
+    return None
+
+
+def strategy():
+    f = ROOT / "runs" / "rl" / "strategy.json"
+    f = f if f.exists() else latest(f"runs/rl/vm/{RLDIR}/runs/rl/strategy.json")
+    rl = json.loads(f.read_text()) if f and Path(f).exists() else {}
+    gf = ROOT / "runs" / "grpo" / "strategy.json"
+    gs = json.loads(gf.read_text()) if gf.exists() else None
+    if isinstance(gs, dict):
+        gs = gs.get("steps") or gs.get("rows") or next((v for v in gs.values() if isinstance(v, list)), None)
+    runs_rl = [(k, n) for k, n in (("ppocold2", "PPO from scratch"), ("gz2", "Gumbel self-play from scratch"), ("ppobc1s", "PPO from cloned policy")) if rl.get(k)]
+    fig = plt.figure(figsize=(5.5, 7.4))
+    gsp = fig.add_gridspec(3, 3, hspace=0.6, wspace=0.45, height_ratios=[1, 1, 1.5])
+    ax = fig.add_subplot(gsp[0, :])
+    if gs:
+        x = [r.get("step", i) for i, r in enumerate(gs)]
+        mx = lambda r: (r["maintain"][2] if isinstance(r.get("maintain"), list) else (r.get("maintain") or {}).get("2", 0))
+        for key, lab, c, fn in (("score", "score", COL["grpo"], lambda r: r.get("score")), ("distinct", "distinct plans / 16", INK, lambda r: r.get("distinct", 0) / 16),
+                                ("m2", "share $m=2$", COL["reactive"], mx), ("boom_hit", "boom hit", COL["agent"], lambda r: r.get("boom_hit"))):
+            y = [fn(r) for r in gs]
+            if any(v is not None for v in y):
+                ax.plot(x, [np.nan if v is None else v for v in y], color=c, lw=1.4, label=lab)
+        one = first(gs, "step", lambda r: r.get("distinct") == 1)
+        flat = first(gs, "step", lambda r: r.get("std", r.get("reward_std", 1)) == 0)
+        for v, t in ((one, "one plan"), (flat, "std 0")):
+            if v is not None:
+                ax.axvline(v, color=MUTED, lw=0.8, ls="--")
+                ax.text(v, 1.02, t, fontsize=8, color=MUTED, ha="center")
+        ax.legend(loc="lower right", ncol=2)
+        ax.set(xlabel="GRPO step", ylim=(-0.02, 1.08))
+    else:
+        ax.text(0.5, 0.5, "TBD: runs/grpo/strategy.json", transform=ax.transAxes, ha="center", color=TBD)
+    ax.set_title("(a) GRPO on Gemma")
+    hm = fig.add_subplot(gsp[2, :])
+    if runs_rl:
+        k = runs_rl[0][0]
+        ids = list(rl[k][0]["freq"])
+        M = np.array([[r["freq"][i] for r in rl[k]] for i in ids], float)
+        hm.imshow(M, aspect="auto", cmap="Purples", vmin=0, vmax=max(M.max(), 1e-9), interpolation="nearest")
+        hm.set_yticks(range(len(ids)), ids, fontsize=7)
+        hm.set_xticks(range(len(rl[k])), [str(r["episodes"]) for r in rl[k]], fontsize=7, rotation=90)
+        hm.set_xlabel("episodes")
+        hm.grid(False)
+    hm.set_title(f"(e) Share of cities in which each project is built, {runs_rl[0][1] if runs_rl else 'RL'}")
+    for j, (k, lab) in enumerate((("ppocold2", "PPO from scratch"), ("gz2", "Gumbel from scratch"), ("ppobc1s", "PPO from cloned policy"))):
+        a = fig.add_subplot(gsp[1, j])
+        if rl.get(k):
+            rows = rl[k]
+            x = [r["episodes"] for r in rows]
+            for y, l, c in (([r["score"] for r in rows], "score", COL["rl"]), ([r["maintain"][2] for r in rows], "share $m=2$", COL["reactive"]),
+                            ([r["access_share"] for r in rows], "access share", MUTED), ([r["boom_hit"] for r in rows], "boom hit", COL["agent"])):
+                a.plot(x, y, color=c, lw=1.3, marker="o", ms=2, label=l)
+            a.set(xlabel="episodes", ylim=(-0.05, 1.05))
+            a.set_title(f"({'bcd'[j]}) {lab}", fontsize=8)
+            if j == 0:
+                a.legend(loc="upper left", fontsize=7)
+        else:
+            a.text(0.5, 0.5, "TBD", transform=a.transAxes, ha="center", color=TBD)
+            a.set_title(f"({'bcd'[j]}) {lab}", fontsize=8)
+    fig.savefig(HERE / "evolution.pdf")
+    for k, _ in runs_rl:
+        rows, t = rl[k], {"ppocold2": "Cold", "gz2": "Gumbel", "ppobc1s": "Bc"}[k]
+        mac(f"evo{t}Eps", str(rows[-1]["episodes"]))
+        mac(f"evo{t}Score", f"{rows[-1]['score']:.2f}")
+        mac(f"evo{t}ScoreZero", f"{rows[0]['score']:.2f}")
+        mac(f"evo{t}Mtwo", f"{rows[-1]['maintain'][2]:.2f}")
+        mac(f"evo{t}MtwoZero", f"{rows[0]['maintain'][2]:.2f}")
+        mac(f"evo{t}Boom", f"{rows[-1]['boom_hit']:.2f}")
+        mac(f"evo{t}BoomZero", f"{rows[0]['boom_hit']:.2f}")
+        mac(f"evo{t}BoomYear", f"{2026 + rows[-1]['boom_access_year']:.0f}")
+        mac(f"evo{t}BoomYearZero", f"{2026 + rows[0]['boom_access_year']:.0f}")
+        mac(f"evo{t}Distinct", str(rows[-1]["distinct"]))
+        v = first(rows, "episodes", lambda r: r["maintain"][2] >= 0.9)
+        if v is not None:
+            mac(f"evo{t}MtwoAt", str(v))
+        v = first(rows, "episodes", lambda r: r["score"] >= 0.5)
+        if v is not None:
+            mac(f"evo{t}HalfAt", str(v))
+    if gs:
+        for key, nm, cond in (("step", "grpoOneAt", lambda r: r.get("distinct") == 1), ("step", "grpoFlatAt", lambda r: r.get("std", r.get("reward_std", 1)) == 0),
+                              ("step", "grpoValidAt", lambda r: r.get("valid", 0) >= 0.9)):
+            v = first(gs, key, cond)
+            if v is not None:
+                mac(nm, str(v))
 
 
 def main():
@@ -377,9 +472,10 @@ def main():
     table(vals)
     facts()
     cats()
+    strategy()
     used = set(re.findall(r"\\([a-zA-Z]+)\{\}", (HERE.parent / "main.tex").read_text()))
     for u in sorted(used):
-        if re.match(r"(planner|reactive|greedy|random|agent|best|nothing|grpo|rl|rlcheck|rlsearch|refrl|gapRl|n|cat)[A-Z]", u) and u not in macros:
+        if re.match(r"(planner|reactive|greedy|random|agent|best|nothing|grpo|rl|rlcheck|rlsearch|refrl|refold|gapRl|n|cat|evo)[A-Z]", u) and u not in macros:
             macros[u] = "\\pending{}"
     (HERE / "numbers.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in macros.items()))
     print(json.dumps(macros, indent=0))

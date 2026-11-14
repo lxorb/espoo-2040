@@ -7,7 +7,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
-JOBS = dict(agent=os.environ.get("GATE", "gate4"), refrl="refrl")
+JOBS = dict(agent=os.environ.get("GATE", "gate4"), refrl="ref2", refold="refrl")
 
 
 def summary(d):
