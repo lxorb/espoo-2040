@@ -1,0 +1,13 @@
+data/raw/
+viz/data/
+micro/out/
+runs/
+jobs/
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+task/environment/server/sim/
+task/environment/server/data/
+task/environment/server/test.sh
+*.pkl

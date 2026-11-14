@@ -1,0 +1,29 @@
+[project]
+name = "espoo"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy",
+    "scipy",
+    "numba",
+    "pyproj",
+    "shapely",
+    "osmium",
+    "requests",
+    "mcp",
+    "pyshp>=3.1.8",
+    "trimesh>=5.2.1",
+    "pillow>=13.0.0",
+]
+
+[dependency-groups]
+micro = ["eclipse-sumo", "sumolib", "traci"]
+rl = ["torch"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
