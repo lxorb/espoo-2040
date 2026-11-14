@@ -11,6 +11,8 @@ from shapely.affinity import translate
 from shapely.geometry import LineString, Point, shape
 
 from data.geo import ORIGIN, OUT, PBF, RAW, local
+from sim import City
+from sim import params as SP
 
 WFS = "service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&srsName=EPSG:3067&typeNames="
 HSY = "https://kartta.hsy.fi/geoserver/wfs?" + WFS
@@ -18,20 +20,20 @@ PAAVO = "https://geo.stat.fi/geoserver/postialue/wfs?" + WFS + "postialue:pno_ti
 TMS = "https://tie.digitraffic.fi/api/tms/v1/"
 GTFS = "https://infopalvelut.storage.hsldev.com/gtfs/hsl.zip"
 LAM_DAYS, GTFS_DAY, GTFS_WD = (258, 259, 260), "20261117", "tuesday"
-DAILY, PT_SHARE = 3.2 * 0.60 * 0.92, 20 / 60
-OCC, WALK, TERM, BT = 1.15, 4.5 / 3.6 / 1.3, 4.0, 0.05
-POP_ADD, JOBS_RATE, YEARS = 6500, (220000 / 135386) ** (1 / 37) - 1, 20
+DAILY, ODME = 3.2 * 0.60 * 0.92, 40
+OCC, WALK, TERM = SP.OCC, 4.5 / 3.6 / 1.3, SP.TERMINAL
+YEARS, BOOM, BASE, AREA_R, AREA_ACT = 15, (2.5, 4.0), 0.002, 2000, 25000
 AREAS = [
-    ("Finnoo", 24.7121, 60.1586, (8000, 13000), (500, 1500)),
-    ("Kera", 24.7538, 60.2146, (9000, 16000), (0, 1500)),
-    ("Vermo", 24.8421, 60.2143, (3000, 5500), (0, 500)),
-    ("Kiviruukki", 24.6347, 60.1638, (5000, 9000), (1500, 3000)),
-    ("Espoonlahti", 24.6559, 60.1498, (2000, 5000), (200, 800)),
-    ("Leppävaara", 24.8141, 60.2197, (4000, 8000), (2000, 5000)),
-    ("Otaniemi and Keilaniemi", 24.8320, 60.1810, (3000, 7000), (5000, 12000)),
-    ("Espoon keskus", 24.6560, 60.2050, (3000, 8000), (500, 2000)),
-    ("Kauklahti", 24.5962, 60.1915, (2000, 6000), (0, 800)),
-    ("Hista", 24.5550, 60.2500, (0, 8000), (0, 3000)),
+    ("Finnoo", 24.7121, 60.1586),
+    ("Kera", 24.7538, 60.2146),
+    ("Vermo", 24.8421, 60.2143),
+    ("Kiviruukki", 24.6347, 60.1638),
+    ("Espoonlahti", 24.6559, 60.1498),
+    ("Leppävaara", 24.8141, 60.2197),
+    ("Otaniemi and Keilaniemi", 24.8320, 60.1810),
+    ("Espoon keskus", 24.6560, 60.2050),
+    ("Kauklahti", 24.5962, 60.1915),
+    ("Hista", 24.5550, 60.2500),
 ]
 
 
@@ -92,7 +94,7 @@ def zones(gates, nodes):
     pl = np.array([p[1:] for p in places])
     out, fz = [], []
     for k, (g, p) in enumerate(pien):
-        for idx in split(np.flatnonzero((zi == k) & (act > 0)), xy, act, act[zi >= 0].sum() / 140):
+        for idx in split(np.flatnonzero((zi == k) & (act > 0)), xy, act, act[zi >= 0].sum() / 45):
             if len(idx):
                 c = np.average(xy[idx], axis=0, weights=act[idx])
                 near = [places[i][0] for i in np.argsort(np.hypot(*(pl - c).T))[:5] if g.contains(Point(pl[i]))]
@@ -162,23 +164,24 @@ def transit(zxy, lo, hi):
     sxy = np.array([v[1:] for v in hub.values()])
     S, ix = len(hub), {sg: len(hub) + i for i, sg in enumerate(ride)}
     rt = {sg: max(np.median(v), 1.0) for sg, v in ride.items()}
-    e = [(ix[a], ix[b], rt[b]) for a, b in cont]
+    e = [(ix[a], ix[b], rt[b], 0.0) for a, b in cont]
     for sg, n in ix.items():
-        e.append((n, sg[1], 0.0))
+        e.append((n, sg[1], 0.0, 0.0))
         if deps[sg]:
-            e.append((sg[0], n, min(3600.0 / deps[sg], 1800.0) + rt[sg]))
+            e.append((sg[0], n, rt[sg], min(3600.0 / deps[sg], 1800.0)))
     t = STRtree(points(sxy))
     i, j = t.query(points(sxy), predicate="dwithin", distance=300)
-    e += [(a, b, np.hypot(*(sxy[a] - sxy[b])) / WALK) for a, b in zip(i, j) if a != b]
+    e += [(a, b, np.hypot(*(sxy[a] - sxy[b])) / WALK, 0.0) for a, b in zip(i, j) if a != b]
     Z, base = len(zxy), S + len(ix)
     for k, c in enumerate(zxy):
         near = t.query(Point(c), predicate="dwithin", distance=1000)
         for s in near if len(near) >= 3 else np.argsort(np.hypot(*(sxy - c).T))[:3]:
             w = 60 + np.hypot(*(sxy[s] - c)) / WALK
-            e += [(base + k, s, w), (s, base + Z + k, w)]
-    a, b, w = map(np.array, zip(*e))
-    pt = dijkstra(coo_matrix((w, (a, b)), shape=(base + 2 * Z,) * 2).tocsr(), indices=base + np.arange(Z))[:, base + Z:]
-    return np.minimum(pt, pdist(zxy, zxy) / WALK) / 60
+            e += [(base + k, s, w, 0.0), (s, base + Z + k, w, 0.0)]
+    a, b, w, h = map(np.array, zip(*e))
+    walk = pdist(zxy, zxy) / WALK
+    pt, half = (np.minimum(dijkstra(coo_matrix((w + f * h, (a, b)), shape=(base + 2 * Z,) * 2).tocsr(), indices=base + np.arange(Z))[:, base + Z:], walk) / 60 for f in (1, 0.5))
+    return pt, np.clip(2 * (pt - half), 0, pt)
 
 
 @njit(cache=True)
@@ -203,6 +206,23 @@ def tree(tt, pred, ip, ix, ed, lens, zn, dem):
     return flow, dist
 
 
+@njit(cache=True)
+def cross(tt, pred, ip, ix, ed, zn, cid, nc):
+    X = np.zeros((nc, len(zn), len(zn)), np.bool_)
+    for o in range(len(zn)):
+        on = np.zeros((tt.shape[1], nc), np.bool_)
+        for n in np.argsort(tt[o]):
+            p = pred[o, n]
+            if p >= 0:
+                on[n] = on[p]
+                for k in range(ip[p], ip[p + 1]):
+                    if ix[k] == n and cid[ed[k]] >= 0:
+                        on[n, cid[ed[k]]] = True
+        for d in range(len(zn)):
+            X[:, o, d] = on[zn[d]]
+    return X
+
+
 def furness(P, A, F):
     T = F * np.outer(P, A)
     for _ in range(200):
@@ -220,20 +240,10 @@ def main():
     cs, phf = counts(region.buffer(6000), muni)
     a, b = np.array([l["a"] for l in L]), np.array([l["b"] for l in L])
     lens, kmh = np.array([[l["len"], l["kmh"]] for l in L], float).T
-    tl = lens / kmh * 3.6
-    o = np.lexsort((tl, b, a))
-    keep = o[np.r_[True, (np.diff(a[o]) != 0) | (np.diff(b[o]) != 0)]]
-    g = coo_matrix((tl[keep], (a[keep], b[keep])), shape=(len(nodes),) * 2).tocsr()
-    eid = coo_matrix((keep + 1.0, (a[keep], b[keep])), shape=g.shape).tocsr()
-    eix = eid.data.astype(np.int64) - 1
     ln = np.unique(np.r_[a, b][np.tile([l["cls"] not in ("motorway", "trunk", "ramp") for l in L], 2)])
     zn = ln[np.argmin(pdist(zxy, nodes[ln]), axis=1)]
     zn[ext] = [gt["node"] for gt in gates]
-    tt, pred = dijkstra(g, indices=zn, return_predecessors=True)
-    tc = np.nan_to_num(tt[:, zn] / 60, posinf=999) + TERM
-    run = lambda dem: tree(tt, pred, eid.indptr, eid.indices, eix, lens, zn, dem)
-    dist = run(np.zeros((len(zs), len(zs))))[1]
-    pt = np.minimum(transit(zxy, zxy.min(0) - 3000, zxy.max(0) + 3000), 300)
+    pt, wait = np.minimum(transit(zxy, zxy.min(0) - 3000, zxy.max(0) + 3000), 300)
     head = np.degrees(np.arctan2(*(nodes[b] - nodes[a]).T)) % 360
     st = STRtree(lines := [LineString(l["geom"]) for l in L])
     for c in cs:
@@ -255,55 +265,68 @@ def main():
     far = ~ext[:, None] | ~ext[None] | (pdist(zxy, zxy) > 10000)
     np.fill_diagonal(far, False)
     rate, inner, act = DAILY * phf, ~ext[:, None] & ~ext[None], pop + jobs
+    areas, used, br = [], set(), [round(BOOM[0] ** (1 / YEARS) - 1, 4), round(BOOM[1] ** (1 / YEARS) - 1, 4)]
+    for name, lon, lat in AREAS:
+        d = np.where(ip, np.hypot(*(zxy - local(lon, lat)).T), np.inf)
+        order = [int(i) for i in np.argsort(d) if i not in used and np.isfinite(d[i])]
+        zi = order[:max(np.sum(d[order] < AREA_R), np.searchsorted(np.cumsum(pop[order] + jobs[order]), AREA_ACT) + 1)]
+        used |= set(zi)
+        areas.append({"name": name, "zones": zi, "pop": br, "jobs": br})
+        print(f"area {name}: {len(zi)} zones, pop {pop[zi].sum():.0f}, jobs {jobs[zi].sum():.0f}")
+    bp = bj = BASE
+    (OUT / "zones.json").write_text(json.dumps({"zones": zs, "growth": {"pop": round(bp, 4), "jobs": round(bj, 4), "areas": areas}}, ensure_ascii=False))
+    (OUT / "counts.json").write_text(json.dumps([{k: v for k, v in c.items() if k[0] != "_"} for c in cs if region.contains(Point(c["x"], c["y"]))], ensure_ascii=False))
+    tl = lens / kmh * 3.6
+    for _ in range(2):
+        o = np.lexsort((tl, b, a))
+        keep = o[np.r_[True, (np.diff(a[o]) != 0) | (np.diff(b[o]) != 0)]]
+        g = coo_matrix((tl[keep], (a[keep], b[keep])), shape=(len(nodes),) * 2).tocsr()
+        eid = coo_matrix((keep + 1.0, (a[keep], b[keep])), shape=g.shape).tocsr()
+        eix = eid.data.astype(np.int64) - 1
+        tt, pred = dijkstra(g, indices=zn, return_predecessors=True)
+        tc = np.nan_to_num(tt[:, zn] / 60, posinf=999) + TERM
+        run = lambda dem: tree(tt, pred, eid.indptr, eid.indices, eix, lens, zn, dem)
+        dist = run(np.zeros((len(zs), len(zs))))[1]
+        Ft = np.exp(-0.05 * tc) * far
 
-    def model(beta, asc=0.0):
-        F = np.exp(-beta * tc) * far
-        for _ in range(6):
-            pc = 1 / (1 + np.exp(-(asc + BT * (pt - tc))))
-            P, A = np.where(ext, 0, rate * pop), np.where(ext, 0, jobs)
+        def trucks(k):
+            P, A = k * fz, k * fz
+            P[ext], A[ext] = gio[2], gio[3]
+            H = furness(P, A * P.sum() / A.sum(), Ft)
+            return np.sqrt(((run(H)[0][li] - oh) ** 2).mean()), k, H
+
+        herr, hk, H = min((trucks(k) for k in np.linspace(0.002, 0.06, 30)), key=lambda r: r[0])
+        print(f"trucks {hk:.4f} veh/h per freight job, total {H.sum():.0f} veh/h, RMSE {herr:.0f}, model/obs {run(H)[0][li].sum() / oh.sum():.2f}")
+        pc = 1 / (1 + np.exp(SP.THETA * (tc + SP.ASC_CAR - pt)))
+
+        def model(beta, h):
+            F = np.exp(-beta * tc) * far
+            P, A = (np.where(ext, 0.0, h * v / v.sum() + (1 - h) * act / act.sum()) * rate * pop.sum() for v in (pop, jobs))
             P[ext] = gio[0] * OCC / np.maximum((F[ext] * pc[ext] * act).sum(1) / np.maximum((F[ext] * act).sum(1), 1e-9), 0.05)
             A[ext] = gio[1] * OCC / np.maximum((F[:, ext] * pc[:, ext] * act[:, None]).sum(0) / np.maximum((F[:, ext] * act[:, None]).sum(0), 1e-9), 0.05)
             A[~ext] *= (P.sum() - A[ext].sum()) / A[~ext].sum()
             T = furness(P, A, F)
-            for _ in range(30):
-                asc += 4 * ((T * (1 - pc))[inner].sum() / T[inner].sum() - PT_SHARE)
-                pc = 1 / (1 + np.exp(-(asc + BT * (pt - tc))))
+            f = run(T * pc / OCC)[0][li]
+            return np.sqrt(((f - oc) ** 2).mean()), beta, h, T
+
+        err, beta, h, T = min((model(bt, h) for bt in (0.03, 0.05, 0.07, 0.1, 0.13, 0.17, 0.22, 0.3) for h in (0.1, 0.25, 0.4, 0.55, 0.7, 0.85)), key=lambda r: r[0])
+        ul, uix = np.unique(li, return_inverse=True)
+        cid = np.full(len(L), -1)
+        cid[ul] = np.arange(len(ul))
+        X = cross(tt, pred, eid.indptr, eid.indices, eix, zn, cid, len(ul)).reshape(len(ul), -1).astype(np.float32)
+        obs, hv = np.bincount(uix, oc) / np.bincount(uix), run(H)[0][ul]
+        n = np.maximum(X.sum(0), 1)
+        for _ in range(ODME):
+            r = np.log(np.maximum(obs - hv, 50) / np.maximum(X @ (T * pc / OCC).ravel(), 50))
+            T *= np.exp(0.5 * (r @ X) / n).reshape(T.shape)
         f = run(T * pc / OCC)[0][li]
-        return np.sqrt(((f - oc) ** 2).mean()), beta, T, pc, asc, f
-
-    err, beta, T, pc, asc, f = min((model(bt) for bt in (0.03, 0.05, 0.07, 0.1, 0.13, 0.17, 0.22, 0.3, 0.4)), key=lambda r: r[0])
-    geh = np.sqrt(2 * (f - oc) ** 2 / (f + oc))
-    print(f"peak hour factor {phf:.3f}, rate {rate:.3f} trips/resident/h, beta {beta}/min, asc {asc:.2f}, cars at {len(li)} count links: RMSE {err:.0f} veh/h, GEH<5 {np.mean(geh < 5):.0%}, GEH<10 {np.mean(geh < 10):.0%}, model/obs {f.sum() / oc.sum():.2f}")
-    Ft = np.exp(-beta / 2 * tc) * far
-
-    def trucks(k):
-        P, A = k * fz, k * fz
-        P[ext], A[ext] = gio[2], gio[3]
-        H = furness(P, A * P.sum() / A.sum(), Ft)
-        return np.sqrt(((run(H)[0][li] - oh) ** 2).mean()), k, H
-
-    herr, hk, H = min((trucks(k) for k in np.linspace(0.002, 0.06, 30)), key=lambda r: r[0])
-    print(f"trucks {hk:.4f} veh/h per freight job, total {H.sum():.0f} veh/h, RMSE {herr:.0f}, model/obs {run(H)[0][li].sum() / oh.sum():.2f}")
-    print(f"zones {ip.sum()} + {ie.sum()} ext, pop {pop.sum():.0f}, jobs {jobs.sum():.0f}, AM peak person trips {T.sum():.0f}: internal {T[ip][:, ip].sum():.0f}, out {T[ip][:, ie].sum():.0f}, in {T[ie][:, ip].sum():.0f}, through {T[ie][:, ie].sum():.0f}")
-    print(f"mean car-path length {(T * dist).sum() / T.sum() / 1000:.1f} km, internal {(T * dist)[inner].sum() / T[inner].sum() / 1000:.1f} km; car {(T * pc).sum() / T.sum():.0%}, internal car {(T * pc)[inner].sum() / T[inner].sum():.0%}")
-    p0, j0, areas, used = pop[ip].sum(), jobs[ip].sum(), [], set()
-    rt = lambda cur, add: round(((cur + add) / cur) ** (1 / YEARS) - 1, 4)
-    for name, lon, lat, pa, ja in AREAS:
-        d = np.where(ip, np.hypot(*(zxy - local(lon, lat)).T), np.inf)
-        order = [int(i) for i in np.argsort(d) if i not in used and np.isfinite(d[i])]
-        zi = order[:max(np.sum(d[order] < 1200), np.searchsorted(np.cumsum(pop[order]), 2000) + 1)]
-        used |= set(zi)
-        cp, cj = max(pop[zi].sum(), 500), max(jobs[zi].sum(), 500)
-        areas.append({"name": name, "zones": zi, "pop": [rt(cp, v) for v in pa], "jobs": [rt(cj, v) for v in ja]})
-    rest = np.array([i for i in np.flatnonzero(ip) if i not in used])
-    end = lambda col, key: sum(max(col[ar["zones"]].sum(), 500) * (1 + np.mean(ar[key])) ** YEARS for ar in areas)
-    bp = (((p0 + YEARS * POP_ADD) - end(pop, "pop")) / pop[rest].sum()) ** (1 / YEARS) - 1
-    bj = ((j0 * (1 + JOBS_RATE) ** YEARS - end(jobs, "jobs")) / jobs[rest].sum()) ** (1 / YEARS) - 1
-    print(f"growth outside areas: pop {bp:.4f}, jobs {bj:.4f}; city pop {((p0 + YEARS * POP_ADD) / p0) ** (1 / YEARS) - 1:.4f}, jobs {JOBS_RATE:.4f}")
-    (OUT / "zones.json").write_text(json.dumps({"zones": zs, "growth": {"pop": round(bp, 4), "jobs": round(bj, 4), "areas": areas}}, ensure_ascii=False))
-    (OUT / "counts.json").write_text(json.dumps([{k: v for k, v in c.items() if k[0] != "_"} for c in cs if region.contains(Point(c["x"], c["y"]))], ensure_ascii=False))
-    for name, m in (("od", T), ("truck", H), ("pt", pt)):
-        np.save(OUT / f"{name}.npy", m.astype(np.float32))
+        geh = np.sqrt(2 * (f - oc) ** 2 / (f + oc))
+        print(f"peak hour factor {phf:.3f}, rate {rate:.3f} trips/resident/h, beta {beta}/min, home-based share {h}, cars at {len(li)} count links: prior RMSE {err:.0f}, after ODME RMSE {np.sqrt(((f - oc) ** 2).mean()):.0f} veh/h, GEH<5 {np.mean(geh < 5):.0%}, GEH<10 {np.mean(geh < 10):.0%}, model/obs {f.sum() / oc.sum():.2f}")
+        print(f"zones {ip.sum()} + {ie.sum()} ext, pop {pop.sum():.0f}, jobs {jobs.sum():.0f}, AM peak person trips {T.sum():.0f}: internal {T[ip][:, ip].sum():.0f}, out {T[ip][:, ie].sum():.0f}, in {T[ie][:, ip].sum():.0f}, through {T[ie][:, ie].sum():.0f}")
+        print(f"mean car-path length {(T * dist).sum() / T.sum() / 1000:.1f} km, internal {(T * dist)[inner].sum() / T[inner].sum() / 1000:.1f} km; car {(T * pc).sum() / T.sum():.0%}, internal car {(T * pc)[inner].sum() / T[inner].sum():.0%}")
+        for name, m in (("od", T), ("truck", H), ("pt", np.stack([pt, wait]))):
+            np.save(OUT / f"{name}.npy", m.astype(np.float32))
+        tl = City(0, years=1, runout=0).step()["time"][:len(L)]
 
 
 if __name__ == "__main__":
