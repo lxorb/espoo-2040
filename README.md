@@ -20,7 +20,7 @@ Each year the agent starts up to two of 22 road projects and picks maintenance l
 
 ## Results
 
-One agent run per seed (`jobs/ref3-s*`, `jobs/gate4-s*`):
+One agent run per seed (plans and agent logs in `evidence/`):
 
 | Seed | 0 | 1 | 2 | 3 | 4 | Mean |
 |---|---|---|---|---|---|---|
@@ -35,11 +35,11 @@ The reference (`rl/policy.py`, `rl/policy.npz`) has 83k parameters and uses no f
 
 ## Why the agent fails
 
-It makes nearly the same plan in every city. It calls `get_state` only 7 or 8 times, so it rarely sees which areas grow. A second access upgrade comes in 2034 or never. Its 3-year forecasts show the cost of road works, not the later gain. It fails where growth needs an early answer (seeds 0 and 1).
+It makes nearly the same plan in every city. It names the growing areas by year 2 but does not act: a second access upgrade comes in 2034 or never. It buys cheap links first and keeps maintenance at level 2, so the cash for a 120 MEUR upgrade is missing (the reference plan with maintenance 2 scores 0.52 on seed 0). Its 3-year forecasts show the cost of road works, not the later gain. It fails where growth needs an early answer (seeds 0 and 1).
 
 ## Why the reward is hard to cheat
 
-- A verifier in a separate container replays the plan (`task/tests/test.sh`, `replay_off` must be 0).
+- A verifier in a separate container replays the plan and scores it itself (`task/tests/test.sh`).
 - Do nothing scores 0.
 - After a stop, the remaining years get no new projects and default maintenance. The reference's first 3 years alone score 0.05 on seed 0 (0.05 to 0.38 on seeds 0 to 4).
 - Rejected actions cost nothing and do nothing.
@@ -52,10 +52,4 @@ GRPO lifts Gemma 3 270M from 0.19 to 0.83. But it learns one plan for all cities
 
 ## Layout
 
-- `sim` simulator
-- `task` Harbor task and verifier
-- `rl` reference policy
-- `grpo` Gemma training
-- `data` network and demand
-- `viz` viewer
-- `paper` paper and figures
+`sim` simulator, `task` Harbor task and verifier, `rl` reference policy, `grpo` Gemma training, `data` network and demand, `viz` viewer, `paper` paper, `evidence` Harbor plans and agent logs.
