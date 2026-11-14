@@ -207,13 +207,21 @@ function words(t, f, y0) {
   if (f < t.b - 1e-6) return t.build ? doing : '';
   return stays || f < t.b + 2.5 ? done : '';
 }
+let lit = null;
+function hover(t) {
+  lit?.el.classList.remove('hi');
+  lit = t;
+  t?.el.classList.add('hi');
+  for (const m of nets) m.outline(m === t?.net ? t : null);
+}
 function projectTags(put) {
   const live = nets.filter(m => m.on && m.tags);
   if (live.length !== shown.length || live.some((m, k) => m.tags !== shown[k])) {
     for (const t of tags) t.el.remove();
+    hover(null);
     shown = live.map(m => m.tags);
     tags = live.flatMap(m => m.tags.map(t => {
-      t.el ||= Object.assign(document.createElement('div'), { className: 'lab tag' });
+      t.el ||= Object.assign(document.createElement('div'), { className: 'lab tag', onpointerenter: e => e.pointerType === 'mouse' && hover(t), onpointerleave: e => e.pointerType === 'mouse' && hover(null), onpointerup: e => e.pointerType !== 'mouse' && hover(lit === t ? null : t) });
       t.p ||= new THREE.Vector3(t.x, 20, -t.y);
       t.net = m;
       document.getElementById('labels').append(t.el);
@@ -235,6 +243,7 @@ function projectTags(put) {
     t.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
     t.el.style.opacity = t.kind === 'road' ? Math.min(Math.max(1 - (state.f - t.b - 2) / 0.5, 0), 1) : 1;
   }
+  if (lit && !lit.on) hover(null);
 }
 
 let labels = [['HYPE', ...HYPE, 40, 'big'], ...STATIONS.map(([n, x, y]) => [n.toUpperCase(), x, y, 12, 'st'])].map(([text, x, y, h, cls]) => {
@@ -295,8 +304,8 @@ function frame() {
   close = state.mode !== 'flow' && camera.zoom > (close ? 0.8 : 1.0) * opt.dz;
   looks.near.value = Math.min(Math.max(looks.near.value + (close ? dt : -dt) / 0.25, 0), 1);
   looks.far.value = 1 - looks.near.value;
-  looks.gtex.value = Math.min(Math.max(looks.gtex.value + (state.mode !== 'flow' && camera.zoom > (looks.gtex.value > 0 ? 0.45 : 0.5) ? dt : -dt) / 0.25, 0), 1);
-  looks.detail.value = (state.mode !== 'flow') * Math.min(Math.max((camera.zoom - 0.25) / 0.25, 0), 1) * opt.gd * looks.ready.value;
+  looks.gtex.value = Math.min(Math.max(looks.gtex.value + (state.mode !== 'flow' && camera.zoom > (looks.gtex.value > 0 ? 0.65 : 0.7) ? dt : -dt) / 0.25, 0), 1);
+  looks.detail.value = (state.mode !== 'flow') * Math.min(Math.max((camera.zoom - 0.45) / 0.45, 0), 1) * opt.gd * looks.ready.value;
   controls.update();
   const px = 1 / camera.zoom;
   const [x0, y0, x1, y1] = view();
@@ -429,6 +438,7 @@ settings([
   knob('shadows', 'shadows', 'toggle', 0, true, v => { sun.castShadow = v; }),
   knob('res', 'resolution', 'choice', [0.5, 1, 'native'], 'native', v => { renderer.setPixelRatio(v === 'native' ? Math.min(devicePixelRatio, 2) : v); resize(); }),
   knob('gd', 'ground detail', 'toggle', 0, true, v => { opt.gd = +v; }),
+  knob('sat', 'satellite buildings', 'toggle', 0, false, v => { detail.use(v); }),
   knob('dz', 'detail zoom', 'range', [0.5, 4, 0.1], 1, v => { opt.dz = v; }),
   knob('cars', 'max cars', 'range', [0, 20000, 500], 20000, v => { opt.cars = v; }),
   knob('cz', 'car spawn zoom', 'range', [0.3, 5, 0.1], 1, v => { cars.spawn = v; }),

@@ -257,14 +257,15 @@ export class Net {
     const lines = [], stops = [], at = l => this.base[l].geom, half = g => along(g, lengths(g), len(g) / 2, [0, 0, 0, 0]);
     for (const { p, a: k, b } of this.projects(run)) {
       c.opens.add(b);
-      const key = st => [k, b, st], ways = [];
-      const link = (osm, st) => osm.forEach(o => (this.byOsm.get(o) || []).forEach(i => { ways.push(at(i)); lines.push({ geom: at(i), w: W(this.base[i]), k: key(st), shift: this.two[i] }); }));
+      const key = st => [k, b, st], ways = [], hl = [];
+      const link = (osm, st) => osm.forEach(o => (this.byOsm.get(o) || []).forEach(i => { ways.push(at(i)); hl.push(i); lines.push({ geom: at(i), w: W(this.base[i]), k: key(st), shift: this.two[i] }); }));
       for (const m of p.works || []) link(m.osm, 0);
       for (const m of p.mod || []) link(m.osm, KIND[p.kind]);
-      for (const m of p.new || []) { ways.push(m.geom); lines.push({ geom: m.geom, w: (m.oneway ? 1 : 2) * Math.max(m.lanes || 1, 1) * 3.3 + 2, k: key(2) }); }
-      const route = (p.pt || []).map((t, i) => { const g = this.line(p, i, t.stops); lines.push({ geom: g, w: 3, k: key(4) }); stops.push(...t.stops.map(s => [...s, b])); return g; })[0];
-      const kind = p.toll ? 'toll' : p.park ? 'park' : p.pnr ? 'pnr' : p.pt ? 'pt' : 'road', tag = (x, y) => c.tags.push({ x, y, kind, a: k, b, cost: p.cost || 0, what: p.kind, build: !!(p.works || p.new) });
+      for (const m of p.new || []) { ways.push(m.geom); hl.push({ geom: m.geom, w: (m.oneway ? 1 : 2) * Math.max(m.lanes || 1, 1) * 3.3 + 2 }); lines.push({ geom: m.geom, w: (m.oneway ? 1 : 2) * Math.max(m.lanes || 1, 1) * 3.3 + 2, k: key(2) }); }
+      const route = (p.pt || []).map((t, i) => { const g = this.line(p, i, t.stops); hl.push({ geom: g, w: 3 }); lines.push({ geom: g, w: 3, k: key(4) }); stops.push(...t.stops.map(s => [...s, b])); return g; })[0];
+      const kind = p.toll ? 'toll' : p.park ? 'park' : p.pnr ? 'pnr' : p.pt ? 'pt' : 'road', tag = (x, y) => c.tags.push({ x, y, kind, a: k, b, cost: p.cost || 0, what: p.kind, build: !!(p.works || p.new), hl });
       if (p.toll) for (const o of p.toll.osm) for (const i of this.byOsm.get(o) || []) {
+        hl.push(i);
         const g = at(i), [x, y2] = mid(g), [ax, ay] = g[0], [bx, by] = g[g.length - 1], d = Math.hypot(bx - ax, by - ay) || 1, h = W(this.base[i]) * (this.two[i] ? 1 : 0.5) + 2;
         lines.push({ geom: [[x - (by - ay) / d * h, y2 + (bx - ax) / d * h], [x + (by - ay) / d * h, y2 - (bx - ax) / d * h]], w: 2.5, k: key(5) });
         if (!c.tags.some(s => s.kind === 'toll' && Math.hypot(s.x - x, s.y - y2) < 600)) tag(x, y2);
@@ -606,10 +607,27 @@ export class Net {
   overlay(mode) {
     this.heatView.visible = mode === 'heat';
     this.flowView.visible = mode === 'flow';
-    if (!this.run || !this.on || mode === 'cars') return;
     this.renderer.autoClear = false;
-    this.renderer.render(this.post, this.postCam);
+    if (this.run && this.on && mode !== 'cars') this.renderer.render(this.post, this.postCam);
+    if (this.hl && this.on) this.renderer.render(this.hl, this.camera);
     this.renderer.autoClear = true;
+  }
+
+  outline(t) {
+    if (t === this.hlT) return;
+    this.hlT = t;
+    this.hl?.children[0].geometry.dispose();
+    this.hl = null;
+    if (!t) return;
+    const seen = new Set(), lines = t.hl.map(h => typeof h === 'number' ? { geom: this.base[h].geom, w: W(this.base[h]) * (this.two[h] ? 2 : 1) } : h).filter(({ geom: g }) => {
+      const e = [g[0], g[g.length - 1]].map(p => p.join()).sort().join();
+      return !seen.has(e) && seen.add(e);
+    }).map(({ geom, w }) => ({ geom, w: w + 5, k: [0, 0, 0] }));
+    const m = new THREE.Mesh(band(lines, 0.6), new THREE.ShaderMaterial({ uniforms: this.uni, vertexShader: BAND_VERT, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
+      fragmentShader: `uniform float uPx; uniform vec3 uMark; varying vec2 vU; varying float vS; ${CLIP}
+        void main() { clip(); if ((1.0 - abs(vS)) / max(fwidth(vS), 1e-5) > 2.0 || fract(vU.x / (12.0 * uPx)) > 0.6) discard; gl_FragColor = vec4(uMark, 1.0); }` }));
+    m.frustumCulled = false;
+    this.hl = new THREE.Scene().add(m);
   }
 
   show(mode) {

@@ -8,8 +8,24 @@ const v = new THREE.Vector3(), depth = fadeDepth(looks.fine);
 
 export class Detail {
   constructor(scene, city) {
-    Object.assign(this, { scene, city, tiles: new Map(), spare: new Map(), busy: 0, key: '', loader: new GLTFLoader() });
-    fetch('data/detail.json').then(r => r.json()).then(m => { this.meta = m; this.part = new Set((m.partial || []).map(t => t.join('_'))); }).catch(() => {});
+    Object.assign(this, { scene, city, tiles: new Map(), spare: new Map(), shared: new Map(), busy: 0, key: '', loader: new GLTFLoader() });
+    this.use(false);
+  }
+
+  use(sat) {
+    for (const k of [...this.tiles.keys()]) this.drop(k);
+    for (const g of this.spare.values()) this.free(g);
+    this.spare.clear();
+    this.meta = null;
+    this.key = '';
+    const get = src => fetch(`data/${src}.json`).then(r => r.json()).then(m => [src, m]);
+    const want = this.want = sat ? 'detail' : 'detail-clean';
+    get(want).catch(() => get('detail')).then(([src, m]) => {
+      if (want !== this.want) return;
+      this.src = src;
+      this.meta = m;
+      this.part = new Set((m.partial || []).map(t => t.join('_')));
+    }).catch(() => {});
   }
 
   update(camera, lod) {
@@ -40,11 +56,20 @@ export class Detail {
     const t = {};
     this.tiles.set(k, t);
     this.busy++;
-    this.loader.load(`data/detail/${k}.glb`, g => {
+    const src = this.src;
+    this.loader.load(`data/${src}/${k}.glb`, g => {
       this.busy--;
-      if (this.tiles.get(k) !== t) return this.free(g.scene);
+      if (this.tiles.get(k) !== t || src !== this.src) return this.free(g.scene);
+      const P = g.parser, J = P.json, keep = new Set(this.shared.values());
       g.scene.traverse(o => {
         if (!o.isMesh) return;
+        for (const mt of [o.material].flat()) for (const [key, val] of Object.entries(mt)) {
+          const a = val?.isTexture && P.associations.get(val), uri = a && J.images?.[J.textures?.[a.textures]?.source]?.uri;
+          if (!uri) continue;
+          const have = this.shared.get(uri);
+          if (!have) this.shared.set(uri, val);
+          else if (have !== val) { if (!keep.has(val)) val.dispose(); mt[key] = have; }
+        }
         o.castShadow = o.receiveShadow = true;
         o.customDepthMaterial = depth;
         o.material = [o.material].flat().map(mt => { mt.flatShading = true; return patch(mt, '', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.fine); });
@@ -61,7 +86,8 @@ export class Detail {
     o.traverse(m => {
       if (!m.isMesh) return;
       m.geometry.dispose();
-      for (const mt of [m.material].flat()) { for (const val of Object.values(mt)) if (val?.isTexture) val.dispose(); mt.dispose(); }
+      const keep = new Set(this.shared.values());
+      for (const mt of [m.material].flat()) { for (const val of Object.values(mt)) if (val?.isTexture && !keep.has(val)) val.dispose(); mt.dispose(); }
     });
   }
 

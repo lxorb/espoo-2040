@@ -8,9 +8,11 @@ export const looks = { dim: { value: 1 }, sat: { value: 1 }, tree: { value: 1 },
   mats: { value: null }, mat: { value: MATS.map(() => new THREE.Vector4(1, 1, 1, 8)) }, detail: { value: 0 }, ready: { value: 0 }, gtex: { value: 0 } };
 materials(looks);
 
-const GROUND = { land: '#7a7e66', water: '#15191c', forest: '#524e34', park: '#646c3c', grass: '#666e3c', field: '#7a7650',
-  wetland: '#646a4a', sand: '#b5ad92', rock: '#97958f', paved: '#9a9b97', rail: '#7d7a74', pitch: '#6c7541',
-  parking: '#8b8c88', playground: '#bfa98a', scrub: '#575e37', garden: '#656d3c', hedge: '#3e4628', sidewalk: '#a9aaa6', conifer_forest: '#45432d' };
+const GROUND = { land: '#8e8f8b', water: '#15191c', forest: '#4f6339', park: '#667f48', grass: '#6f864e', field: '#959872',
+  wetland: '#6d7a58', sand: '#b5ad92', rock: '#97958f', paved: '#9a9b97', rail: '#7d7a74', pitch: '#7a9c56',
+  parking: '#8b8c88', playground: '#bfa98a', scrub: '#5f7342', garden: '#6b8449', hedge: '#3e5530', sidewalk: '#a9aaa6', conifer_forest: '#3d5236' };
+const NEAR = { ...GROUND, forest: '#505834', conifer_forest: '#464e30', park: '#646c3c', grass: '#666e3c', field: '#7a7650', wetland: '#646a4a', pitch: '#6c7541',
+  scrub: '#575e37', garden: '#656d3c', hedge: '#3e4628' };
 const BASE = new THREE.Color(GROUND.water);
 
 const hash = `float hash(float n){return fract(sin(n*12.9898)*43758.5453);}`;
@@ -56,7 +58,7 @@ const RIB = ['attribute vec3 aB, aR, aJ; varying vec3 vB, vR, vJ; varying vec2 v
   'vB = aB; vR = aR; vJ = aJ; vW = (modelMatrix * vec4(position, 1.0)).xz;', `if (${DITHER} < cover(vW)) discard;
   float w = vR.z, x = vB.y * 0.5 * w, n = vB.z, fw = fwidth(x), fu = max(fwidth(vB.x), 1e-4);`];
 const roadLook = fade => patch(new THREE.MeshStandardMaterial({ roughness: 0.9, vertexColors: true }), RIB[1], `${RIB[2]}
-  if (uDetail > 0.0) diffuseColor.rgb *= mix(vec3(1.0), detail(vec2(vB.x, x), vec2(vW.x, -vW.y), vR.x), uDetail);
+  if (uDetail > 0.0) diffuseColor.rgb = mix(diffuseColor.rgb, (vR.x < 0.5 ? vec3(0.091, 0.093, 0.098) : diffuseColor.rgb) * detail(vec2(vB.x, x), vec2(vW.x, -vW.y), vR.x), uDetail);
   float t = (x + 0.5 * w - 0.5) / 3.3, q = mod(vB.x, 12.0), major = step(2.0, mod(vR.y, 4.0));
   float dash = mix(clamp(min(q, 3.0 - q) / fu + 0.5, 0.0, 1.0), 0.25, smoothstep(2.0, 6.0, fu));
   float m = major * max(step(1.5, n) * line(abs(t - clamp(floor(t + 0.5), 1.0, n - 1.0)) * 3.3, 0.07, fw) * dash, line(abs(abs(x) - 0.5 * w + 0.5), 0.08, fw));
@@ -75,15 +77,16 @@ export const borderMat = lineMat('#8a8a85', 1);
 const overMat = patch(new THREE.MeshStandardMaterial({ roughness: 0.9, vertexColors: true, depthTest: false, depthWrite: false }),
   'transformed.xz += aE.xy * max(0.0, uPx * 2.5 - aE.z) * 0.5;', 'diffuseColor.rgb *= uDim;', 'attribute vec3 aE; uniform float uPx;');
 
-const groundMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true, depthWrite: false, depthTest: false }), 'vG = aG; vW = (modelMatrix * vec4(position, 1.0)).xz;', `
+const groundMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true, depthWrite: false, depthTest: false }), 'vG = aG; vC = aC; vW = (modelMatrix * vec4(position, 1.0)).xz;', `
   diffuseColor.rgb *= uDim; sky = step(distance(vColor, vec3(${BASE.toArray().map(v => v.toFixed(5))})), 0.001);
   if (uDetail > 0.0) {
     vec2 p = vec2(vW.x, -vW.y); float c = cos(vG.y), s = sin(vG.y);
     vec2 q = mat2(c, -s, s, c) * p; vec3 d = detail(q, p, vG.x);
-    if (vG.z > 0.5) d = mix(d, detail(q, p, ${L.meadow}.0), smoothstep(0.3, 0.7, gn(p / 90.0 + 11.0)));
+    if (vG.z > 0.5) d = mix(d, detail(q, p, vG.z > 1.5 ? ${L.grass}.0 : ${L.meadow}.0), smoothstep(0.3, 0.7, gn(p / 90.0 + 11.0)));
+    vec3 n = vG.z > 0.5 && vG.z < 1.5 ? mix(vec3(0.134, 0.157, 0.048), vec3(0.171, 0.155, 0.061), 0.8 * gn(p / 80.0 + 7.0)) * (0.85 + 0.25 * gn(p / 31.0)) : vC;
     if (sky > 0.5) sky = 1.0 + 0.25 * uDetail * (d.g - 1.0);
-    else diffuseColor.rgb = mix(diffuseColor.rgb, (vG.z > 0.5 ? mix(vec3(0.134, 0.157, 0.048), vec3(0.171, 0.155, 0.061), 0.8 * gn(p / 80.0 + 7.0)) * (0.85 + 0.25 * gn(p / 31.0)) * uDim : diffuseColor.rgb) * d, uDetail);
-  }`, 'attribute vec3 aG; varying vec3 vG; varying vec2 vW;');
+    else diffuseColor.rgb = mix(diffuseColor.rgb, n * uDim * d, uDetail);
+  }`, 'attribute vec3 aG, aC; varying vec3 vG, vC; varying vec2 vW;');
 const GL = { land: 'grass', water: 'water', forest: 'forest_floor', park: 'grass', grass: 'grass', field: 'meadow', wetland: 'meadow', sand: 'sand', rock: 'rock', paved: 'paving', rail: 'rail',
   pitch: 'pitch', parking: 'parking', playground: 'sand', garden: 'grass', scrub: 'scrub', hedge: 'scrub', sidewalk: 'paving', conifer_forest: 'forest_floor' };
 const treeMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true }), 'transformed *= uTree;', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.far);
@@ -151,8 +154,8 @@ function buildings(list, mat = buildingMat) {
 }
 
 function ground(list, kinds, size, i, j, trees) {
-  const pos = [], col = [], ag = [], c = new THREE.Color();
-  const quad = (x0, y0, x1, y1, h, cc) => { for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y0], [x1, y1], [x0, y1]]) { pos.push(x, h, -y); col.push(cc.r, cc.g, cc.b); ag.push(L.water, 0, 0); } };
+  const pos = [], col = [], ag = [], an = [], c = new THREE.Color(), nc = new THREE.Color();
+  const quad = (x0, y0, x1, y1, h, cc) => { for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y0], [x1, y1], [x0, y1]]) { pos.push(x, h, -y); col.push(cc.r, cc.g, cc.b); an.push(cc.r, cc.g, cc.b); ag.push(L.water, 0, 0); } };
   quad(i * size, j * size, (i + 1) * size, (j + 1) * size, -0.05, BASE);
   const polys = list.map(([k, f]) => {
     const p = ring(f), b = [Infinity, Infinity, -Infinity, -Infinity];
@@ -161,11 +164,11 @@ function ground(list, kinds, size, i, j, trees) {
   }).filter(q => q.p.length > 2);
   const covered = (from, x, y) => polys.some((q, k) => k > from && !SCATTER[q.name] && x > q.b[0] && x < q.b[2] && y > q.b[1] && y < q.b[3] && inside(q.p, x, y));
   polys.forEach(({ name, p, b }, k) => {
-    c.set(GROUND[name] || GROUND.land);
+    c.set(GROUND[name] || GROUND.land); nc.set(NEAR[name] || NEAR.land);
     let a = 0, best = 0;
     p.forEach((v, i) => { const u = p[(i + 1) % p.length], l = v.distanceToSquared(u); if (l > best) { best = l; a = Math.atan2(u.y - v.y, u.x - v.x); } });
     for (const t of tris(p))
-      for (const v of t) { pos.push(p[v].x, 0, -p[v].y); col.push(c.r, c.g, c.b); ag.push(L[GL[name] || 'grass'], a, +(name === 'land' || !name)); }
+      for (const v of t) { pos.push(p[v].x, 0, -p[v].y); col.push(c.r, c.g, c.b); an.push(nc.r, nc.g, nc.b); ag.push(L[GL[name] || 'grass'], a, name === 'land' || !name ? 1 : /forest/.test(name) ? 2 : 0); }
     const sc = SCATTER[name];
     if (!sc || !trees) return;
     const n = Math.min(3000, (b[2] - b[0]) * (b[3] - b[1]) / sc[1]);
@@ -178,6 +181,7 @@ function ground(list, kinds, size, i, j, trees) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setAttribute('aG', new THREE.Float32BufferAttribute(ag, 3));
+  g.setAttribute('aC', new THREE.Float32BufferAttribute(an, 3));
   const m = new THREE.Mesh(up(g), groundMat);
   m.receiveShadow = true;
   m.renderOrder = -1;
@@ -185,7 +189,7 @@ function ground(list, kinds, size, i, j, trees) {
 }
 
 const roadStyle = k => /rail|tram|subway|metro/.test(k) ? [2.4, '#55524d', 0.48] : /foot|path|cycle|steps|pedestrian|track|bridleway/.test(k) ? [1.2, '#979893', 0.4]
-  : /service|living/.test(k) ? [3.5, '#5a5b5c', 0.42] : [0, '#555658', 0.45];
+  : /service|living/.test(k) ? [3.5, '#7a7c7d', 0.42] : [0, '#5e6164', 0.45];
 
 export function ribbon(lines, extra) {
   const pos = [], ab = [], col = [], idx = [], c = new THREE.Color();

@@ -38,7 +38,8 @@ canvas { display: block; }
 canvas, img { -webkit-user-drag: none; user-select: none; }
 #track { flex: 1; }
 #year { width: 100%; margin: 0; accent-color: var(--hi); touch-action: none; cursor: pointer; }
-.lab.tag { font-size: 10px; padding: 3px 6px; letter-spacing: .06em; text-transform: uppercase; color: var(--mark, #fff); pointer-events: none; }
+.lab.tag { font-size: 10px; padding: 3px 6px; letter-spacing: .06em; text-transform: uppercase; color: var(--mark, #fff); cursor: default; }
+.lab.tag.hi { background: #3a3c3e; }
 #split { padding: 8px 7px; font-size: 10px; }
 #cut { position: fixed; top: 50%; width: 21px; height: 130vmax; margin-left: -10px; transform: translateY(-50%) rotate(15deg); cursor: ew-resize; touch-action: none; z-index: 1; }
 #cut::before { content: ""; position: absolute; left: 9px; top: 0; bottom: 0; width: 3px; background: #fff; box-shadow: 0 0 6px #0009; }
