@@ -1,16 +1,7 @@
 \documentclass{article}
 
 \PassOptionsToPackage{numbers,compress,sort}{natbib}
-\newif\ifpreprint
-\preprinttrue
-\newif\iftextonly
-\textonlyfalse
-
-\ifpreprint
-  \usepackage[preprint]{neurips_2026}
-\else
-  \usepackage{neurips_2026}
-\fi
+\usepackage[preprint]{neurips_2026}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -21,23 +12,15 @@
 \usepackage{amssymb}
 \usepackage{amsmath}
 \usepackage{microtype}
-\usepackage{xcolor}
 \usepackage{graphicx}
 \usepackage{subcaption}
-\usepackage{comment}
-\iftextonly\excludecomment{figure}\excludecomment{table}\fi
 
-\newcommand{\pending}[1]{\textcolor{red}{\textbf{TBD}\ifx&#1&\else{} (#1)\fi}}
 \input{figs/numbers.tex}
-\newcommand{\shot}[1]{\IfFileExists{figs/shot_#1.jpg}{\includegraphics[width=\linewidth]{figs/shot_#1.jpg}}{\fbox{\parbox[c][0.28\linewidth][c]{0.95\linewidth}{\centering\pending{screenshot #1}}}}}
+\newcommand{\shot}[1]{\includegraphics[width=\linewidth]{figs/shot_#1.jpg}}
 
 \title{Espoo 2040: A City Road-Planning Environment\\Where Frontier Agents Fail in Measurable Ways}
 
-\ifpreprint
 \author{Emil Alexander Vinu \And Alessandro Tesi}
-\else
-\author{Anonymous Author(s)}
-\fi
 
 \begin{document}
 
@@ -153,6 +136,23 @@ Method & 16 seeds & agent's & M p-h & M p-h & \% & M p-h/yr & MEUR \\
 
 \textbf{Main comparison.} Table~\ref{tab:main} and Figure~\ref{fig:bars} show the results. Doing nothing is the worst plan, and random plans recover little. Greedy plans help on some seeds and fail on others: they rank projects one at a time and value them inside a short window. The rule planner and the learned policy beat the frontier agent clearly, without any forecasts. Through Harbor, the learned policy gives the same delays as in our simulator (largest gap \refrlGap{}\% on \refrlN{} seeds).
 
+\textbf{Unseen cities.} We chose the learned policy's checkpoint on seeds 0 to 15, so we also test all rule-based methods and the policy on \hoN{} new cities (seeds \hoSeeds{}) that were never used for training or selection (Table~\ref{tab:heldout}). There we have no best known plan, so we report the share of the do-nothing delay that each method saves. The learned policy saves \hoRl{}\% (\hoRlEval{}\% on seeds 0 to 15) and beats the rule planner in \hoWinPlanner{} of \hoN{} cities and the reactive rule in \hoWinReactive{}.
+
+\begin{table}[t]
+\caption{Share of the do-nothing delay saved (\%), on \hoN{} unseen cities and on seeds 0 to 15.}
+\label{tab:heldout}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+ & \multicolumn{2}{c}{Unseen cities} & Seeds 0 to 15 \\
+\cmidrule(lr){2-3}
+Method & mean & worst & mean \\
+\midrule
+\csname @@input\endcsname figs/heldout.tex 
+\bottomrule
+\end{tabular}
+\end{table}
+
 \textbf{Maintenance matters.} The 5-year greedy rule scores \greedyFiveMTwo{} with $m=2$ but only \greedyFiveMOne{} with $m=1$ (reactive: \reactiveMTwo{} and \reactiveMOne{}). At the default level more roads fall below the rebuild threshold, and emergency rebuilds use up cash that projects need. The agent finds this: it chooses $m=2$ in almost every year. Maintenance is not the only lever, though: the learned policy wins with the default level, through few, well-placed projects (Section~\ref{sec:evolution}).
 
 \begin{figure}[t]
@@ -199,7 +199,7 @@ Expert plans & mean & worst & mean & worst \\
 
 \begin{figure}[t]
   \centering
-  \IfFileExists{figs/evolution.pdf}{\includegraphics[width=\linewidth]{figs/evolution.pdf}}{\fbox{\parbox[c][0.3\linewidth][c]{0.95\linewidth}{\centering\pending{strategy figure from \texttt{runs/rl/strategy.json} and \texttt{runs/grpo/strategy.json}}}}}
+  \includegraphics[width=\linewidth]{figs/evolution.pdf}
   \caption{How the strategy changes during training, measured on the plans for seeds 0 to 15 at each checkpoint. (a) GRPO on Gemma 3 270M. (b to d) The policy network trained with RL from scratch (PPO, Gumbel self-play) and from the cloned policy (PPO). (e) Which projects the RL policy builds at each checkpoint.}
   \label{fig:evolution}
 \end{figure}
@@ -216,15 +216,13 @@ We run each checkpoint greedily on seeds 0 to 15 and measure its plans (Figure~\
 
 \section{Limitations}
 
-The model is a static equilibrium for one peak hour, scaled to a year; it has no queues and no time of day. The car share is fixed, so better roads do not pull people out of transit, and induced demand comes only from growth and rerouting. The ten access upgrades are made up with the same cost for every area. $D^{*}$ is the best plan we know, not a proven optimum. The frontier agent ran once on five seeds, so its mean is uncertain. We chose the learned policy's checkpoint on the evaluation seeds, so its score of \rlScore{} (and its lead on the agent's five seeds) is slightly optimistic.
+The model is a static equilibrium for one peak hour, scaled to a year; it has no queues and no time of day. The car share is fixed, so better roads do not pull people out of transit, and induced demand comes only from growth and rerouting. The ten access upgrades are made up with the same cost for every area. $D^{*}$ is the best plan we know, not a proven optimum. The frontier agent ran once on five seeds, so its mean is uncertain. We chose the learned policy's checkpoint on the evaluation seeds; on unseen cities it saves \hoGap{} points less of the do-nothing delay, which measures this bias.
 
 \section{Conclusion}
 
 Espoo 2040 turns a real planning question into a POMDP with a replayed, hard-to-game reward. Its core difficulty is to build early for growth that short forecasts do not yet reward. A frontier agent falls into this trap: it follows a generic list and answers growth late. A tiny policy learns to avoid the trap from experience in the environment, and a 270M LLM improves strongly with GRPO but so far learns a generic plan. Because the score is in person-hours, each failure has a concrete size.
 
-\iftextonly\else
 \bibliographystyle{plainnat}
 \bibliography{refs}
-\fi
 
 \end{document}
