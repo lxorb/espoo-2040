@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { looks, patch, up, DITHER, HYPE, COVER } from './city.js';
+import { looks, patch, up, DITHER, HYPE, COVER, junctions } from './city.js';
 import { lengths, along } from './traffic.js';
 
 export const caps = { marks: 4000, ground: 64, texels: 40e6, cache: 80e6, sprites: 10000, walkers: 300, props: 3000, loads: 4 };
@@ -284,7 +284,7 @@ const MARK_FRAG = `uniform sampler2D uMap; uniform float uDim, uSat, uShow; vary
   }`;
 
 function marks(t, k) {
-  const segs = [], out = [], P = t.p || [], sig = P.filter(p => k.pkinds[p[0]] === 'signal');
+  const segs = [], out = [], P = t.p || [], sig = P.filter(p => k.pkinds[p[0]] === 'signal'), J = [...junctions(t.r || [], k.rkinds).values()];
   for (const [q, lanes, f] of t.r || []) {
     const n = k.rkinds[q], w = /motorway|trunk|primary|secondary|tertiary|residential/.test(n) ? Math.max(lanes, 1) * 3.3 + 1 : n === 'service' ? 3.5 : 0;
     if (w) for (let i = 2; i < f.length; i += 2) segs.push([f[i - 2], f[i - 1], f[i], f[i + 1], w]);
@@ -297,10 +297,15 @@ function marks(t, k) {
       if (d < best) { best = d; hit = [px, py, Math.atan2(dy, dx), w]; }
     }
     if (!hit) continue;
-    const [px, py, a, w] = hit, c = Math.cos(a), s = Math.sin(a);
+    let [px, py, a, w] = hit, side = 0;
+    const c = Math.cos(a), s = Math.sin(a), j = J.find(j => Math.hypot(j.x - px, j.y - py) < j.w / 2 + 2);
+    if (j) {
+      side = Math.sign((px - j.x) * c + (py - j.y) * s) || 1;
+      px = j.x + c * side * (j.w / 2 + 2.5); py = j.y + s * side * (j.w / 2 + 2.5);
+    }
     out.push(px, py, a, w, 0);
     if (sig.some(([, sx, sy]) => Math.hypot(sx - x, sy - y) < 30))
-      for (const d of [-1, 1]) out.push(px - d * c * 3 + d * s * w / 4, py - d * s * 3 - d * c * w / 4, a, w / 2, 1);
+      for (const d of [-1, 1]) if (d !== side) out.push(px - d * c * 3 + d * s * w / 4, py - d * s * 3 - d * c * w / 4, a, w / 2, 1);
   }
   return out;
 }

@@ -52,14 +52,15 @@ const buildingLook = show => patch(new THREE.MeshStandardMaterial({ roughness: 0
 const buildingMat = buildingLook(looks.one), coarseMat = buildingLook(looks.coarse), coarseDepth = fadeDepth(looks.coarse);
 const dress = (m, mat) => { m.material = mat; m.customDepthMaterial = mat === coarseMat ? coarseDepth : undefined; };
 
-const RIB = ['attribute vec3 aB, aR; varying vec3 vB, vR; varying vec2 vW; float line(float d, float h, float f) { float e = max(h, 0.6 * f); return (1.0 - smoothstep(e - 0.5 * f, e + 0.5 * f, d)) * h / e; }',
-  'vB = aB; vR = aR; vW = (modelMatrix * vec4(position, 1.0)).xz;', `if (${DITHER} < cover(vW)) discard;
+const RIB = ['attribute vec3 aB, aR, aJ; varying vec3 vB, vR, vJ; varying vec2 vW; float line(float d, float h, float f) { float e = max(h, 0.6 * f); return (1.0 - smoothstep(e - 0.5 * f, e + 0.5 * f, d)) * h / e; }',
+  'vB = aB; vR = aR; vJ = aJ; vW = (modelMatrix * vec4(position, 1.0)).xz;', `if (${DITHER} < cover(vW)) discard;
   float w = vR.z, x = vB.y * 0.5 * w, n = vB.z, fw = fwidth(x), fu = max(fwidth(vB.x), 1e-4);`];
 const roadLook = fade => patch(new THREE.MeshStandardMaterial({ roughness: 0.9, vertexColors: true }), RIB[1], `${RIB[2]}
   if (uDetail > 0.0) diffuseColor.rgb *= mix(vec3(1.0), detail(vec2(vB.x, x), vec2(vW.x, -vW.y), vR.x), uDetail);
   float t = (x + 0.5 * w - 0.5) / 3.3, q = mod(vB.x, 12.0), major = step(2.0, mod(vR.y, 4.0));
   float dash = mix(clamp(min(q, 3.0 - q) / fu + 0.5, 0.0, 1.0), 0.25, smoothstep(2.0, 6.0, fu));
   float m = major * max(step(1.5, n) * line(abs(t - clamp(floor(t + 0.5), 1.0, n - 1.0)) * 3.3, 0.07, fw) * dash, line(abs(abs(x) - 0.5 * w + 0.5), 0.08, fw));
+  m *= smoothstep(vJ.x - 2.0, vJ.x, vB.x) * smoothstep(vJ.y - 2.0, vJ.y, vJ.z - vB.x);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.9, 0.87), uLane * m);
   diffuseColor.rgb = mix(vec3(0.27, 0.275, 0.26), diffuseColor.rgb, uFade) * uDim;`, RIB[0], fade);
 const roadMat = roadLook(looks.one), pathMat = roadLook(looks.path);
@@ -78,10 +79,13 @@ const groundMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexCol
   diffuseColor.rgb *= uDim; sky = step(distance(vColor, vec3(${BASE.toArray().map(v => v.toFixed(5))})), 0.001);
   if (uDetail > 0.0) {
     vec2 p = vec2(vW.x, -vW.y); float c = cos(vG.y), s = sin(vG.y);
-    vec3 d = mix(vec3(1.0), detail(mat2(c, -s, s, c) * p, p, vG.x), uDetail);
-    if (sky > 0.5) sky = 1.0 + 0.25 * (d.g - 1.0); else diffuseColor.rgb *= d;
-  }`, 'attribute vec2 aG; varying vec2 vG, vW;');
-const GL = { land: 'gravel', water: 'water', forest: 'forest_floor', park: 'grass', grass: 'grass', field: 'meadow', wetland: 'meadow', sand: 'sand', rock: 'rock', paved: 'paving', rail: 'rail',
+    vec2 q = mat2(c, -s, s, c) * p; vec3 d = detail(q, p, vG.x);
+    if (vG.z > 1.5) d = mix(d, detail(q, p, ${L.meadow}.0), smoothstep(0.3, 0.7, gn(p / 90.0 + 11.0)));
+    if (sky > 0.5) sky = 1.0 + 0.25 * uDetail * (d.g - 1.0);
+    else diffuseColor.rgb = mix(diffuseColor.rgb, (vG.z > 0.5 ? vec3(0.134, 0.157, 0.048) * uDim : diffuseColor.rgb) * d, uDetail);
+  }`, 'attribute vec3 aG; varying vec3 vG; varying vec2 vW;');
+const OLIVE = { land: 2, park: 1, grass: 1, pitch: 1, garden: 1 };
+const GL = { land: 'grass', water: 'water', forest: 'forest_floor', park: 'grass', grass: 'grass', field: 'meadow', wetland: 'meadow', sand: 'sand', rock: 'rock', paved: 'paving', rail: 'rail',
   pitch: 'pitch', parking: 'parking', playground: 'sand', garden: 'grass', scrub: 'scrub', hedge: 'scrub', sidewalk: 'paving', conifer_forest: 'forest_floor' };
 const treeMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true }), 'transformed *= uTree;', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.far);
 const SCATTER = { forest: [3, 140], conifer_forest: [4, 140], hedge: [5, 6], scrub: [5, 40], garden: [5, 90] };
@@ -149,7 +153,7 @@ function buildings(list, mat = buildingMat) {
 
 function ground(list, kinds, size, i, j, trees) {
   const pos = [], col = [], ag = [], c = new THREE.Color();
-  const quad = (x0, y0, x1, y1, h, cc) => { for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y0], [x1, y1], [x0, y1]]) { pos.push(x, h, -y); col.push(cc.r, cc.g, cc.b); ag.push(L.water, 0); } };
+  const quad = (x0, y0, x1, y1, h, cc) => { for (const [x, y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y0], [x1, y1], [x0, y1]]) { pos.push(x, h, -y); col.push(cc.r, cc.g, cc.b); ag.push(L.water, 0, 0); } };
   quad(i * size, j * size, (i + 1) * size, (j + 1) * size, -0.05, BASE);
   const polys = list.map(([k, f]) => {
     const p = ring(f), b = [Infinity, Infinity, -Infinity, -Infinity];
@@ -162,7 +166,7 @@ function ground(list, kinds, size, i, j, trees) {
     let a = 0, best = 0;
     p.forEach((v, i) => { const u = p[(i + 1) % p.length], l = v.distanceToSquared(u); if (l > best) { best = l; a = Math.atan2(u.y - v.y, u.x - v.x); } });
     for (const t of tris(p))
-      for (const v of t) { pos.push(p[v].x, 0, -p[v].y); col.push(c.r, c.g, c.b); ag.push(L[GL[name] || 'gravel'], a); }
+      for (const v of t) { pos.push(p[v].x, 0, -p[v].y); col.push(c.r, c.g, c.b); ag.push(L[GL[name] || 'grass'], a, OLIVE[name || 'land'] || 0); }
     const sc = SCATTER[name];
     if (!sc || !trees) return;
     const n = Math.min(3000, (b[2] - b[0]) * (b[3] - b[1]) / sc[1]);
@@ -174,7 +178,7 @@ function ground(list, kinds, size, i, j, trees) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.setAttribute('aG', new THREE.Float32BufferAttribute(ag, 2));
+  g.setAttribute('aG', new THREE.Float32BufferAttribute(ag, 3));
   const m = new THREE.Mesh(up(g), groundMat);
   m.receiveShadow = true;
   m.renderOrder = -1;
@@ -212,16 +216,38 @@ export function ribbon(lines, extra) {
 }
 
 const RL = k => L[/rail|tram|subway/.test(k) ? 'rail' : /track/.test(k) ? 'gravel' : /foot/.test(k) ? 'paving' : 'asphalt'];
+const CAR = /motorway|trunk|primary|secondary|tertiary|residential/;
+export const jkey = (x, y) => Math.round(x * 2) + ',' + Math.round(y * 2);
+export function junctions(list, kinds) {
+  const J = new Map();
+  for (const [k, lanes, f] of list) if (CAR.test(kinds[k])) for (let i = 0, n = f.length / 2; i < n; i++) {
+    const q = jkey(f[2 * i], f[2 * i + 1]), j = J.get(q) || J.set(q, { x: f[2 * i], y: f[2 * i + 1], d: 0, w: 0 }).get(q);
+    j.d += i && i < n - 1 ? 2 : 1;
+    j.w = Math.max(j.w, Math.max(lanes, 1) * 3.3 + 1);
+  }
+  for (const [q, j] of J) if (j.d < 3) J.delete(q);
+  return J;
+}
 function rib(lines, mat) {
-  const r = [], m = new THREE.Mesh(up(ribbon(lines, ({ r: q }) => r.push(...q))), mat);
+  const r = [], j = [], m = new THREE.Mesh(up(ribbon(lines, ({ r: q, j: e }) => { r.push(...q); j.push(...e); })), mat);
   m.geometry.setAttribute('aR', new THREE.Float32BufferAttribute(r, 3));
+  m.geometry.setAttribute('aJ', new THREE.Float32BufferAttribute(j, 3));
   m.receiveShadow = true;
   return m;
 }
 function roads(list, kinds, minor) {
-  const lines = list.filter(([k]) => kinds[k] !== 'tunnel' && minor === /foot|cycle|service|track/.test(kinds[k])).map(([k, lanes, f, fl = 0]) => {
-    const name = kinds[k] || '', [w, color, y] = roadStyle(name), ww = w || Math.max(lanes, 1) * 3.3 + 1;
-    return { pts: f, w: ww, color, y, lanes: w ? 0 : lanes, r: [RL(name), (fl & 1) + 2 * /motorway|trunk|primary|secondary|tertiary/.test(name), ww], walk: /primary|secondary|tertiary|residential/.test(name) && fl & 12 };
+  const J = junctions(list, kinds), at = (x, y) => (J.get(jkey(x, y))?.w ?? -4) + 4;
+  const lines = list.filter(([k]) => kinds[k] !== 'tunnel' && minor === /foot|cycle|service|track/.test(kinds[k])).flatMap(([k, lanes, f, fl = 0]) => {
+    const name = kinds[k] || '', [w, color, y] = roadStyle(name), ww = w || Math.max(lanes, 1) * 3.3 + 1, n = f.length / 2, cut = [0];
+    const base = { w: ww, color, y, lanes: w ? 0 : lanes, r: [RL(name), (fl & 1) + 2 * /motorway|trunk|primary|secondary|tertiary/.test(name), ww], walk: /primary|secondary|tertiary|residential/.test(name) && fl & 12 };
+    if (CAR.test(name)) for (let i = 1; i < n - 1; i++) if (J.has(jkey(f[2 * i], f[2 * i + 1]))) cut.push(i);
+    cut.push(n - 1);
+    return cut.slice(1).map((b, c) => {
+      const pts = f.slice(2 * cut[c], 2 * b + 2);
+      let len = 0;
+      for (let i = 2; i < pts.length; i += 2) len += Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]);
+      return { ...base, pts, j: [at(pts[0], pts[1]), at(pts[pts.length - 2], pts[pts.length - 1]), len] };
+    });
   });
   const side = lines.filter(l => l.walk).map(l => ({ ...l, w: l.w + 4.3, y: 0.3, color: GROUND.sidewalk, r: [L.paving, 0, l.w + 4.3] }));
   return [rib(lines, minor ? pathMat : roadMat), ...side.length ? [rib(side, sideMat)] : []];
