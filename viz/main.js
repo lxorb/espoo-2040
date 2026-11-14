@@ -191,7 +191,7 @@ addEventListener('keydown', e => {
 });
 
 const UI = ['modes', 'runs', 'time', 'sl', 'sr'].map(id => document.getElementById(id));
-let tags = [], shown = [], anim = null, hold = 0, espoo = null;
+let tags = [], shown = [], hold = 0, espoo = null;
 function tag(text, x, y, cls) {
   const el = document.createElement('div');
   el.className = `lab ${cls}`;
@@ -219,15 +219,6 @@ function projectTags(put) {
       document.getElementById('labels').append(t.el);
       return t;
     }));
-  }
-  for (const m of live) if (m.anim && m.anim !== anim) {
-    anim = m.anim;
-    for (const t of tags) if (t.net === m && t.b === anim.y) {
-      const el = Object.assign(document.createElement('div'), { className: 'pulse' });
-      document.getElementById('labels').append(el);
-      setTimeout(() => el.remove(), 1500);
-      labels.push({ el, p: t.p.clone().setY(0), ring: true });
-    }
   }
   const y0 = state.run?.y0 ?? 2026, cap = camera.zoom < 0.2 ? 3 : camera.zoom < 0.5 ? 6 : 99, w = innerWidth, h = innerHeight;
   let n = 0;
@@ -339,8 +330,8 @@ function frame() {
     l.el.style.display = l.on ? '' : 'none';
     if (!l.on) continue;
     const x = (v.x + 1) / 2 * w, y = (1 - v.y) / 2 * h;
-    l.el.style.transform = l.ring ? `translate(${x}px, ${y}px)` : `translate(${x}px, ${y - 8}px) translate(-50%, -100%)`;
-    if (!l.ring) put.push([x - l.el.offsetWidth / 2, y - 8 - l.el.offsetHeight, x + l.el.offsetWidth / 2, y - 8]);
+    l.el.style.transform = `translate(${x}px, ${y - 8}px) translate(-50%, -100%)`;
+    put.push([x - l.el.offsetWidth / 2, y - 8 - l.el.offsetHeight, x + l.el.offsetWidth / 2, y - 8]);
   }
   projectTags(put);
   const all = [...labels, ...tags];
