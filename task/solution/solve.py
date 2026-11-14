@@ -24,7 +24,7 @@ def call(tool, **args):
 
 def learned(st, projects, tried):
     proj = [dict(id=p[0], kind=p[2], cost=p[3], years=p[4], opex=p[5]) for p in projects]
-    h = st["years_left"] + st["runout_left"]
+    h = min(st["rules"]["forecast_years"], st["years_left"] + st["runout_left"])
     fc = lambda a: call("forecast", plan={"0": a}, years=h)["total_loss_kh"]
     return POLICY(st, proj, [p["id"] in st["startable"] for p in proj], fc, st["forecasts_left"], st["rules"]["years"])
 
@@ -34,7 +34,7 @@ def greedy(st, projects, tried):
     if not set(st["startable"]) - tried:
         tried.clear()
     cands = [k for k in st["startable"] if k not in tried][:st["forecasts_left"] - 1]
-    h = min(max([menu[k][4] for k in cands], default=0) + 3, st["years_left"] + st["runout_left"])
+    h = min(st["rules"]["forecast_years"], st["years_left"] + st["runout_left"])
     base = call("forecast", plan={"0": []}, years=h)["total_loss_kh"]
     best, pick = 0, []
     for k in cands:

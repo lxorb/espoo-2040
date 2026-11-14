@@ -11,7 +11,7 @@ You are the transport planner of Espoo, Finland. Every year you decide which pro
 
 ## Money and rules
 
-- `get_state` reports the income, opex, committed instalments and the exact rules (`rules`): the number of planning years and runout years, builds per year, maintenance levels and their budgets, emergency rebuilds and forecasts per year.
+- `get_state` reports the income, opex, committed instalments and the exact rules (`rules`): the number of planning years and runout years, builds per year, maintenance levels and their budgets, emergency rebuilds, forecasts per year and the longest forecast.
 - Each year you may start up to `rules.builds_per_year` projects from the menu and choose one maintenance level (default `rules.maintain.default`). Maintenance and emergency rebuilds are paid from your cash. Unspent cash carries over.
 - A project's cost is paid in equal instalments over its build years, the first one when you start it. A start is accepted only if your cash stays non-negative in every instalment year. During construction a project reduces capacity on the roads it works on; it opens after its build years and then costs its opex every year.
 - `startable` in `get_state` lists the projects you can start this year. An action that does not fit is rejected with a reason and costs nothing.
@@ -22,7 +22,7 @@ The MCP server `espoo` offers four tools.
 
 - `get_state()`: year, cash, losses, car share, network condition, development areas, projects under construction and built, startable projects, forecasts left, rules, the most delayed roads.
 - `list_projects()`: the menu with cost, build years, opex, status and the roads each project changes.
-- `forecast(plan, years)`: simulates a plan from the current state without changing anything. `plan` maps a year offset (`"0"` is this year) to that year's actions. It uses the expected growth of every area (the middle of its range), not the drawn one. The number of forecasts per year is limited; it resets when you commit a year.
+- `forecast(plan, years)`: simulates a plan from the current state without changing anything. `plan` maps a year offset (`"0"` is this year) to that year's actions. Its growth for each area blends the middle of the area's range with the rate the area has shown so far, trusting the shown rate by `rules.forecast_trust`. A forecast covers at most `rules.forecast_years` years, and you have `rules.forecasts_per_year` forecasts per year; the count resets when you commit a year.
 - `commit_year(actions)`: carries out this year's actions and advances one year.
 
 ```json

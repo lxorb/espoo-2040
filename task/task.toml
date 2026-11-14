@@ -26,7 +26,6 @@ memory_mb = 6144
 [environment.env]
 SEED = "${SEED:-0}"
 YEARS = "${YEARS:-15}"
-FORECASTS = "${FORECASTS:-6}"
 
 [[environment.mcp_servers]]
 name = "espoo"

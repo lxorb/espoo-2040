@@ -10,9 +10,10 @@ from sim import City
 from sim import params as P
 
 STATE = "/var/lib/env/state.json"
-SEED, YEARS, RUNOUT, TRIES = (int(os.environ.get(k) or d) for k, d in (("SEED", 0), ("YEARS", 15), ("RUNOUT", 5), ("FORECASTS", 6)))
+SEED, YEARS, RUNOUT = (int(os.environ.get(k) or d) for k, d in (("SEED", 0), ("YEARS", 15), ("RUNOUT", 5)))
+TRIES, HORIZON = P.FORECASTS, P.FORECAST_YEARS
 LEVELS = range(len(P.MAINT))
-RULES = {"years": YEARS, "runout": RUNOUT, "builds_per_year": P.BUILDS, "forecasts_per_year": TRIES,
+RULES = {"years": YEARS, "runout": RUNOUT, "builds_per_year": P.BUILDS, "forecasts_per_year": TRIES, "forecast_years": HORIZON, "forecast_trust": f"step / (step + {P.LEARN:g})",
          "maintain": {"budget_meur": P.MAINT, "default": P.MAINT_DEFAULT, "runout_level": 0, "fixes_below_cond": P.MAINT_BELOW},
          "emergency_rebuild": {"below_cond": P.COND_MIN, "cost_x_resurface": P.REBUILD, "capacity": P.REBUILD_CAP}}
 
@@ -121,12 +122,12 @@ async def list_projects():
 
 @mcp.tool(description=(
     "Forecast a plan without changing the city. plan maps a year offset (\"0\" = this year) to that year's actions; years is "
-    "how many years to simulate (at most what is left, runout included). Uses the expected growth of every area, not the "
-    "drawn one. Returns per year the loss and jam (thousand person-hours), car share, cash left and rejected actions. "
+    "how many years to simulate (at most rules.forecast_years and what is left, runout included). Growth blends each area's "
+    "prior middle with the rate it has shown so far, weighted by rules.forecast_trust. Returns per year the loss and jam (thousand person-hours), car share, cash left and rejected actions. "
     "Limited forecasts per year; the count resets on commit_year."
 ))
 async def forecast(plan: dict[str, list], years: int):
-    left = YEARS + RUNOUT - c.s["year"]
+    left = min(HORIZON, YEARS + RUNOUT - c.s["year"])
     if type(years) is not int or not 1 <= years <= left:
         raise ValueError(f"years must be an integer from 1 to {left}")
     p = {}

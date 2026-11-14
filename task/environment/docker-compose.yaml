@@ -10,7 +10,6 @@ services:
     environment:
       SEED: ${SEED:-0}
       YEARS: ${YEARS:-15}
-      FORECASTS: ${FORECASTS:-6}
     expose:
       - "8000"
     healthcheck:
