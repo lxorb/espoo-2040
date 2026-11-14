@@ -309,6 +309,8 @@ def model(bs, lib, ortho, A, f=1.0, pages=99, crops={}, far=0.6):
             px = np.stack([(wl["u"] if "u" in wl else t[..., :2] @ wl["e"]) * s - wl["u0"] * s + x, (wl["zt"] - t[..., 2]) * s + y], -1)
         if key in crops:
             im = Image.open(TEX / crops[key][0]).crop(tuple(crops[key][1])).resize((w, h), Image.LANCZOS)
+        if i is None and "plain" in b:
+            im = b["plain"](px - (x, y), w, h, k / o[1])
         out[pg][0].paste(im.resize((w + 4, h + 4)), (x - 2, y - 2))
         out[pg][0].paste(im, (x, y))
         out[pg][1].append(t.reshape(-1, 3))
@@ -346,7 +348,7 @@ def glb(prims, q=84):
 
 
 def build():
-    from data.facade import dress
+    from data.facade import dress, plain, small
     bs, rings = buildings()
     sheets = [sh for f in ("near.json", "facade.json") if (TEX / f).exists() for sh in json.loads((TEX / f).read_text())["sheets"] if (TEX / sh["file"]).exists()]
     crops = {it[0]: (sh["file"], it[1:5], *it[5:]) for sh in sheets for it in sh["items"]}
@@ -355,6 +357,8 @@ def build():
     for b in bs:
         if b["id"] in fine:
             dress(b)
+        elif b["d"] < NEAR and small(b):
+            b["plain"] = plain(b)
     for name, part in (("district.glb", [b for b in bs if b["id"] not in fine]), ("district-near.glb", [b for b in bs if b["id"] in fine])):
         prims = model(part, lib, o, 4096, crops=crops) if part else []
         for k in range(0, len(prims), 5):

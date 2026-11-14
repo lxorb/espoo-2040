@@ -7,7 +7,8 @@ import numpy as np
 import shapely
 from PIL import Image, ImageDraw, ImageFilter
 from shapely.geometry import LineString, Polygon
-from data.district import BG, ERA, NEAR, RAW, ROOT, TEX, WHAT, buildings, call, pack, size
+from shapely.ops import unary_union
+from data.district import BG, ERA, NEAR, RAW, ROOT, TEX, WHAT, buildings, call, pack, prep, prism, size
 
 PICK = ["t-1521_1136", "1036850279", "1037184105", "103718423K", "1037865518", "1014164457", "101416423H", "101416429P",
         "101426323V", "1003664713", "1014164479", "1038503111"]
@@ -160,7 +161,45 @@ def plan(b, w, role, big):
     return out
 
 
+def flat(b):
+    r = b["roof"]
+    n = np.cross(r[:, 1] - r[:, 0], r[:, 2] - r[:, 0]) if len(r) else np.zeros((0, 3))
+    a = np.linalg.norm(n, axis=1)
+    return len(r) > 0 and a[n[:, 2] > 0.97 * a].sum() > 0.8 * a.sum()
+
+
+def small(b):
+    return b["foot"].area < 200 and flat(b)
+
+
+def plain(b):
+    seed = int(hashlib.md5(b["id"].encode()).hexdigest(), 16) % 2 ** 32
+
+    def draw(t, w, h, ppm):
+        rng = np.random.default_rng(seed)
+        img = Image.fromarray(np.clip(np.full((h, w, 3), (70, 72, 76)) + rng.normal(0, 3, (h, w, 1)), 0, 255).astype(np.uint8))
+        d, poly = ImageDraw.Draw(img), unary_union([Polygon(q).buffer(0.5) for q in t]).buffer(-0.5)
+        for y in np.arange(rng.uniform(0, 1.5 * ppm), h, 1.5 * ppm):
+            d.line([(0, y), (w, y)], fill=(62, 64, 68), width=1)
+        for p in getattr(poly, "geoms", [poly]):
+            d.line(list(p.exterior.coords), fill=(176, 178, 180), width=max(2, round(0.35 * ppm)))
+            for c in [p.representative_point()] + ([p.centroid] if p.area > 60 * ppm ** 2 else []):
+                v = 0.45 * ppm
+                d.rectangle([c.x - v, c.y - v, c.x + v, c.y + v], fill=(152, 154, 156), outline=(60, 60, 62))
+        return img
+    return draw
+
+
+def boxify(b):
+    p = max(getattr(b["foot"], "geoms", [b["foot"]]), key=lambda p: p.area).simplify(0.3)
+    b["faces"] = prism(p.exterior.coords, float(b["roof"][..., 2].max()))
+    prep(b)
+    b["plain"] = plain(b)
+
+
 def dress(b):
+    if small(b):
+        boxify(b)
     unfold(b)
     (col, desc), big, rail = look(b)
     ln = [w["u"].max() - w["u"].min() for w in b["walls"]]
@@ -168,16 +207,12 @@ def dress(b):
     long = [k for k in range(len(ln)) if ln[k] >= 0.6 * max(ln)]
     bal = max(long, key=lambda k: sw[k]) if b["style"][0] in ("apt", "row") and max(ln) >= 12 else -1
     entry = min(long, key=lambda k: sw[k]) if len(long) > 1 or bal < 0 else -1
-    r = b["roof"]
-    n = np.cross(r[:, 1] - r[:, 0], r[:, 2] - r[:, 0]) if len(r) else np.zeros((0, 3))
-    a = np.linalg.norm(n, axis=1)
-    flat = len(r) and a[n[:, 2] > 0.97 * a].sum() > 0.8 * a.sum()
     b["look"] = col, desc, big, rail
     for k, w in enumerate(b["walls"]):
         w["base"], w["u0"], w["u1"], w["zt"] = w["tris"], w["u"].min(), w["u"].max(), w["tris"][..., 2].max()
         w["plan"] = plan(b, w, "bal" if k == bal else "entry" if k == entry else "side" if k in long or ln[k] >= 14 else "gable", big)
         add = [box(w, *c, 1.0 if kind == "rail" else 1.4, kind == "hood") for kind, *c in w["plan"] if kind in ("rail", "hood")]
-        cap = parapet(w) if flat else ([], [])
+        cap = parapet(w, 0.3 if small(b) else 0.6) if flat(b) else ([], [])
         w["cap"] = np.array(cap[0]).reshape(-1, 3, 3)
         w["tris"] = np.vstack([w["base"], *(np.array(x[0]).reshape(-1, 3, 3) for x in add + [cap] if x[0])])
         w["u"] = np.vstack([w["u"], *(np.array(x[1]).reshape(-1, 3) for x in add + [cap] if x[1])])
