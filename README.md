@@ -27,21 +27,21 @@ One agent run per seed (plans and agent logs in `evidence/`):
 | Reference | 1.00 | 1.00 | 0.91 | 0.99 | 0.98 | 0.98 |
 | gpt-6.1-sol | 0.52 | 0.60 | 0.88 | 0.93 | 0.92 | 0.77 |
 
-On seeds 2 to 4 the lead is small (0.03 to 0.06). Five runs is a small sample. The agent jobs ran before `sim/norms.json` was frozen; the table rescores their delays with it.
+On seeds 2 to 4 the lead is small (0.03 to 0.06). Five runs is few. Agent delays are scored with the frozen `sim/norms.json`.
 
 Seeds 0 to 15: learned policy 0.97, rule planner 0.84, Gemma after GRPO 0.83, reactive rule 0.56, random 0.15.
 
-The reference (`rl/policy.py`, `rl/policy.npz`) has 83k parameters and uses no forecasts. It learned from expert plans, then PPO. We chose its checkpoint on seeds 0 to 15. On 32 unseen cities it saves 34.3% of the do-nothing delay (rule planner 31.1%), 3.6 points less than on seeds 0 to 15.
+The reference (`rl/policy.py`, `rl/policy.npz`) has 83k parameters and uses no forecasts. It learned from expert plans, then PPO. Its checkpoint was chosen on seeds 0 to 15. On 32 unseen cities it saves 34.3% of the do-nothing delay (rule planner 31.1%).
 
 ## Why the agent fails
 
-It makes nearly the same plan in every city. It names the growing areas by year 2 but does not act: a second access upgrade comes in 2034 or never. It buys cheap links first and keeps maintenance at level 2, so the cash for a 120 MEUR upgrade is missing (the reference plan with maintenance 2 scores 0.52 on seed 0). Its 3-year forecasts show the cost of road works, not the later gain. It fails where growth needs an early answer (seeds 0 and 1).
+It makes nearly the same plan everywhere. It names the growing areas by year 2 but does not act: a second access upgrade comes in 2034 or never. It buys cheap links first and keeps maintenance at level 2, so the cash for a 120 MEUR upgrade is missing (the reference plan with maintenance 2 scores 0.52 on seed 0). Its 3-year forecasts show the cost of road works, not the later gain. It fails where growth needs an early answer (seeds 0 and 1).
 
 ## Why the reward is hard to cheat
 
 - A verifier in a separate container replays the plan and scores it itself (`task/tests/test.sh`).
 - Do nothing scores 0.
-- After a stop, the remaining years get no new projects and default maintenance. The reference's first 3 years alone score 0.05 on seed 0 (0.05 to 0.38 on seeds 0 to 4).
+- After a stop, the remaining years get no new projects and default maintenance. The reference's first 3 years alone score 0.05 to 0.38 (seeds 0 to 4).
 - Rejected actions cost nothing and do nothing.
 - Scores are clipped to 0 to 1.
 - Replays are bit-identical on one CPU type; AMD and Intel differ by at most 0.008.
@@ -52,4 +52,4 @@ GRPO lifts Gemma 3 270M from 0.19 to 0.83. But it learns one plan for all cities
 
 ## Layout
 
-`sim` simulator, `task` Harbor task and verifier, `rl` reference policy, `grpo` Gemma training, `data` network and demand, `viz` viewer, `paper` paper, `evidence` Harbor plans and agent logs.
+`sim` simulator, `task` Harbor task and verifier, `rl` reference policy, `grpo` Gemma training, `data` network and demand, `viz` viewer, `paper` paper.
