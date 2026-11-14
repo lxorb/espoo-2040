@@ -1,0 +1,8 @@
+/data/ground/*
+  Cache-Control: public, max-age=600, stale-while-revalidate=86400
+/data/detail/*
+  Cache-Control: public, max-age=600, stale-while-revalidate=86400
+/data/tiles/*
+  Cache-Control: public, max-age=600, stale-while-revalidate=86400
+/assets/*
+  Cache-Control: public, max-age=600, stale-while-revalidate=86400
