@@ -263,7 +263,7 @@ setInterval(() => { fps.textContent = `${Math.round(frames / ((performance.now()
 const knob = (k, l, t, r, d, f) => ({ k, l, t, r, d, f });
 settings([
   knob('mark', 'marker color', 'color', 0, '#ffffff', v => { looks.mark.value.set(...rgb(v)); document.body.style.setProperty('--mark', v); }),
-  knob('out', 'outside dim', 'range', [0, 1, 0.05], 0.3, v => { looks.out.value = v; apply(); }),
+  knob('out', 'outside dim', 'range', [0, 1, 0.05], 0.1, v => { looks.out.value = v; apply(); }),
   knob('border', 'border', 'toggle', 0, true, v => { borderMat.visible = v; }),
   knob('labels', 'labels', 'toggle', 0, true, v => { document.getElementById('labels').hidden = !v; }),
   knob('shadows', 'shadows', 'toggle', 0, true, v => { sun.castShadow = v; }),
@@ -273,10 +273,10 @@ settings([
   knob('walk', 'pedestrians', 'range', [0, 1, 0.1], 1, v => { near.walkers.density = v; near.key = ''; }),
   knob('trees', 'trees', 'range', [0, 1, 0.1], 1, v => { looks.trees.value = v; near.key = ''; }),
   knob('hr', 'heat radius', 'range', [0.25, 3, 0.05], 1, v => { flowOpt.radius = v; }),
-  knob('hi', 'heat intensity', 'range', [0.25, 4, 0.05], 1, v => { flowOpt.heat = v; }),
+  knob('hi', 'heat intensity', 'range', [0.25, 4, 0.05], 2, v => { flowOpt.heat = v; }),
   knob('fp', 'flow particles', 'range', [0.1, 1, 0.05], 1, v => { flowOpt.particles = v; }),
   knob('ft', 'flow trail', 'range', [0.25, 4, 0.05], 1, v => { flowOpt.trail = v; }),
-  knob('hb', 'heat background', 'range', [0.05, 1, 0.05], 0.3, v => { opt.heat = v; apply(); }),
+  knob('hb', 'heat background', 'range', [0.05, 1, 0.05], 0.25, v => { opt.heat = v; apply(); }),
   knob('fb', 'flow background', 'range', [0.02, 1, 0.01], 0.07, v => { opt.flow = v; apply(); }),
   knob('tl', 'timelapse', 'range', [0.3, 5, 0.1], 1.4, v => { opt.tl = v; }),
   knob('fps', 'fps', 'toggle', 0, false, v => { fps.hidden = !v; })

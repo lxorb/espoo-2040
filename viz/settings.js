@@ -1,6 +1,6 @@
 const CODE = 'ArrowUp ArrowUp ArrowDown ArrowDown ArrowLeft ArrowRight ArrowLeft ArrowRight b a';
 const PALETTE = ['#ffffff', '#f6d32d', '#ff7a45', '#4fd1ff', '#ff5fc8', '#8cff6b'];
-const KEY = 'espoo.settings';
+const KEY = 'espoo.settings.2';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
 const save = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch {} };
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
@@ -29,7 +29,7 @@ const CONTROLS = {
 export function settings(table) {
   const val = { ...Object.fromEntries(table.map(t => [t.k, t.d])), ...load() }, show = {};
   const set = (t, v) => { val[t.k] = v; t.f(v); show[t.k](v); };
-  const panel = make('aside', { id: 'cfg' }, ...table.map(t => {
+  const panel = make('aside', { id: 'cfg' }, make('button', { id: 'shut', textContent: 'x', onclick: () => panel.classList.remove('open') }), ...table.map(t => {
     const [nodes, upd] = CONTROLS[t.t](t, v => { set(t, v); save(val); });
     show[t.k] = upd;
     return make('div', { className: 'row' }, make('span', { textContent: t.l }), ...nodes);
@@ -39,8 +39,6 @@ export function settings(table) {
   let keys = [];
   addEventListener('keydown', e => {
     keys = [...keys, e.key.length === 1 ? e.key.toLowerCase() : e.key].slice(-10);
-    if (keys.join(' ') === CODE) { panel.classList.toggle('open'); keys = []; }
-    if (e.key === 'Escape') panel.classList.remove('open');
+    if (keys.join(' ') === CODE) { panel.classList.add('open'); keys = []; }
   });
-  addEventListener('pointerdown', e => { if (!panel.contains(e.target)) panel.classList.remove('open'); });
 }
