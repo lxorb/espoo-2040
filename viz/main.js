@@ -6,6 +6,7 @@ import { settings } from './settings.js';
 import { Near } from './near.js';
 import { Detail } from './detail.js';
 import { Net } from './traffic.js';
+import { present } from './present.js';
 import { Cars } from './cars.js';
 
 const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Soukka', 603, -544], ['Kaitaa', 1797, 312], ['Finnoo', 2981, 656],
@@ -13,7 +14,7 @@ const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Sou
 const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 3: 7.5, 4: 10, 5: 12 }, TILT = Math.tan(15 * Math.PI / 180);
 const q = new URLSearchParams(location.search);
 const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 0.47, dz: 1 }, flowOpt = {};
-const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 3, split: false, pair: [], shown: [], cut: 0.5 };
+const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 3, split: q.has('cut'), pair: [], shown: [], cut: +(q.get('cut') || 0.5) };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -196,8 +197,7 @@ play.onclick = () => { state.play = !state.play; if (state.play && state.f >= +y
 addEventListener('keydown', e => {
   if (e.key.toLowerCase() === 's') toggleSplit();
   if (e.key === ' ') play.onclick();
-  if (e.key === 'o') go(2422, 7758, 0.052, HOME);
-  if (e.key === 'O') go(7437, 7120, 0.157, HOME);
+  if (e.key === 'o' || e.key === 'O') go(...VIEWS[e.key]);
   const m = { 1: 'cars', 2: 'heat', 3: 'flow' }[e.key];
   if (m) { state.mode = m; apply(); }
 });
@@ -205,12 +205,13 @@ addEventListener('keydown', e => {
 const UI = ['modes', 'right', 'time', 'sl', 'sr', 'card'].map(id => document.getElementById(id));
 let tags = [], shown = [], espoo = null;
 const HOME = -Math.PI / 4, turn = () => controls.getAzimuthalAngle();
+const VIEWS = { hype: [...HYPE, 3, HOME], o: [2422, 7758, 0.052, HOME], O: [7437, 7120, 0.157, HOME], 0: [6379, 7698, 0.086, HOME] };
 const go = (x, y, z1 = Math.max(camera.zoom, 2.5), r1 = turn()) => { fly = { t: 0, a: controls.target.clone(), b: new THREE.Vector3(x, 0, -y), z0: camera.zoom, z1, r0: turn(), r1 }; };
 function label(text, x, y, h, cls) {
   const el = document.createElement('div');
   el.className = `lab ${cls}`;
   el.textContent = text;
-  el[text === 'HYPE' ? 'onclick' : 'ondblclick'] = () => text === 'HYPE' ? go(x, y, 3, HOME) : go(x, y);
+  el[text === 'HYPE' ? 'onclick' : 'ondblclick'] = () => text === 'HYPE' ? go(...VIEWS.hype) : go(x, y);
   document.getElementById('labels').append(el);
   return { el, p: new THREE.Vector3(x, h, -y) };
 }
@@ -431,6 +432,11 @@ document.getElementById('fx').onclick = () => { fm.hidden = true; };
 fm.onclick = e => { if (e.target === fm) fm.hidden = true; };
 addEventListener('keydown', e => { if (e.key === 'Escape') fm.hidden = true; });
 
+present({
+  go: k => go(...VIEWS[k]),
+  set: o => { Object.assign(state, o); if ('who' in o || 'split' in o || 'pair' in o) loadRun(); if ('f' in o) paint(); apply(); },
+  slide: to => { const a = state.cut, t0 = performance.now(), step = () => { const t = Math.min((performance.now() - t0) / 1500, 1); state.cut = a + (to - a) * t * t * (3 - 2 * t); if (t < 1) requestAnimationFrame(step); }; step(); }
+});
 apply();
 const fps = Object.assign(document.createElement('div'), { id: 'fps' }), rgb = v => [1, 3, 5].map(i => parseInt(v.slice(i, i + 2), 16) / 255);
 document.body.append(fps);
