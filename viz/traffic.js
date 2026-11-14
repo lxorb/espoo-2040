@@ -55,7 +55,7 @@ const BAND_FRAG = (body) => `uniform float uYear, uDim, uSat; uniform sampler2D 
     float stripe = step(0.5, fract((vW.x + vW.y) / 8.0)), dash = step(0.5, fract(vU.x / 16.0)), e = abs(vS);
     vec3 c = vec3(0.0); float al = 1.0;
     ${body}
-    c = mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, uSat) * uDim * (0.55 + 0.45 * texture2D(uMask, (vec2(vW.x, -vW.y) - uBox.xy) * uBox.zw).r);
+    c = mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, uSat) * uDim * (0.3 + 0.7 * texture2D(uMask, (vec2(vW.x, -vW.y) - uBox.xy) * uBox.zw).r);
     gl_FragColor = vec4(c, al);
   }`;
 const SURFACE = BAND_FRAG(`float wear = 1.0 - vK.x, v = vn(vW * 0.35);
