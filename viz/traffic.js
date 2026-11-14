@@ -17,7 +17,7 @@ const pick = cdf => {
   return lo;
 };
 const tone = (c, r, a) => { const s = Math.min(Math.max((r - 0.3) / 0.6, 0), 1); c.setHSL(0.47 * s * Math.sqrt(s), 1, 0.5).multiplyScalar(a * (1.7 - 0.7 * s)); return 1.5 + 2 * (1 - s); };
-const STEP = 12, SHUT = 0.35, FINE = 10;
+const STEP = 12, SHUT = 0.35, GRID = 40, FINE = 10;
 const W = l => Math.max(l.lanes || 1, 1) * 3.3 + 1, len = g => lengths(g).at(-1);
 const full = (frag, extra = {}) => new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
   depthTest: false, depthWrite: false, transparent: true, ...extra,
@@ -59,7 +59,7 @@ const BAND_FRAG = (body, mark) => `uniform float uYear, uDim, uSat, uOy, uT, uPx
   float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f *= f * (3.0 - 2.0 * f); return mix(mix(hs(i), hs(i + vec2(1.0, 0.0)), f.x), mix(hs(i + vec2(0.0, 1.0)), hs(i + 1.0), f.x), f.y); }
   void main() {
     clip();
-    float z = exp2(ceil(log2(max(1.0, 1.25 * uPx)))), stripe = step(0.5, fract((vW.x + vW.y) / (8.0 * z))), e = abs(vS);
+    float z = exp2(ceil(log2(max(1.0, 1.25 * uPx)))), stripe = step(0.5, fract((vW.x + vW.y) / (8.0 * z))), dash = step(0.5, fract(vU.x / (16.0 * z))), e = abs(vS);
     vec3 c = vec3(0.0); float al = 1.0;
     ${body}
     c = ${mark ? 'c' : 'mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, uSat) * uDim'};
@@ -78,14 +78,18 @@ const PROJECT = BAND_FRAG(`float st = vK.z, age = uYear - vK.y, f = vU.x / max(v
     bool done = age >= 0.0 && d > 0.0;
     float glow = done ? exp(-d * 14.0) * step(p, 1.1) : 0.0;
     c = uMark;
-    if (!done) { if (st > 1.5 && st < 2.5 && e < 0.7) al = 0.15; else if (stripe < 0.5) discard; }
+    if (st > 3.5) { if (age < 0.0 && (st > 4.5 || dash < 0.5)) discard; }
+    else if (!done) { if (st > 1.5 && st < 2.5 && e < 0.7) al = 0.15; else if (stripe < 0.5) discard; }
     else if (st < 0.5) discard;
     else if (e < 0.8 && glow < 0.05) { if (st < 1.5 || st > 2.5) discard; c = vec3(0.2, 0.21, 0.22); }
     c = mix(c, uMark, glow);`, true);
+const KIND = { road: 1, lanes: 1, junction: 0, buslane: 3, rail: 0, bus: 0, toll: 0, parking: 0, pnr: 0 };
+const mid = pts => [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
 
 export class Net {
   constructor(scene, net, renderer, camera, cat) {
-    Object.assign(this, { scene, renderer, camera, base: net.links, cat: new Map((cat || []).map(p => [p.id, p])) });
+    Object.assign(this, { scene, renderer, camera, base: net.links, nodes: net.nodes, cat: new Map((cat || []).map(p => [p.id, p])), routes: new Map(), out: [] });
+    net.links.forEach((l, i) => (this.out[l.a] ||= []).push(i));
     this.byOsm = new Map();
     net.links.forEach((l, i) => this.byOsm.set(l.osm, [...(this.byOsm.get(l.osm) || []), i]));
     const twin = new Set(net.links.map(l => l.a + ',' + l.b));
@@ -119,12 +123,14 @@ export class Net {
     this.shift = full('uniform sampler2D tMap; uniform vec2 uOff; varying vec2 vU; void main() { vec2 u = vU - uOff; gl_FragColor = u == clamp(u, 0.0, 1.0) ? texture2D(tMap, u) : vec4(0.0); }', { blending: THREE.NoBlending, transparent: false });
     this.shift.material.uniforms = { tMap: { value: null }, uOff: { value: new THREE.Vector2() } };
     this.shiftScene = new THREE.Scene().add(this.shift);
-    Object.assign(this, { vp: new THREE.Matrix4(), vp0: new THREE.Matrix4(), o: new THREE.Vector3(), o2: new THREE.Vector3(), rest: new THREE.Vector2(), size: new THREE.Vector2(), col: new THREE.Color(), gen: 0, kick: 0, on: false, cut: null, opt: {} });
+    Object.assign(this, { vp: new THREE.Matrix4(), vp0: new THREE.Matrix4(), o: new THREE.Vector3(), o2: new THREE.Vector3(), rest: new THREE.Vector2(), size: new THREE.Vector2(), col: new THREE.Color(), gen: 0, kick: 0, on: false, share: 1, cut: null, pl: [], opt: { particles: 1, trail: 1, radius: 1, heat: 1, sources: false, abs: false } });
     this.postCam = new THREE.Camera();
     this.N = 60000;
     this.M = 30000;
     this.px = new Float32Array(this.N); this.py = new Float32Array(this.N); this.age = new Float32Array(this.N);
-    this.T = { q: new Array(this.M), s: new Float32Array(this.M), d: new Float32Array(this.M), age: new Float32Array(this.M) };
+    const pool = n => ({ q: new Array(n), s: new Float32Array(n), d: new Float32Array(n), age: new Float32Array(n), lat: new Float32Array(n) });
+    this.T = pool(this.M);
+    this.S = pool(this.N);
     this.paths = []; this.tn = 0;
     const seg = n => {
       const g = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1));
@@ -197,10 +203,19 @@ export class Net {
     return out;
   }
 
+  blocked(x, y) {
+    const s = this.grid?.get(Math.floor(x / GRID) * 65536 + Math.floor(y / GRID));
+    return !!s && s.some(([ax, ay, bx, by, w]) => {
+      const dx = bx - ax, dy = by - ay, t = Math.min(Math.max(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1), 0), 1);
+      return Math.hypot(ax + dx * t - x, ay + dy * t - y) < w;
+    });
+  }
+
   use(run) {
     if (this.group) { this.scene.remove(this.group); this.heatScene.remove(this.heat); }
     if (!this.cache.has(run)) this.cache.set(run, this.build(run));
     Object.assign(this, this.cache.get(run), { run });
+    this.S.q = this.S.q.map(q => q && q.i < this.base.length ? this.lp(q.i) : null);
     this.scene.add(this.group);
     this.heatScene.add(this.heat);
     if (!this.scale) this.calib(run);
@@ -214,7 +229,10 @@ export class Net {
       if (!seen.has(id)) { seen.add(id); ext.push(l); }
     }));
     const L = this.base.concat(ext), n = L.length, F = () => new Float32Array(n);
-    const c = { links: L, id: this.cache.size, ff: Float32Array.from(L, l => l.len / (l.kmh / 3.6)), speed: F(), flow: F(), loss: F(), ratio: F(), cap: F().fill(1), cond: F(), cum: L.map(l => lengths(l.geom)), pl: [], opens: new Set(), tags: [] };
+    const c = { links: L, id: this.cache.size, ff: Float32Array.from(L, l => l.len / (l.kmh / 3.6)), speed: F(), flow: F(), loss: F(), ratio: F(), cap: F().fill(1), cond: F(), cum: L.map(l => lengths(l.geom)), pl: [], paths: [], opens: new Set(), tags: [] };
+    c.adj = [];
+    L.forEach((l, i) => (c.adj[l.a] ||= []).push(i));
+    c.oflow = new Float32Array(c.adj.length + L.length); c.iflow = new Float32Array(c.adj.length + L.length);
     c.box = L.map(l => { const xs = l.geom.map(p => p[0]), ys = l.geom.map(p => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; });
     const P = [], link = [];
     L.forEach((l, i) => {
@@ -236,29 +254,84 @@ export class Net {
     }));
     c.heat.frustumCulled = false;
     c.dots = q.attributes.aI;
-    const lines = [], at = l => this.base[l].geom;
+    const lines = [], stops = [], at = l => this.base[l].geom, half = g => along(g, lengths(g), len(g) / 2, [0, 0, 0, 0]);
     for (const { p, a: k, b } of this.projects(run)) {
       c.opens.add(b);
       const key = st => [k, b, st], ways = [], hl = [];
       const link = (osm, st) => osm.forEach(o => (this.byOsm.get(o) || []).forEach(i => { ways.push(at(i)); hl.push(i); lines.push({ geom: at(i), w: W(this.base[i]), k: key(st), shift: this.two[i] }); }));
       for (const m of p.works || []) link(m.osm, 0);
-      for (const m of p.mod || []) link(m.osm, p.kind === 'junction' ? 0 : 1);
-      for (const m of p.new || []) { const l = { geom: m.geom, w: (m.oneway ? 1 : 2) * Math.max(m.lanes || 1, 1) * 3.3 + 2, k: key(2) }; ways.push(m.geom); hl.push(l); lines.push(l); }
-      const g = ways.reduce((m, g) => len(g) > len(m) ? g : m, ways[0]);
-      if (g) { const [x, y] = along(g, lengths(g), len(g) / 2, [0, 0, 0, 0]); c.tags.push({ x, y, a: k, b, cost: p.cost || 0, what: p.kind, hl }); }
+      for (const m of p.mod || []) link(m.osm, KIND[p.kind]);
+      for (const m of p.new || []) { ways.push(m.geom); hl.push({ geom: m.geom, w: (m.oneway ? 1 : 2) * Math.max(m.lanes || 1, 1) * 3.3 + 2 }); lines.push({ geom: m.geom, w: (m.oneway ? 1 : 2) * Math.max(m.lanes || 1, 1) * 3.3 + 2, k: key(2) }); }
+      const route = (p.pt || []).map((t, i) => { const g = this.line(p, i, t.stops); hl.push({ geom: g, w: 3 }); lines.push({ geom: g, w: 3, k: key(4) }); stops.push(...t.stops.map(s => [...s, b])); return g; })[0];
+      const kind = p.toll ? 'toll' : p.park ? 'park' : p.pnr ? 'pnr' : p.pt ? 'pt' : 'road', tag = (x, y) => c.tags.push({ x, y, kind, a: k, b, cost: p.cost || 0, what: p.kind, build: !!(p.works || p.new), hl });
+      if (p.toll) for (const o of p.toll.osm) for (const i of this.byOsm.get(o) || []) {
+        hl.push(i);
+        const g = at(i), [x, y2] = mid(g), [ax, ay] = g[0], [bx, by] = g[g.length - 1], d = Math.hypot(bx - ax, by - ay) || 1, h = W(this.base[i]) * (this.two[i] ? 1 : 0.5) + 2;
+        lines.push({ geom: [[x - (by - ay) / d * h, y2 + (bx - ax) / d * h], [x + (by - ay) / d * h, y2 - (bx - ax) / d * h]], w: 2.5, k: key(5) });
+        if (!c.tags.some(s => s.kind === 'toll' && Math.hypot(s.x - x, s.y - y2) < 600)) tag(x, y2);
+      }
+      else if (p.park) tag(...mid(p.park.area));
+      else if (p.pnr) tag(...p.pnr.at);
+      else {
+        const g = p.pt && !p.new ? route : ways.reduce((m, g) => len(g) > len(m) ? g : m, ways[0] || route);
+        if (g) tag(...half(g));
+      }
     }
     c.tags.sort((u, v) => v.cost - u.cost);
     const works = new THREE.Mesh(band(lines, 0.55), new THREE.ShaderMaterial({
       uniforms: this.uni, vertexShader: BAND_VERT, fragmentShader: PROJECT, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
-    works.renderOrder = 3;
-    works.frustumCulled = false;
-    c.group = works;
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.Float32BufferAttribute(stops.flatMap(([x, y]) => [x, 1.2, -y]), 3));
+    sg.setAttribute('aK', new THREE.Float32BufferAttribute(stops.map(s => s[2]), 1));
+    const dots = new THREE.Points(sg, new THREE.ShaderMaterial({ uniforms: this.uni, transparent: true, depthTest: false,
+      vertexShader: 'attribute float aK; uniform float uYear; varying float vA; void main() { vA = step(aK, uYear); gl_PointSize = 6.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: CLIP + ' uniform vec3 uMark; varying float vA; void main() { clip(); float r = length(gl_PointCoord - 0.5); if (vA < 0.5 || r > 0.5) discard; gl_FragColor = vec4(r > 0.36 ? vec3(0.08) : uMark, 1.0); }' }));
+    works.renderOrder = 3; dots.renderOrder = 4;
+    c.group = new THREE.Group().add(works, dots);
+    for (const m of [works, dots]) m.frustumCulled = false;
     return c;
+  }
+
+  line(p, q, stops) {
+    const id = p.id + q;
+    if (this.routes.has(id)) return this.routes.get(id);
+    let g = new THREE.SplineCurve(stops.map(s => new THREE.Vector2(...s))).getPoints(stops.length * 12).map(v => [v.x, v.y]);
+    if (/bus/.test(p.kind)) {
+      const near = ([x, y]) => this.nodes.reduce((b, [nx, ny], i) => { const d = (nx - x) ** 2 + (ny - y) ** 2; return d < b[0] ? [d, i] : b; }, [Infinity, 0])[1], ns = stops.map(near);
+      g = [stops[0]];
+      for (let s = 1; s < ns.length; s++) { for (const i of this.walk(ns[s - 1], ns[s])) g.push(...this.base[i].geom); g.push(stops[s]); }
+      g = g.filter((v, i) => !i || v[0] !== g[i - 1][0] || v[1] !== g[i - 1][1]);
+    }
+    this.routes.set(id, g);
+    return g;
+  }
+
+  walk(a, b) {
+    const D = new Float64Array(this.nodes.length).fill(Infinity), via = new Int32Array(this.nodes.length).fill(-1), h = [[0, a]];
+    D[a] = 0;
+    while (h.length) {
+      const [d, u] = h[0], last = h.pop();
+      if (h.length) {
+        h[0] = last;
+        for (let i = 0; ;) { let m = i; for (const c of [2 * i + 1, 2 * i + 2]) if (c < h.length && h[c][0] < h[m][0]) m = c; if (m === i) break; [h[i], h[m]] = [h[m], h[i]]; i = m; }
+      }
+      if (u === b) break;
+      if (d > D[u]) continue;
+      for (const i of this.out[u] || []) {
+        const l = this.base[i], e = d + l.len;
+        if (e >= D[l.b]) continue;
+        D[l.b] = e; via[l.b] = i; h.push([e, l.b]);
+        for (let k = h.length - 1; k;) { const j = (k - 1) >> 1; if (h[j][0] <= e) break; [h[k], h[j]] = [h[j], h[k]]; k = j; }
+      }
+    }
+    const r = [];
+    for (let u = b; via[u] >= 0; u = this.base[via[u]].a) r.unshift(via[u]);
+    return r;
   }
 
   set(run, f) {
     if (run !== this.run) this.use(run);
-    const ys = run.years, a = Math.min(Math.floor(f), ys.length - 1), b = Math.min(a + 1, ys.length - 1), t = f - a, A = ys[a], B = ys[b];
+    const ys = run.years, a = Math.min(Math.floor(f), ys.length - 1), b = Math.min(a + 1, ys.length - 1), t = f - a, A = ys[a], B = ys[b], shut = [];
     for (let i = 0; i < this.links.length; i++) {
       const ff = this.ff[i], tm = (A.time[i] ?? ff) * (1 - t) + (B.time[i] ?? ff) * t, t0 = this.opt.free ? ff : Math.max(ys[0].time[i] ?? ff, ff);
       this.cap[i] = A.cap?.[i] ?? 1;
@@ -267,8 +340,29 @@ export class Net {
       this.flow[i] = this.cap[i] < SHUT ? 0 : (A.flow[i] ?? 0) * (1 - t) + (B.flow[i] ?? 0) * t;
       this.loss[i] = this.flow[i] * Math.max(tm - t0, 0) / 3600 * 7.5;
       this.cond[i] = (A.cond?.[i] ?? 1) * (1 - t) + (B.cond?.[i] ?? 1) * t;
+      if (this.cap[i] < SHUT) shut.push(i);
     }
     this.queue();
+    const O = this.oflow.fill(0), I = this.iflow.fill(0);
+    this.links.forEach((l, i) => { O[l.a] += this.flow[i]; I[l.b] += this.flow[i]; });
+    let src = 0;
+    this.srcCdf = Float64Array.from(O, (o, u) => src += Math.max(o - I[u], 0));
+    const sk = shut.join();
+    if (sk !== this.shutKey) {
+      this.shutKey = sk;
+      this.grid = new Map();
+      for (const i of shut) {
+        const g = this.links[i].geom, w = W(this.links[i]) / 2 + 3;
+        for (let k = 1; k < g.length; k++) {
+          const [ax, ay] = g[k - 1], [bx, by] = g[k];
+          for (let x = Math.floor((Math.min(ax, bx) - w) / GRID); x <= Math.floor((Math.max(ax, bx) + w) / GRID); x++)
+            for (let y = Math.floor((Math.min(ay, by) - w) / GRID); y <= Math.floor((Math.max(ay, by) + w) / GRID); y++) {
+              const key = x * 65536 + y;
+              this.grid.set(key, [...this.grid.get(key) || [], [ax, ay, bx, by, w]]);
+            }
+        }
+      }
+    }
     const yr = Math.floor(f + 1e-6);
     if (run === this.lastRun && yr > Math.floor(this.lastF + 1e-6) && f - this.lastF < 1.5 && this.opens.has(yr)) this.anim = { y: yr, t0: performance.now() };
     this.kick += run === this.lastRun ? Math.abs(f - this.lastF) : 1;
@@ -340,26 +434,41 @@ export class Net {
     return this.opt.abs ? this.speed[i] / 27.8 : this.ratio[i];
   }
 
-  stream(mesh, P, n, dt, px) {
+  hop(u, from = -1) {
+    const back = from < 0 ? -1 : this.links[from].a;
+    if (!(this.oflow[u] > 0) || from >= 0 && Math.random() * this.iflow[u] > this.oflow[u]) return -1;
+    const o = (this.adj[u] || []).filter(j => this.links[j].b !== back && this.flow[j] > 0);
+    let r = Math.random() * o.reduce((a, j) => a + this.flow[j], 0);
+    return o.find(j => (r -= this.flow[j]) < 0) ?? -1;
+  }
+
+  stream(mesh, P, n, dt, px, src) {
     const pos = mesh.geometry.attributes.aA.array, col = mesh.geometry.attributes.aC.array, e = [0, 0, 0, 0], c = this.col, k = px * 0.45 * dt, rf = Math.min(Math.max((FINE - px) / 3, 0), 1);
+    let born = src && this.srcCdf.at(-1) > 0 ? Math.ceil(n * dt / 12) : 0;
     for (let p = 0; p < P.q.length; p++) {
-      const q = P.q[p], s0 = P.s[p], s = q ? s0 + P.d[p] * (q.i < 0 ? 7 : this.speed[q.i]) * k : 0;
+      let q = P.q[p], s0 = P.s[p];
       P.age[p] -= dt;
-      if (p >= n || !q || q.gen !== this.gen || P.age[p] < 0 || s < 0 || s > q.cum.at(-1)) {
+      let s = q ? s0 + P.d[p] * (q.i < 0 ? 7 : this.speed[q.i]) * k : 0;
+      while (src && q && s > q.cum.at(-1)) { const j = this.hop(this.links[q.i].b, q.i); s -= q.cum.at(-1); s0 = 0; q = j < 0 ? null : this.lp(j); }
+      P.q[p] = q;
+      if (p >= n || !q || !src && q.gen !== this.gen || P.age[p] < 0 || s < 0 || s > q.cum.at(-1)) {
         pos.fill(0, p * 4, p * 4 + 4);
-        P.q[p] = p < n && this.paths.length ? this.paths[pick(this.pcdf)] : null;
-        if (!P.q[p]) continue;
-        P.s[p] = Math.random() * P.q[p].cum.at(-1);
-        P.d[p] = P.q[p].i < 0 && Math.random() < 0.5 ? -1 : 1;
-        P.age[p] = 3 + Math.random() * 5;
+        P.q[p] = null;
+        const j = p >= n ? -1 : src ? born-- > 0 ? this.hop(pick(this.srcCdf)) : -1 : this.paths.length ? -2 : -1;
+        if (j === -1) continue;
+        P.q[p] = q = j < 0 ? this.paths[pick(this.pcdf)] : this.lp(j);
+        P.s[p] = src ? 0 : Math.random() * q.cum[q.cum.length - 1];
+        P.d[p] = !src && q.i < 0 && Math.random() < 0.5 ? -1 : 1;
+        P.age[p] = src ? 120 : 3 + Math.random() * 5;
+        P.lat[p] = Math.random() - 0.5;
         continue;
       }
-      const off = P.d[p] * (q.i < 0 ? Math.max(2, px * 1.2) : q.off * Math.max(3.3, px * 1.5));
+      const off = src ? ((q.off ? 0.5 : 0) + P.lat[p]) * Math.max(Math.max(this.links[q.i].lanes || 1, 1) * 3.3, px * 3) : P.d[p] * (q.i < 0 ? Math.max(2, px * 1.2) : q.off * Math.max(3.3, px * 1.5));
       along(q.g, q.cum, s0, e);
       pos.set([e[0] + e[3] * off, e[1] - e[2] * off], p * 4);
       along(q.g, q.cum, s, e);
       pos.set([e[0] + e[3] * off, e[1] - e[2] * off], p * 4 + 2);
-      const w = tone(c, q.i < 0 ? 1 : this.rel(q.i), (q.i < 0 ? 0.9 * rf : 0.55) * Math.min(Math.abs(s - s0) / px, 1));
+      const w = tone(c, q.i < 0 ? 1 : this.rel(q.i), (q.i < 0 ? 0.9 * rf : src ? 0.35 : 0.55) * Math.min(Math.abs(s - s0) / px, 1));
       P.s[p] = s;
       col.set([c.r, c.g, c.b, w], p * 4);
     }
@@ -421,7 +530,16 @@ export class Net {
       r.setRenderTarget(this.heatRT); r.setClearColor(0, 0); r.clear();
       r.render(this.heatScene, this.camera);
     }
-    if (mode === 'flow') {
+    const src = this.opt.sources;
+    this.thin.visible = !src;
+    if (src && !this.srcOn) this.S.q.fill(null);
+    if (mode === 'flow' && src) {
+      this.pan(size);
+      r.setRenderTarget(this.flowRT);
+      this.stream(this.lines, this.S, Math.floor(this.N * this.opt.particles), dt, px, true);
+    }
+    this.srcOn = src;
+    if (mode === 'flow' && !src) {
       const [x0, y0, x1, y1] = rect, w = x1 - x0, h = y1 - y0, span = Math.max(w, h), F = this.F;
       this.view = rect;
       if (this.dirty || !F || x0 < F.r[0] || y0 < F.r[1] || x1 > F.r[2] || y1 > F.r[3] || span > F.span * 1.33 || span < F.span * 0.75) {
@@ -434,7 +552,9 @@ export class Net {
       this.pan(size);
       r.setRenderTarget(this.flowRT);
       this.advect(dt, px);
-      this.stream(this.thin, this.T, this.tn, dt, px);
+      this.stream(this.thin, this.T, this.tn, dt, px, false);
+    }
+    if (mode === 'flow') {
       this.fade.material.uniforms.uA.value = 1 - Math.exp(-0.25 * dt / this.opt.trail - Math.min(2 * this.kick, 3));
       this.kick = 0;
       r.autoClear = false;
