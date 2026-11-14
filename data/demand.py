@@ -164,31 +164,29 @@ def transit(zxy, lo, hi):
     sxy = np.array([v[1:] for v in hub.values()])
     S, ix = len(hub), {sg: len(hub) + i for i, sg in enumerate(ride)}
     rt = {sg: max(np.median(v), 1.0) for sg, v in ride.items()}
-    e = [(ix[a], ix[b], rt[b], 0.0) for a, b in cont]
+    e = [(ix[a], ix[b], rt[b]) for a, b in cont]
     for sg, n in ix.items():
-        e.append((n, sg[1], 0.0, 0.0))
+        e.append((n, sg[1], 0.0))
         if deps[sg]:
-            e.append((sg[0], n, rt[sg], min(3600.0 / deps[sg], 1800.0)))
+            e.append((sg[0], n, rt[sg] + min(3600.0 / deps[sg], 1800.0)))
     t = STRtree(points(sxy))
     i, j = t.query(points(sxy), predicate="dwithin", distance=300)
-    e += [(a, b, np.hypot(*(sxy[a] - sxy[b])) / WALK, 0.0) for a, b in zip(i, j) if a != b]
+    e += [(a, b, np.hypot(*(sxy[a] - sxy[b])) / WALK) for a, b in zip(i, j) if a != b]
     Z, base = len(zxy), S + len(ix)
     for k, c in enumerate(zxy):
         near = t.query(Point(c), predicate="dwithin", distance=1000)
         for s in near if len(near) >= 3 else np.argsort(np.hypot(*(sxy - c).T))[:3]:
             w = 60 + np.hypot(*(sxy[s] - c)) / WALK
-            e += [(base + k, s, w, 0.0), (s, base + Z + k, w, 0.0)]
-    a, b, w, h = map(np.array, zip(*e))
-    walk = pdist(zxy, zxy) / WALK
-    pt, half = (np.minimum(dijkstra(coo_matrix((w + f * h, (a, b)), shape=(base + 2 * Z,) * 2).tocsr(), indices=base + np.arange(Z))[:, base + Z:], walk) / 60 for f in (1, 0.5))
-    return pt, np.clip(2 * (pt - half), 0, pt)
+            e += [(base + k, s, w), (s, base + Z + k, w)]
+    a, b, w = map(np.array, zip(*e))
+    return np.minimum(dijkstra(coo_matrix((w, (a, b)), shape=(base + 2 * Z,) * 2).tocsr(), indices=base + np.arange(Z))[:, base + Z:], pdist(zxy, zxy) / WALK) / 60
 
 
 @njit(cache=True)
-def tree(tt, pred, ip, ix, ed, lens, zn, dem):
-    flow, dist = np.zeros(len(lens)), np.zeros((len(zn), len(zn)))
+def tree(tt, pred, ip, ix, ed, nl, zn, dem):
+    flow = np.zeros(nl)
     for o in range(len(zn)):
-        order, load, dd, eo = np.argsort(tt[o]), np.zeros(tt.shape[1]), np.zeros(tt.shape[1]), np.full(tt.shape[1], -1)
+        order, load, eo = np.argsort(tt[o]), np.zeros(tt.shape[1]), np.full(tt.shape[1], -1)
         for d in range(len(zn)):
             load[zn[d]] += dem[o, d]
         for n in order:
@@ -197,13 +195,11 @@ def tree(tt, pred, ip, ix, ed, lens, zn, dem):
                 for k in range(ip[p], ip[p + 1]):
                     if ix[k] == n:
                         eo[n] = ed[k]
-                dd[n] = dd[p] + lens[eo[n]]
         for n in order[::-1]:
             if eo[n] >= 0:
                 flow[eo[n]] += load[n]
                 load[pred[o, n]] += load[n]
-        dist[o] = dd[zn]
-    return flow, dist
+    return flow
 
 
 @njit(cache=True)
@@ -243,14 +239,14 @@ def main():
     ln = np.unique(np.r_[a, b][np.tile([l["cls"] not in ("motorway", "trunk", "ramp") for l in L], 2)])
     zn = ln[np.argmin(pdist(zxy, nodes[ln]), axis=1)]
     zn[ext] = [gt["node"] for gt in gates]
-    pt, wait = np.minimum(transit(zxy, zxy.min(0) - 3000, zxy.max(0) + 3000), 300)
+    pt = np.minimum(transit(zxy, zxy.min(0) - 3000, zxy.max(0) + 3000), 300)
     head = np.degrees(np.arctan2(*(nodes[b] - nodes[a]).T)) % 360
     st = STRtree(lines := [LineString(l["geom"]) for l in L])
     for c in cs:
         p = Point(c["x"], c["y"])
         near = [i for i in st.query(p, predicate="dwithin", distance=300) if L[i]["ref"] == c["_r"] and abs((head[i] - c["bearing"] + 180) % 360 - 180) < 60]
         c["_l"] = min(near, key=lambda i: lines[i].distance(p)) if near else -1
-    gio, ip, ie = np.zeros((4, len(gates))), ~ext, ext
+    gio, ip = np.zeros((4, len(gates))), ~ext
     for k, gt in enumerate(gates):
         gx = nodes[gt["node"]]
         refs = {l["ref"] for l in L if gt["node"] in (l["a"], l["b"]) and l["ref"]}
@@ -260,11 +256,10 @@ def main():
             gio[[1 - inb, 3 - inb], k] += c["veh"] * (1 - c["heavy"]), c["veh"] * c["heavy"]
         if not cand:
             gio[:, k] = np.array([0.5, 0.5, 0.02, 0.02]) * max(l["cap"] for l in L if gt["node"] in (l["a"], l["b"]))
-        print(f"gate {gt['name']}: cars in/out, heavy in/out {gio[:, k].round().tolist()} from {cand[0]['name'] if cand else 'capacity'}")
     li, oc, oh = (np.array(v) for v in zip(*[(c["_l"], c["veh"] * (1 - c["heavy"]), c["veh"] * c["heavy"]) for c in cs if c["_l"] >= 0]))
     far = ~ext[:, None] | ~ext[None] | (pdist(zxy, zxy) > 10000)
     np.fill_diagonal(far, False)
-    rate, inner, act = DAILY * phf, ~ext[:, None] & ~ext[None], pop + jobs
+    rate, act = DAILY * phf, pop + jobs
     areas, used, br = [], set(), [round(BOOM[0] ** (1 / YEARS) - 1, 4), round(BOOM[1] ** (1 / YEARS) - 1, 4)]
     for name, lon, lat in AREAS:
         d = np.where(ip, np.hypot(*(zxy - local(lon, lat)).T), np.inf)
@@ -272,9 +267,7 @@ def main():
         zi = order[:max(np.sum(d[order] < AREA_R), np.searchsorted(np.cumsum(pop[order] + jobs[order]), AREA_ACT) + 1)]
         used |= set(zi)
         areas.append({"name": name, "zones": zi, "pop": br, "jobs": br})
-        print(f"area {name}: {len(zi)} zones, pop {pop[zi].sum():.0f}, jobs {jobs[zi].sum():.0f}")
-    bp = bj = BASE
-    (OUT / "zones.json").write_text(json.dumps({"zones": zs, "growth": {"pop": round(bp, 4), "jobs": round(bj, 4), "areas": areas}}, ensure_ascii=False))
+    (OUT / "zones.json").write_text(json.dumps({"zones": zs, "growth": {"pop": BASE, "jobs": BASE, "areas": areas}}, ensure_ascii=False))
     (OUT / "counts.json").write_text(json.dumps([{k: v for k, v in c.items() if k[0] != "_"} for c in cs if region.contains(Point(c["x"], c["y"]))], ensure_ascii=False))
     tl = lens / kmh * 3.6
     for _ in range(2):
@@ -285,18 +278,16 @@ def main():
         eix = eid.data.astype(np.int64) - 1
         tt, pred = dijkstra(g, indices=zn, return_predecessors=True)
         tc = np.nan_to_num(tt[:, zn] / 60, posinf=999) + TERM
-        run = lambda dem: tree(tt, pred, eid.indptr, eid.indices, eix, lens, zn, dem)
-        dist = run(np.zeros((len(zs), len(zs))))[1]
+        run = lambda dem: tree(tt, pred, eid.indptr, eid.indices, eix, len(L), zn, dem)
         Ft = np.exp(-0.05 * tc) * far
 
         def trucks(k):
             P, A = k * fz, k * fz
             P[ext], A[ext] = gio[2], gio[3]
             H = furness(P, A * P.sum() / A.sum(), Ft)
-            return np.sqrt(((run(H)[0][li] - oh) ** 2).mean()), k, H
+            return np.sqrt(((run(H)[li] - oh) ** 2).mean()), k, H
 
-        herr, hk, H = min((trucks(k) for k in np.linspace(0.002, 0.06, 30)), key=lambda r: r[0])
-        print(f"trucks {hk:.4f} veh/h per freight job, total {H.sum():.0f} veh/h, RMSE {herr:.0f}, model/obs {run(H)[0][li].sum() / oh.sum():.2f}")
+        H = min((trucks(k) for k in np.linspace(0.002, 0.06, 30)), key=lambda r: r[0])[2]
         pc = 1 / (1 + np.exp(SP.THETA * (tc + SP.ASC_CAR - pt)))
 
         def model(beta, h):
@@ -306,25 +297,22 @@ def main():
             A[ext] = gio[1] * OCC / np.maximum((F[:, ext] * pc[:, ext] * act[:, None]).sum(0) / np.maximum((F[:, ext] * act[:, None]).sum(0), 1e-9), 0.05)
             A[~ext] *= (P.sum() - A[ext].sum()) / A[~ext].sum()
             T = furness(P, A, F)
-            f = run(T * pc / OCC)[0][li]
-            return np.sqrt(((f - oc) ** 2).mean()), beta, h, T
+            return np.sqrt(((run(T * pc / OCC)[li] - oc) ** 2).mean()), beta, h, T
 
         err, beta, h, T = min((model(bt, h) for bt in (0.03, 0.05, 0.07, 0.1, 0.13, 0.17, 0.22, 0.3) for h in (0.1, 0.25, 0.4, 0.55, 0.7, 0.85)), key=lambda r: r[0])
         ul, uix = np.unique(li, return_inverse=True)
         cid = np.full(len(L), -1)
         cid[ul] = np.arange(len(ul))
         X = cross(tt, pred, eid.indptr, eid.indices, eix, zn, cid, len(ul)).reshape(len(ul), -1).astype(np.float32)
-        obs, hv = np.bincount(uix, oc) / np.bincount(uix), run(H)[0][ul]
+        obs, hv = np.bincount(uix, oc) / np.bincount(uix), run(H)[ul]
         n = np.maximum(X.sum(0), 1)
         for _ in range(ODME):
             r = np.log(np.maximum(obs - hv, 50) / np.maximum(X @ (T * pc / OCC).ravel(), 50))
             T *= np.exp(0.5 * (r @ X) / n).reshape(T.shape)
-        f = run(T * pc / OCC)[0][li]
+        f = run(T * pc / OCC)[li]
         geh = np.sqrt(2 * (f - oc) ** 2 / (f + oc))
-        print(f"peak hour factor {phf:.3f}, rate {rate:.3f} trips/resident/h, beta {beta}/min, home-based share {h}, cars at {len(li)} count links: prior RMSE {err:.0f}, after ODME RMSE {np.sqrt(((f - oc) ** 2).mean()):.0f} veh/h, GEH<5 {np.mean(geh < 5):.0%}, GEH<10 {np.mean(geh < 10):.0%}, model/obs {f.sum() / oc.sum():.2f}")
-        print(f"zones {ip.sum()} + {ie.sum()} ext, pop {pop.sum():.0f}, jobs {jobs.sum():.0f}, AM peak person trips {T.sum():.0f}: internal {T[ip][:, ip].sum():.0f}, out {T[ip][:, ie].sum():.0f}, in {T[ie][:, ip].sum():.0f}, through {T[ie][:, ie].sum():.0f}")
-        print(f"mean car-path length {(T * dist).sum() / T.sum() / 1000:.1f} km, internal {(T * dist)[inner].sum() / T[inner].sum() / 1000:.1f} km; car {(T * pc).sum() / T.sum():.0%}, internal car {(T * pc)[inner].sum() / T[inner].sum():.0%}")
-        for name, m in (("od", T), ("truck", H), ("pt", np.stack([pt, wait]))):
+        print(f"beta {beta}, home-based {h}, RMSE {err:.0f} to {np.sqrt(((f - oc) ** 2).mean()):.0f}, GEH<10 {np.mean(geh < 10):.0%}, model/obs {f.sum() / oc.sum():.2f}")
+        for name, m in (("od", T), ("truck", H), ("pt", pt)):
             np.save(OUT / f"{name}.npy", m.astype(np.float32))
         tl = City(0, years=1, runout=0).step()["time"][:len(L)]
 

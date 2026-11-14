@@ -40,10 +40,10 @@ class City:
         self.pop0, self.jobs0 = (np.array([z[k] for z in zs], float) for k in ("pop", "jobs"))
         ix = {z["id"]: i for i, z in enumerate(zs)}
         gr = zj["growth"]
-        self.areas = [(a["name"], [ix[z] for z in a["zones"]]) for a in gr.get("areas", [])]
+        self.areas = [(a["name"], [ix[z] for z in a["zones"]]) for a in gr["areas"]]
         self.rp, self.rj, self.mp, self.mj = (np.full(len(zs), float(gr[k])) for k in ("pop", "jobs", "pop", "jobs"))
         boom = rng.choice(len(self.areas), rng.integers(P.BOOMS[0], P.BOOMS[1] + 1), replace=False)
-        for i, ar in enumerate(gr.get("areas", [])):
+        for i, ar in enumerate(gr["areas"]):
             m = self.areas[i][1]
             for r, med, k in ((self.rp, self.mp, "pop"), (self.rj, self.mj, "jobs")):
                 r[m] = rng.uniform(*ar[k]) if i in boom else r[m]
@@ -69,7 +69,7 @@ class City:
         self.foot = {k: np.isin(s["osm"], [o for e in p.get("mod", []) + p.get("works", []) for o in e["osm"]])
                      | (np.linalg.norm(xy[:, None] - np.array([e["geom"][i] for e in p.get("new", []) for i in (0, -1)] or [[1e9, 1e9]])[None], axis=2) < 300).any(1)
                      for k, p in self.cat.items()}
-        self.share = 1 / (1 + np.exp(P.THETA * (self.ff0 + P.ASC_CAR + P.TERMINAL - np.load(self.data / "pt.npy")[0])))
+        self.share = 1 / (1 + np.exp(P.THETA * (self.ff0 + P.ASC_CAR + P.TERMINAL - np.load(self.data / "pt.npy"))))
         if str(self.data) not in WARM:
             f = self.fork(False)
             f.step()
@@ -225,7 +225,7 @@ class City:
         cut[bad[inv]] *= P.REBUILD_CAP
         s["cond"][np.isin(inv, fix) | bad[inv]] = 1.0
         L, t0 = s["L"], self._t0()
-        r = equilibrium(self._graph(), t0[L], (s["cap"] * cut)[L], 0.0, T * self.share, qt, s.get("eq"), self.gap)
+        r = equilibrium(self._graph(), t0[L], (s["cap"] * cut)[L], T * self.share, qt, s.get("eq"), self.gap)
         s["eq"] = r["st"]
         s["heavy"], s["carv"], t = np.zeros(s["a"].size), np.zeros(s["a"].size), t0.copy()
         s["heavy"][L], s["carv"][L], t[L] = r["vt"], r["v"] - P.PCU * r["vt"], r["t"]
@@ -233,7 +233,7 @@ class City:
         delay = jam = float(((s["carv"] * P.OCC + s["heavy"]) * (t - s["len"] / 1000 / s["kmh"] * 60)).sum() / 60 * P.ANNUAL)
         rec = dict(year=P.Y0 + y, budget=s["cash"], spent=c0 - s["cash"], actions=acts, maint=s["maint"], delay=delay, jam=jam,
                    car=s["car"], flow=s["carv"] + s["heavy"], time=t * 60, cond=s["cond"].copy(), cap=s["cap"] * cut / s["cap0"], new=new,
-                   works=works, open=opened, events=ev, it=r["it"], gap=float(r["gap"]))
+                   works=works, open=opened, events=ev)
         s["year"] += 1
         s["cash"] += P.INCOME - s["due"].pop(s["year"], 0.0) - self._opex()
         self.recs.append(rec)
@@ -245,7 +245,7 @@ class City:
         cond = self._segs()[2]
         return dict(year=P.Y0 + s["year"], step=s["year"], budget=s["cash"], income=P.INCOME, opex=self._opex(),
                     committed=sum(s["due"].values()), car=s["car"], last=r.get("delay"), jam=r.get("jam"),
-                    delay=sum(r["delay"] for r in self.recs), pop=pop.tolist(), jobs=jobs.tolist(),
+                    delay=sum(r["delay"] for r in self.recs),
                     areas=[dict(name=n, pop=float(pop[m].sum()), jobs=float(jobs[m].sum()), pop0=float(self.pop0[m].sum()),
                                 jobs0=float(self.jobs0[m].sum())) for n, m in self.areas],
                     works=dict(s["prog"]), built=list(s["built"]), cond=[float(cond.mean()), float(np.sort(cond)[:max(cond.size // 10, 1)].mean())],

@@ -5,16 +5,14 @@ from . import params as P
 
 
 @njit(cache=True)
-def _tree(src, ptr, adj, head, cost, time, zm, nzm):
+def _tree(src, ptr, adj, head, cost, zm, nzm):
     n = ptr.size - 1
     dist = np.full(n, np.inf)
-    tt = np.zeros(n)
     pred = np.full(n, -1)
-    order = np.empty(n, np.int64)
     seen = np.zeros(n, np.bool_)
     hd = np.empty(adj.size + 1)
     hn = np.empty(adj.size + 1, np.int64)
-    hd[0], hn[0], s, k = 0.0, src, 1, 0
+    hd[0], hn[0], s = 0.0, src, 1
     dist[src] = 0.0
     while s:
         d, u = hd[0], hn[0]
@@ -35,8 +33,6 @@ def _tree(src, ptr, adj, head, cost, time, zm, nzm):
         if seen[u]:
             continue
         seen[u] = True
-        order[k] = u
-        k += 1
         nzm -= zm[u]
         if not nzm:
             break
@@ -45,7 +41,6 @@ def _tree(src, ptr, adj, head, cost, time, zm, nzm):
             nd = d + cost[e]
             if nd < dist[w]:
                 dist[w] = nd
-                tt[w] = tt[u] + time[e]
                 pred[w] = e
                 i = s
                 hd[i], hn[i] = nd, w
@@ -57,7 +52,7 @@ def _tree(src, ptr, adj, head, cost, time, zm, nzm):
                     hd[i], hd[m] = hd[m], hd[i]
                     hn[i], hn[m] = hn[m], hn[i]
                     i = m
-    return dist, tt, pred, order, k
+    return dist, pred
 
 
 @njit(cache=True)
@@ -77,7 +72,7 @@ def _sweep(ptr, adj, tail, head, znode, zm, cost, der, c0, c1, pw, T, qt, occ, p
     C, S = np.zeros(MP), np.zeros(MP)
     mark, stamp = np.zeros(v.size, np.int64), 0
     for o in range(Z):
-        dist, _, pred, _, _ = _tree(znode[o], ptr, adj, head, cost, cost, zm, zm.sum())
+        dist, pred = _tree(znode[o], ptr, adj, head, cost, zm, zm.sum())
         for d in range(Z):
             if T[o, d] <= 0 and qt[o, d] <= 0:
                 continue
@@ -198,7 +193,6 @@ def _remap(pool, pst, pln, ptr, idx, ce, ne):
 def remap(st, old, new):
     ce = np.zeros(new["M"].shape[1], np.int64)
     ce[new["M"].indices] = np.repeat(np.arange(new["M"].shape[0]), np.diff(new["M"].indptr))
-    st = dict(st, pst=st["pst"].copy(), pln=st["pln"].copy())
     st["pool"] = _remap(st["pool"], st["pst"], st["pln"], old["M"].indptr, old["M"].indices, ce, new["M"].shape[0])
     return st
 
@@ -238,10 +232,10 @@ def skim(g, cost):
     zm = np.zeros(g["ptr"].size - 1, np.int64)
     zm[g["znode"]] = 1
     c = g["M"] @ cost
-    return np.array([_tree(o, g["ptr"], g["adj"], g["head"], c, c, zm, zm.sum())[0][g["znode"]] for o in g["znode"]])
+    return np.array([_tree(o, g["ptr"], g["adj"], g["head"], c, zm, zm.sum())[0][g["znode"]] for o in g["znode"]])
 
 
-def equilibrium(g, t0, cap, toll, T, qt, st, gap):
+def equilibrium(g, t0, cap, T, qt, st, gap):
     Z, n, ne = T.shape[0], g["ptr"].size - 1, g["tail"].size
     zm = np.zeros(n, np.int64)
     zm[g["znode"]] = 1
@@ -251,13 +245,13 @@ def equilibrium(g, t0, cap, toll, T, qt, st, gap):
     st = dict(st, T=T, qt=qt)
     st["h"] = st["h"] * np.divide(T, st["T"], out=np.zeros_like(T), where=st["T"] > 0).reshape(-1, 1)
     st["ht"] = st["ht"] * np.divide(qt, st["qt"], out=np.zeros_like(qt), where=st["qt"] > 0).reshape(-1, 1)
-    c0, c1 = g["M"] @ (t0 + toll), g["M"] @ (t0 * P.BPR_A / cap ** P.BPR_B)
+    c0, c1 = g["M"] @ t0, g["M"] @ (t0 * P.BPR_A / cap ** P.BPR_B)
     for it in range(P.MAXIT):
         v, vt = np.zeros(ne), np.zeros(ne)
         st["pool"], top = _pack(st["pool"], st["pst"], st["pln"], st["h"], st["ht"], v, vt, P.OCC, P.PCU, st["pool"].size)
         x = g["MT"] @ v / cap
         t = t0 * (1 + P.BPR_A * x ** P.BPR_B)
-        gn, gd, top, full = _sweep(g["ptr"], g["adj"], g["tail"], g["head"], g["znode"], zm, g["M"] @ (t + toll), g["M"] @ (t0 * P.BPR_A * P.BPR_B * x ** (P.BPR_B - 1) / cap), c0, c1, int(P.BPR_B),
+        gn, gd, top, full = _sweep(g["ptr"], g["adj"], g["tail"], g["head"], g["znode"], zm, g["M"] @ t, g["M"] @ (t0 * P.BPR_A * P.BPR_B * x ** (P.BPR_B - 1) / cap), c0, c1, int(P.BPR_B),
                                    T, qt, P.OCC, P.PCU, st["pool"], top, st["pst"], st["pln"], st["h"], st["ht"], v, vt)
         if full or top > st["pool"].size // 2:
             st["pool"] = np.concatenate([st["pool"], np.zeros_like(st["pool"])])
@@ -265,4 +259,4 @@ def equilibrium(g, t0, cap, toll, T, qt, st, gap):
             break
     vo = g["MT"] @ v
     t = t0 * (1 + P.BPR_A * (vo / cap) ** P.BPR_B)
-    return dict(v=vo, vt=g["MT"] @ vt, t=t, it=it, gap=gn / max(gd, 1e-12), st=st)
+    return dict(v=vo, vt=g["MT"] @ vt, t=t, st=st)

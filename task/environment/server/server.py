@@ -98,8 +98,7 @@ def status(k):
 ))
 async def get_state():
     async with lock:
-        st = c.state()
-        return out({**{k: v for k, v in st.items() if k not in ("pop", "jobs")},
+        return out({**c.state(),
                     "years_left": max(YEARS - c.s["year"], 0), "runout_left": min(RUNOUT, YEARS + RUNOUT - c.s["year"]),
                     "startable": [k for k, ok in zip(c.menu, c.mask()) if ok], "forecasts_left": run["tries"],
                     "rules": RULES,
@@ -116,7 +115,7 @@ async def list_projects():
         rows, jam = [], {p["id"]: p["jam"] for p in c.catalogue()}
         for k in c.menu:
             p = c.cat[k]
-            osm = {o for e in p.get("mod", []) + p.get("works", []) + [p.get("toll") or {"osm": []}] for o in e["osm"]}
+            osm = {o for e in p.get("mod", []) + p.get("works", []) for o in e["osm"]}
             rows.append([k, p["name"], p["kind"], p["cost"], p["years"], p.get("opex", 0), status(k), jam.get(k, 0), sorted({road[o] for o in osm if o in road})[:6]])
         return out({"cols": ["id", "name", "kind", "cost", "years", "opex", "status", "jam", "roads"], "rows": rows})
 

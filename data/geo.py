@@ -10,13 +10,8 @@ ORIGIN = (370000.0, 6670000.0)
 BBOX = (24.40, 60.05, 25.00, 60.42)
 
 _fwd = Transformer.from_crs(4326, 3067, always_xy=True)
-_inv = Transformer.from_crs(3067, 4326, always_xy=True)
 
 
 def local(lon, lat):
     e, n = _fwd.transform(lon, lat)
     return e - ORIGIN[0], n - ORIGIN[1]
-
-
-def lonlat(x, y):
-    return _inv.transform(x + ORIGIN[0], y + ORIGIN[1])
