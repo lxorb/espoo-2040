@@ -11,7 +11,7 @@ import { Cars } from './cars.js';
 const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Soukka', 603, -544], ['Kaitaa', 1797, 312], ['Finnoo', 2981, 656],
   ['Matinkylä', 4518, 1343], ['Niittykumpu', 5884, 2487], ['Urheilupuisto', 6902, 2920], ['Tapiola', 8165, 2929], ['Aalto-yliopisto', 9295, 3944], ['Keilaniemi', 9590, 2952]];
 const RUNS = ['agent', 'rl'];
-const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 5: 12 }, TILT = Math.tan(15 * Math.PI / 180);
+const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 3: 7.5, 4: 10, 5: 12 }, TILT = Math.tan(15 * Math.PI / 180);
 const q = new URLSearchParams(location.search);
 const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 1.4, dz: 1, cars: 20000, fps: false }, flowOpt = { particles: 1, trail: 1, radius: 1, heat: 1, sources: false, abs: false };
 const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 1, split: false, pair: [], shown: [], cut: 0.5 };
@@ -179,7 +179,7 @@ function apply() {
 document.getElementById('modes').onclick = e => { if (e.target.dataset.v) { state.mode = e.target.dataset.v; apply(); } };
 document.getElementById('runs').onclick = e => { if (e.target.id === 'split') toggleSplit(); else if (e.target.dataset.v) { state.who = e.target.dataset.v; loadRun(); sync(); } };
 year.oninput = () => { state.f = +year.value; paint(); sync(); };
-speed.onclick = () => { state[rate()] = { 1: 2, 2: 5, 5: 1 }[state[rate()]]; sync(); };
+speed.onclick = () => { state[rate()] = state[rate()] % 5 + 1; sync(); };
 play.onclick = () => { state.play = !state.play; if (state.play && state.f >= +year.max) state.f = 0; sync(); };
 addEventListener('keydown', e => {
   if (e.key.toLowerCase() === 's') toggleSplit();
