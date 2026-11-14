@@ -328,18 +328,23 @@ def glb(prims, q=84):
         bins.append(data + b"\0" * (-len(data) % 4))
         return len(views) - 1
 
+    images = []
     for n, (img, v, uv) in enumerate(prims):
-        img.save(buf := io.BytesIO(), "JPEG", quality=q)
+        ext = isinstance(img, str)
+        if not ext:
+            img.save(buf := io.BytesIO(), "JPEG", quality=q)
+        images.append({"uri": img} if ext else {"bufferView": view(buf.getvalue()), "mimeType": "image/jpeg"})
         w = (v - lo) / span * (1, -1, 1) + (0, 1, 0)
-        a, ix = np.unique(np.round(np.c_[w[:, [0, 2, 1]], 0 * w[:, 0], np.clip(uv, 0, 1)] * 65535).astype(np.uint16), axis=0, return_inverse=True)
-        ix, k = ix.ravel().astype(np.uint16 if len(a) < 65536 else np.uint32), view(a.tobytes(), byteStride=12, target=34962)
+        a, ix = np.unique(np.c_[np.round(np.c_[w[:, [0, 2, 1]], 0 * w[:, 0]] * 65535), uv if ext else np.round(np.clip(uv, 0, 1) * 65535)], axis=0, return_inverse=True)
+        ix, t = ix.ravel().astype(np.uint16 if len(a) < 65536 else np.uint32), a[:, 4:].astype(np.float32 if ext else np.uint16)
         acc += [{"bufferView": view(ix.tobytes(), target=34963), "componentType": 5121 + ix.itemsize, "count": len(ix), "type": "SCALAR"},
-                {"bufferView": k, "componentType": 5123, "normalized": True, "count": len(a), "type": "VEC3", "min": a[:, :3].min(0).tolist(), "max": a[:, :3].max(0).tolist()},
-                {"bufferView": k, "byteOffset": 8, "componentType": 5123, "normalized": True, "count": len(a), "type": "VEC2"}]
-        prim.append(({"material": n, "indices": len(acc) - 3, "attributes": {"POSITION": len(acc) - 2, "TEXCOORD_0": len(acc) - 1}}, view(buf.getvalue())))
+                {"bufferView": view(a[:, :4].astype(np.uint16).tobytes(), byteStride=8, target=34962), "componentType": 5123, "normalized": True,
+                 "count": len(a), "type": "VEC3", "min": a[:, :3].min(0).tolist(), "max": a[:, :3].max(0).tolist()},
+                {"bufferView": view(t.tobytes(), target=34962), "componentType": 5126 if ext else 5123, "normalized": not ext, "count": len(a), "type": "VEC2"}]
+        prim.append({"material": n, "indices": len(acc) - 3, "attributes": {"POSITION": len(acc) - 2, "TEXCOORD_0": len(acc) - 1}})
     js = {"asset": {"version": "2.0"}, "extensionsUsed": ["KHR_mesh_quantization"], "extensionsRequired": ["KHR_mesh_quantization"], "scene": 0,
           "scenes": [{"nodes": [0]}], "nodes": [{"mesh": 0, "translation": [lo[0], lo[2], -lo[1] - span[1]], "scale": [span[0], span[2], span[1]]}],
-          "meshes": [{"primitives": [p for p, _ in prim]}], "images": [{"bufferView": i, "mimeType": "image/jpeg"} for _, i in prim],
+          "meshes": [{"primitives": prim}], "images": images,
           "materials": [{"pbrMetallicRoughness": {"baseColorTexture": {"index": n}, "metallicFactor": 0, "roughnessFactor": 0.9}} for n in range(len(prim))],
           "textures": [{"sampler": 0, "source": n} for n in range(len(prim))], "samplers": [{"magFilter": 9729, "minFilter": 9987}], "accessors": acc,
           "bufferViews": views, "buffers": [{"byteLength": len(body := b"".join(bins))}]}
@@ -359,7 +364,11 @@ def build():
             dress(b)
         elif b["d"] < NEAR and small(b):
             b["plain"] = plain(b)
-    for name, part in (("district.glb", [b for b in bs if b["id"] not in fine]), ("district-near.glb", [b for b in bs if b["id"] in fine])):
+    from data.clean import model as clean
+    if outer := clean([b for b in bs if b["id"] not in fine and b["d"] >= NEAR], "../data/detail-clean/tex-"):
+        (OUT / "district-outer.glb").write_bytes(outer)
+        files.append("district-outer.glb")
+    for name, part in (("district.glb", [b for b in bs if b["id"] not in fine and b["d"] < NEAR]), ("district-near.glb", [b for b in bs if b["id"] in fine])):
         prims = model(part, lib, o, 4096, crops=crops) if part else []
         for k in range(0, len(prims), 5):
             files.append(name if len(prims) <= 5 else name.replace(".glb", f"-{k // 5}.glb"))
@@ -370,13 +379,18 @@ def build():
     (OUT / "district.json").write_text(json.dumps({"models": files, "hide": hide}, separators=(",", ":")))
 
 
-def tile(t):
+def tilebs(t, keep=lambda d: d >= FAR):
     i, j = t
     wfs(lambda name: RAW / f"tiles/{name}_{i}_{j}.xml.gz", i * TS, j * TS, (i + 1) * TS, (j + 1) * TS)
     bs = [prep(b) for b in parse(read(RAW / f"tiles/lod2_{i}_{j}.xml.gz"), read(RAW / f"tiles/kanta_{i}_{j}.xml.gz"))]
     foot = [b["foot"] for b in bs]
-    bs = [b for b in bs if (len(b["roof"]) or b["walls"]) and b["d"] >= FAR and np.all(b["c"] // TS == t)]
-    bs += [prep(b) for b in residual(foot, [t], lambda c: np.hypot(*(c - C)) >= FAR)[0]]
+    bs = [b for b in bs if (len(b["roof"]) or b["walls"]) and keep(b["d"]) and np.all(b["c"] // TS == t)]
+    return bs + [prep(b) for b in residual(foot, [t], lambda c: keep(np.hypot(*(c - C))))[0]]
+
+
+def tile(t):
+    i, j = t
+    bs = tilebs(t)
     if bs:
         o = ortho(RAW / f"tiles/o_{i}_{j}.jpg", np.array(t) * TS - 100.0, 0.3, 4000)
         prims = next(m for A, f in [(512, 1), (1024, 1), (2048, 1)] + [(4096, 0.9 ** k) for k in range(40)] if (m := model(bs, LIB, o, A, f, 1, far=0.3)))
@@ -434,7 +448,7 @@ def fit(out, base):
 
 
 def call(job):
-    name, img, text, refs = job
+    name, img, text, refs, *raw = job
     if (TEX / f"{name}.jpg").exists():
         return Image.open(TEX / f"{name}.jpg")
     img.save(buf := io.BytesIO(), "PNG")
@@ -450,7 +464,8 @@ def call(job):
         if "data" in r:
             break
         time.sleep(30)
-    out = fit(Image.open(io.BytesIO(base64.b64decode(r["data"][0]["b64_json"]))).convert("RGB").resize((1536, 1024)), img)
+    out = Image.open(io.BytesIO(base64.b64decode(r["data"][0]["b64_json"]))).convert("RGB").resize((1536, 1024))
+    out = out if raw else fit(out, img)
     out.save(TEX / f"{name}.jpg", quality=90)
     return out
 

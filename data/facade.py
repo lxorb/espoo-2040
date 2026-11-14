@@ -125,6 +125,7 @@ def plan(b, w, role, big):
     g, fh, u0, u1 = b["style"][0], b["fh"], w["u0"], w["u1"]
     width, nf, res = u1 - u0, max(1, b["floors"] or round(b["h"] / 3)), g in ("apt", "row", "house")
     top, out = min(w["zt"], nf * fh), []
+    w.update(role=role, nf=nf, bw=width, door=set())
     if big:
         out.append(("glass", u0 + 1, u1 - 1, top - 1.6, top - 0.6)) if width > 8 else None
         for k in range(int(width // 14) if role == "entry" else 0):
@@ -139,6 +140,7 @@ def plan(b, w, role, big):
     bw = width / bays
     nd = max(1, round(width / (8 if g in ("row", "house") else 18)))
     door = set(np.round((np.arange(nd) + 0.5) * bays / nd - 0.5).astype(int)) if role == "entry" and width > 6 else set()
+    w.update(bw=bw, door=door)
     cols = range(bays) if role != "gable" else [bays // 2] if width >= 8 or g in ("row", "house") else []
     for i in cols:
         u = u0 + (i + 0.5) * bw
@@ -197,20 +199,24 @@ def boxify(b):
     b["plain"] = plain(b)
 
 
-def dress(b):
-    if small(b):
-        boxify(b)
-    unfold(b)
-    (col, desc), big, rail = look(b)
+def roles(b):
     ln = [w["u"].max() - w["u"].min() for w in b["walls"]]
     sw = [w["n"] @ [-0.6, -0.8] for w in b["walls"]]
     long = [k for k in range(len(ln)) if ln[k] >= 0.6 * max(ln)]
     bal = max(long, key=lambda k: sw[k]) if b["style"][0] in ("apt", "row") and max(ln) >= 12 else -1
     entry = min(long, key=lambda k: sw[k]) if len(long) > 1 or bal < 0 else -1
+    return ["bal" if k == bal else "entry" if k == entry else "side" if k in long or ln[k] >= 14 else "gable" for k in range(len(ln))]
+
+
+def dress(b):
+    if small(b):
+        boxify(b)
+    unfold(b)
+    (col, desc), big, rail = look(b)
     b["look"] = col, desc, big, rail
-    for k, w in enumerate(b["walls"]):
+    for w, role in zip(b["walls"], roles(b)):
         w["base"], w["u0"], w["u1"], w["zt"] = w["tris"], w["u"].min(), w["u"].max(), w["tris"][..., 2].max()
-        w["plan"] = plan(b, w, "bal" if k == bal else "entry" if k == entry else "side" if k in long or ln[k] >= 14 else "gable", big)
+        w["plan"] = plan(b, w, role, big)
         add = [box(w, *c, 1.0 if kind == "rail" else 1.4, kind == "hood") for kind, *c in w["plan"] if kind in ("rail", "hood")]
         cap = parapet(w, 0.3 if small(b) else 0.6) if flat(b) else ([], [])
         w["cap"] = np.array(cap[0]).reshape(-1, 3, 3)
