@@ -13,7 +13,7 @@ const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Sou
 const RUNS = ['agent', 'rl'];
 const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 5: 12 }, TILT = Math.tan(15 * Math.PI / 180);
 const q = new URLSearchParams(location.search);
-const opt = { heat: 0.3, flow: 0.07, tl: 1.4, dz: 1, cars: 20000, fps: false }, flowOpt = { particles: 1, trail: 1, radius: 1, heat: 1, sources: false, abs: false };
+const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 1.4, dz: 1, cars: 20000, fps: false }, flowOpt = { particles: 1, trail: 1, radius: 1, heat: 1, sources: false, abs: false };
 const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 1, split: false, pair: [], shown: [], cut: 0.5 };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
@@ -293,6 +293,7 @@ function frame() {
   close = state.mode !== 'flow' && camera.zoom > (close ? 0.8 : 1.0) * opt.dz;
   looks.near.value = Math.min(Math.max(looks.near.value + (close ? dt : -dt) / 0.25, 0), 1);
   looks.far.value = 1 - looks.near.value;
+  looks.detail.value = looks.near.value * opt.gd * looks.ready.value;
   controls.update();
   const px = 1 / camera.zoom;
   const [x0, y0, x1, y1] = view();
@@ -355,6 +356,7 @@ settings([
   knob('labels', 'labels', 'toggle', 0, true, v => { document.getElementById('labels').hidden = !v; }),
   knob('shadows', 'shadows', 'toggle', 0, true, v => { sun.castShadow = v; }),
   knob('res', 'resolution', 'choice', [0.5, 1, 'native'], 'native', v => { renderer.setPixelRatio(v === 'native' ? Math.min(devicePixelRatio, 2) : v); resize(); }),
+  knob('gd', 'ground detail', 'toggle', 0, true, v => { opt.gd = +v; }),
   knob('dz', 'detail zoom', 'range', [0.5, 4, 0.1], 1, v => { opt.dz = v; }),
   knob('cars', 'max cars', 'range', [0, 20000, 500], 20000, v => { opt.cars = v; }),
   knob('walk', 'pedestrians', 'range', [0, 1, 0.1], 1, v => { near.walkers.density = v; near.key = ''; }),

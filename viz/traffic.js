@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { looks, COVER } from './city.js';
+import { DETAIL, L } from './ground.js';
 
 export const lengths = g => { let s = 0; return g.map((p, k) => s += k ? Math.hypot(p[0] - g[k - 1][0], p[1] - g[k - 1][1]) : 0); };
 export const along = (g, cum, s, out) => {
@@ -53,6 +54,7 @@ const CLIP = 'uniform vec3 uClip; void clip() { if (dot(vec3(gl_FragCoord.xy, 1.
 const BAND_FRAG = (body, mark) => `uniform float uYear, uDim, uSat, uOy, uT, uPx; uniform vec3 uMark; varying vec3 vK; varying vec2 vW, vU; varying float vS;
   ${CLIP}
   ${COVER}
+  ${DETAIL}
   float hs(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
   float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f *= f * (3.0 - 2.0 * f); return mix(mix(hs(i), hs(i + vec2(1.0, 0.0)), f.x), mix(hs(i + vec2(0.0, 1.0)), hs(i + 1.0), f.x), f.y); }
   void main() {
@@ -67,7 +69,8 @@ const SURFACE = BAND_FRAG(`float wear = 1.0 - vK.x, v = vn(vW * 0.35);
     c = mix(vec3(0.15, 0.155, 0.16), vec3(0.47, 0.47, 0.45), smoothstep(0.0, 1.0, wear));
     float crack = (1.0 - smoothstep(0.0, 1.0, abs(v - 0.5) / max(fwidth(v), 1e-4))) * smoothstep(0.7, 0.9, wear) * step(0.62, vn(vW * 0.04 + 7.0));
     c *= 1.0 - 0.35 * crack * (1.0 - smoothstep(0.2, 0.5, length(fwidth(vW))));
-    al = mix(0.85, 0.7 * smoothstep(0.35, 1.0, wear), cover(vW));
+    if (uDetail > 0.0) c *= mix(vec3(1.0), detail(vW, vW, ${L.asphalt_worn}.0), uDetail);
+    al = mix(0.85, 0.7 * smoothstep(0.35, 1.0, wear), max(cover(vW), uDetail));
     if (vK.y < ${SHUT}) { float bar = step(fract(vU.x / 30.0), 0.07); c = mix(vec3(0.09), uMark, max(step(0.5, fract((vW.x + vW.y) / 5.0)), bar)); al = 0.95; }
     else if (vK.y < 0.999) { c = mix(c, uMark, stripe); al = max(al, 0.85 * stripe); }`);
 const PROJECT = BAND_FRAG(`float st = vK.z, age = uYear - vK.y, f = vU.x / max(vU.y, 1.0), p = abs(vK.y - uOy) < 0.01 ? uT / 1.2 : 9.0, d = p - f;
@@ -91,7 +94,7 @@ export class Net {
     net.links.forEach((l, i) => this.byOsm.set(l.osm, [...(this.byOsm.get(l.osm) || []), i]));
     const twin = new Set(net.links.map(l => l.a + ',' + l.b));
     this.two = net.links.map(l => twin.has(l.b + ',' + l.a) ? 1 : 0);
-    this.uni = { uPx: { value: 1 }, uRef: { value: 1 }, uClip: { value: new THREE.Vector3(0, 0, 1) }, uYear: { value: 0 }, uOy: { value: -99 }, uT: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat, uCover: looks.cover, uCbox: looks.cbox, uMark: looks.mark };
+    this.uni = { uPx: { value: 1 }, uRef: { value: 1 }, uClip: { value: new THREE.Vector3(0, 0, 1) }, uYear: { value: 0 }, uOy: { value: -99 }, uT: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat, uCover: looks.cover, uCbox: looks.cbox, uMark: looks.mark, uMats: looks.mats, uMat: looks.mat, uDetail: looks.detail };
     this.heatRT = target();
     this.heatOld = target();
     this.xf = -1e9;

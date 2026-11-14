@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { looks, patch, up, DITHER, HYPE } from './city.js';
+import { looks, patch, up, DITHER, HYPE, COVER } from './city.js';
 import { lengths, along } from './traffic.js';
 
-export const caps = { ground: 64, texels: 40e6, cache: 80e6, sprites: 10000, walkers: 300, props: 3000, loads: 4 };
+export const caps = { marks: 4000, ground: 64, texels: 40e6, cache: 80e6, sprites: 10000, walkers: 300, props: 3000, loads: 4 };
 const GROUPS = [['birch', 'linden'], ['pine', 'spruce'], ['linden', 'linden', 'birch'], ['pine', 'spruce', 'birch'], ['pine', 'spruce'], ['shrub']];
 const SHADOW = [0.51, 0.86];
 const v = new THREE.Vector3();
@@ -266,6 +266,45 @@ class Walkers {
   }
 }
 
+const MARK_VERT = `attribute vec4 aM; attribute float aK; uniform vec4 uZ, uS; varying vec2 vT, vW; varying vec4 vR; varying float vL;
+  void main() {
+    float c = cos(aM.z), s = sin(aM.z), L = aK > 0.5 ? 0.5 : 4.0;
+    vec2 p = aM.xy + vec2(-s, c) * position.x * aM.w + vec2(c, s) * position.y * L;
+    vT = vec2((position.x + 0.5) * (aK > 0.5 ? 1.0 : aM.w / 2.5), position.y + 0.5);
+    vR = aK > 0.5 ? uS : uZ; vW = vec2(p.x, -p.y);
+    gl_Position = projectionMatrix * viewMatrix * vec4(p.x, 0.55, -p.y, 1.0);
+  }`;
+const MARK_FRAG = `uniform sampler2D uMap; uniform float uDim, uSat, uShow; varying vec2 vT, vW; varying vec4 vR; ${COVER}
+  void main() {
+    vec2 k = vec2(vR.z - vR.x, vR.y - vR.w);
+    vec4 c = textureGrad(uMap, vec2(mix(vR.x, vR.z, fract(vT.x)), 1.0 - mix(vR.w, vR.y, vT.y)), dFdx(vT) * k, dFdy(vT) * k);
+    if (c.a < 0.02 || ${DITHER} >= uShow || ${DITHER} < cover(vec2(vW.x, -vW.y))) discard;
+    c.rgb = mix(vec3(dot(c.rgb, vec3(0.3, 0.59, 0.11))), c.rgb, uSat) * uDim * 0.85;
+    gl_FragColor = c;
+  }`;
+
+function marks(t, k) {
+  const segs = [], out = [], P = t.p || [], sig = P.filter(p => k.pkinds[p[0]] === 'signal');
+  for (const [q, lanes, f] of t.r || []) {
+    const n = k.rkinds[q], w = /motorway|trunk|primary|secondary|tertiary|residential/.test(n) ? Math.max(lanes, 1) * 3.3 + 1 : n === 'service' ? 3.5 : 0;
+    if (w) for (let i = 2; i < f.length; i += 2) segs.push([f[i - 2], f[i - 1], f[i], f[i + 1], w]);
+  }
+  for (const [q, x, y] of P) {
+    if (k.pkinds[q] !== 'crossing') continue;
+    let best = 12, hit;
+    for (const [ax, ay, bx, by, w] of segs) {
+      const dx = bx - ax, dy = by - ay, f = Math.min(Math.max(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1), 0), 1), px = ax + dx * f, py = ay + dy * f, d = Math.hypot(px - x, py - y);
+      if (d < best) { best = d; hit = [px, py, Math.atan2(dy, dx), w]; }
+    }
+    if (!hit) continue;
+    const [px, py, a, w] = hit, c = Math.cos(a), s = Math.sin(a);
+    out.push(px, py, a, w, 0);
+    if (sig.some(([, sx, sy]) => Math.hypot(sx - x, sy - y) < 30))
+      for (const d of [-1, 1]) out.push(px - d * c * 3 + d * s * w / 4, py - d * s * 3 - d * c * w / 4, a, w / 2, 1);
+  }
+  return out;
+}
+
 function props() {
   const paint = (g, c) => { const t = new THREE.Color(c); g = g.index ? g.toNonIndexed() : g; g.deleteAttribute('uv'); g.setAttribute('color', new THREE.Float32BufferAttribute(Array(g.attributes.position.count).fill([t.r, t.g, t.b]).flat(), 3)); return g; };
   const box = (w, h, d, x, y, z, c) => paint(new THREE.BoxGeometry(w, h, d).translate(x, y + h / 2, z), c);
@@ -296,8 +335,19 @@ export class Near {
       scene.add(m);
       return { name, m };
     });
+    const mg = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1));
+    mg.setAttribute('aM', this.mA = new THREE.InstancedBufferAttribute(new Float32Array(caps.marks * 4), 4).setUsage(THREE.DynamicDrawUsage));
+    mg.setAttribute('aK', this.mK = new THREE.InstancedBufferAttribute(new Float32Array(caps.marks), 1).setUsage(THREE.DynamicDrawUsage));
+    mg.instanceCount = 0;
+    const mu = { uMap: { value: new THREE.TextureLoader().load('assets/ground/marks.webp') }, uZ: { value: new THREE.Vector4() }, uS: { value: new THREE.Vector4() }, uDim: looks.dim, uSat: looks.sat, uShow: looks.detail, uCover: looks.cover, uCbox: looks.cbox };
+    fetch('assets/ground/materials.json').then(r => r.json()).then(j => { mu.uZ.value.set(...j.marks.zebra.uv); mu.uS.value.set(...j.marks.stop.uv); }).catch(() => {});
+    this.marks = new THREE.Mesh(mg, new THREE.ShaderMaterial({ uniforms: mu, vertexShader: MARK_VERT, fragmentShader: MARK_FRAG, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+    this.marks.frustumCulled = false;
+    this.marks.renderOrder = 1;
+    scene.add(this.marks);
     city.onTile = (t, g) => {
       const k = city.meta, P = {};
+      g.userData.marks = marks(t, k);
       for (const [q, x, y, a] of t.p || []) (P[k.pkinds[q]] ||= []).push(x, y, a);
       g.userData.props = P;
       this.sprites.prep(t, g, { r: k.rkinds, g: k.gkinds });
@@ -309,6 +359,7 @@ export class Near {
     this.ground.update(camera, dt);
     const on = looks.near.value > 0 && mode !== 'flow', sets = this.sprites.sets;
     for (const { m } of this.props) m.visible = on;
+    this.marks.visible = on && looks.detail.value > 0;
     for (const s of sets || []) for (const m of s.ms) m.visible = on;
     if (!on || !sets) return;
     const key = stamp(camera, this.city.loaded.size, this.city.busy);
@@ -318,6 +369,11 @@ export class Near {
       const tiles = [...this.city.loaded.values()].filter(g => g?.userData.spr && g.name.split('_').every((v, i) => v * 1000 < r[i + 2] && v * 1000 + 1000 > r[i]));
       this.sprites.trees(tiles.map(g => g.userData.spr), r);
       this.walkers.plan(tiles.map(g => g.userData.walk), r);
+      let n = 0;
+      for (const g of tiles) for (let a = g.userData.marks, k = 0; k < a.length && n < caps.marks; k += 5)
+        if (a[k] > r[0] && a[k] < r[2] && a[k + 1] > r[1] && a[k + 1] < r[3]) { this.mA.array.set(a.slice(k, k + 4), 4 * n); this.mK.array[n++] = a[k + 4]; }
+      this.marks.geometry.instanceCount = n;
+      this.mA.needsUpdate = this.mK.needsUpdate = true;
       for (const { name, m } of this.props) {
         let n = 0;
         for (const g of tiles) {
