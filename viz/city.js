@@ -34,7 +34,7 @@ export function patch(mat, vert = '', frag = '', pars = '', fade = looks.one, sh
       .replace('#include <project_vertex>', '#include <project_vertex>\nvec4 wq = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\nwq = instanceMatrix * wq;\n#endif\nvMask = (modelMatrix * wq).xz;');
     s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\nuniform float uDim, uSat, uLane, uFade, uShow, uOut;\nuniform sampler2D uMask;\nuniform vec4 uBox;\nuniform vec3 uSky;\nvarying vec2 vMask;\n${hash}\n${COVER}\n${pars.replace(/attribute[^;]*;/g, '')}`)
       .replace('#include <dithering_fragment>', '#include <dithering_fragment>\nif (sky > 0.5) gl_FragColor.rgb = uSky * mix(uOut, 1.0, mk);')
-      .replace('#include <color_fragment>', `#include <color_fragment>\nfloat sky = 0.0, mk = texture2D(uMask, (vec2(vMask.x, -vMask.y) - uBox.xy) * uBox.zw).r;\nif (${DITHER} >= uShow) discard;\n${frag}\ndiffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, uSat) * mix(uOut, 1.0, mk);`);
+      .replace('#include <color_fragment>', `#include <color_fragment>\nfloat sky = 0.0, mk = smoothstep(0.46, 0.54, texture2D(uMask, (vec2(vMask.x, -vMask.y) - uBox.xy) * uBox.zw).r);\nif (${DITHER} >= uShow) discard;\n${frag}\ndiffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, uSat) * mix(uOut, 1.0, mk);`);
   };
   return mat;
 }
@@ -245,15 +245,13 @@ export class City {
       if (rings[0].length) {
         const all = rings[0].flat(), xs = all.filter((v, i) => !(i % 2)), ys = all.filter((v, i) => i % 2), d = 3000, S = 2048;
         const x0 = Math.min(...xs) - d, y0 = Math.min(...ys) - d, w = Math.max(...xs) + d - x0, h = Math.max(...ys) + d - y0;
-        const cv = Object.assign(document.createElement('canvas'), { width: S, height: S }), cx = cv.getContext('2d');
-        cx.fillStyle = '#fff';
-        rings[0].forEach(f => {
-          cx.beginPath();
-          for (let i = 0; i < f.length; i += 2) cx.lineTo((f[i] - x0) / w * S, (1 - (f[i + 1] - y0) / h) * S);
-          cx.fill();
-        });
-        looks.mask.value = new THREE.CanvasTexture(cv);
-        looks.box.value.set(x0, y0, 1 / w, 1 / h);
+        const far = 4e5, shape = new THREE.Shape([[-far, -far], [far, -far], [far, far], [-far, far]].map(p => new THREE.Vector2(...p)));
+        for (const f of rings[0]) { const p = []; for (let i = 0; i < f.length - 2; i += 2) p.push(new THREE.Vector2(f[i], f[i + 1])); shape.holes.push(new THREE.Path(p)); }
+        const shade = new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({ uniforms: { uOut: looks.out }, depthTest: false, depthWrite: false, transparent: true,
+          blending: THREE.CustomBlending, blendSrc: THREE.ZeroFactor, blendDst: THREE.SrcColorFactor,
+          vertexShader: 'void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }', fragmentShader: 'uniform float uOut; void main() { gl_FragColor = vec4(vec3(pow(uOut, 0.4545)), 1.0); }' }));
+        shade.renderOrder = 50; shade.frustumCulled = false;
+        scene.add(shade);
         const f = rings[0].reduce((a, b) => b.length > a.length ? b : a);
         let A = 0, mx = 0, my = 0;
         for (let i = 0; i < f.length - 2; i += 2) { const c = f[i] * f[i + 3] - f[i + 2] * f[i + 1]; A += c; mx += (f[i] + f[i + 2]) * c; my += (f[i + 1] + f[i + 3]) * c; }

@@ -15,16 +15,9 @@ const pick = cdf => {
   while (lo < hi) { const m = (lo + hi) >> 1; if (cdf[m] < r) lo = m + 1; else hi = m; }
   return lo;
 };
-const hue = (c, r, a) => c.setHSL(0.47 * Math.min(Math.max((r - 0.25) / 0.65, 0), 1), 1, 0.5).multiplyScalar(a);
-const STEP = 20, SHUT = 0.35, GRID = 40, TAIL = /\s+(to|and|at|on|from|the|of|in|with)$/i;
+const tone = (c, r, a) => { const s = Math.min(Math.max((r - 0.3) / 0.6, 0), 1); c.setHSL(0.47 * s * Math.sqrt(s), 1, 0.5).multiplyScalar(a * (1.7 - 1.2 * s)); return 1 + 2.4 * (1 - s); };
+const STEP = 20, SHUT = 0.35, GRID = 40;
 const W = l => Math.max(l.lanes || 1, 1) * 3.3 + 1, len = g => lengths(g).at(-1);
-export const short = s => {
-  if (s.length <= 30) return s;
-  let o = '';
-  for (const w of s.split(' ')) { if (o.length + w.length + 1 > 31) break; o = o ? o + ' ' + w : w; }
-  while (TAIL.test(o)) o = o.replace(TAIL, '');
-  return o || s.slice(0, 30);
-};
 const full = (frag, extra = {}) => new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
   depthTest: false, depthWrite: false, transparent: true, ...extra,
   vertexShader: 'varying vec2 vU; void main() { vU = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: frag
@@ -56,15 +49,18 @@ const BAND_VERT = `attribute vec3 aS; attribute vec2 aN; attribute vec3 aK; attr
     vW = p.xz;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   }`;
+const CLIP = 'uniform vec3 uClip; void clip() { if (dot(vec3(gl_FragCoord.xy, 1.0), uClip) < 0.0) discard; }';
 const BAND_FRAG = (body, mark) => `uniform float uYear, uDim, uSat, uOut, uOy, uT, uPx; uniform vec3 uMark; uniform sampler2D uMask; uniform vec4 uBox; varying vec3 vK; varying vec2 vW, vU; varying float vS;
+  ${CLIP}
   ${COVER}
   float hs(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
   float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f *= f * (3.0 - 2.0 * f); return mix(mix(hs(i), hs(i + vec2(1.0, 0.0)), f.x), mix(hs(i + vec2(0.0, 1.0)), hs(i + 1.0), f.x), f.y); }
   void main() {
+    clip();
     float z = exp2(ceil(log2(max(1.0, 1.25 * uPx)))), stripe = step(0.5, fract((vW.x + vW.y) / (8.0 * z))), dash = step(0.5, fract(vU.x / (16.0 * z))), e = abs(vS);
     vec3 c = vec3(0.0); float al = 1.0;
     ${body}
-    c = ${mark ? 'c' : 'mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, uSat) * uDim'} * mix(uOut, 1.0, texture2D(uMask, (vec2(vW.x, -vW.y) - uBox.xy) * uBox.zw).r);
+    c = ${mark ? 'c' : 'mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, uSat) * uDim'} * mix(uOut, 1.0, smoothstep(0.46, 0.54, texture2D(uMask, (vec2(vW.x, -vW.y) - uBox.xy) * uBox.zw).r));
     gl_FragColor = vec4(c, al);
   }`;
 const SURFACE = BAND_FRAG(`float wear = 1.0 - vK.x, v = vn(vW * 0.35);
@@ -95,7 +91,7 @@ export class Net {
     net.links.forEach((l, i) => this.byOsm.set(l.osm, [...(this.byOsm.get(l.osm) || []), i]));
     const twin = new Set(net.links.map(l => l.a + ',' + l.b));
     this.two = net.links.map(l => twin.has(l.b + ',' + l.a) ? 1 : 0);
-    this.uni = { uPx: { value: 1 }, uYear: { value: 0 }, uOy: { value: -99 }, uT: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat, uMask: looks.mask, uBox: looks.box, uCover: looks.cover, uCbox: looks.cbox, uOut: looks.out, uMark: looks.mark };
+    this.uni = { uPx: { value: 1 }, uRef: { value: 1 }, uClip: { value: new THREE.Vector3(0, 0, 1) }, uYear: { value: 0 }, uOy: { value: -99 }, uT: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat, uMask: looks.mask, uBox: looks.box, uCover: looks.cover, uCbox: looks.cbox, uOut: looks.out, uMark: looks.mark };
     this.heatRT = target();
     this.heatOld = target();
     this.xf = -1e9;
@@ -104,17 +100,21 @@ export class Net {
     this.flowRT2 = target(THREE.NearestFilter);
     this.heatScene = new THREE.Scene();
     this.flowScene = new THREE.Scene();
-    this.heatView = full(`uniform sampler2D tMap, tOld; uniform float uScale, uMix; varying vec2 vU;
+    this.heatView = full(`uniform sampler2D tMap, tOld; uniform float uRef, uHeat, uMix; varying vec2 vU; ${CLIP}
       void main() {
-        float t = mix(texture2D(tOld, vU).r, texture2D(tMap, vU).r, uMix) / uScale;
-        vec3 c = t < 1.0 ? mix(vec3(0.2, 0.8, 0.35), vec3(1.0, 0.88, 0.15), t) : t < 1.7 ? mix(vec3(1.0, 0.88, 0.15), vec3(1.0, 0.5, 0.08), (t - 1.0) / 0.7)
-          : t < 2.4 ? mix(vec3(1.0, 0.5, 0.08), vec3(0.9, 0.08, 0.08), (t - 1.7) / 0.7) : mix(vec3(0.9, 0.08, 0.08), vec3(0.5, 0.0, 0.32), clamp((t - 2.4) / 0.6, 0.0, 1.0));
-        gl_FragColor = vec4(c, smoothstep(0.08, 0.6, t) * 0.8);
+        clip();
+        float t = log2(max(mix(texture2D(tOld, vU).r, texture2D(tMap, vU).r, uMix) * uHeat / uRef, 1e-6));
+        vec3 c = mix(vec3(0.2, 0.75, 0.35), vec3(1.0, 0.88, 0.15), smoothstep(-2.3, -1.7, t));
+        c = mix(c, vec3(1.0, 0.5, 0.08), smoothstep(-1.2, -0.8, t));
+        c = mix(c, vec3(0.92, 0.06, 0.06), smoothstep(-0.2, 0.2, t));
+        c = mix(c, vec3(0.5, 0.0, 0.42), smoothstep(0.8, 1.2, t));
+        c = mix(c, vec3(0.9, 0.4, 1.0), smoothstep(1.3, 3.5, t));
+        gl_FragColor = vec4(c, smoothstep(-4.0, -3.2, t) * mix(0.7, 0.92, smoothstep(-2.0, 0.0, t)));
       }`);
-    this.heatView.material.uniforms = { tMap: { value: this.heatRT.texture }, tOld: { value: this.heatOld.texture }, uScale: { value: 1 }, uMix: { value: 1 } };
-    this.flowView = full(`uniform sampler2D tMap; varying vec2 vU;
-      void main() { vec3 c = texture2D(tMap, vU).rgb; float m = max(c.r, max(c.g, c.b)); gl_FragColor = vec4(c / max(m, 1e-4) * (1.0 - exp(-1.6 * m)), 1.0); }`, { blending: THREE.AdditiveBlending });
-    this.flowView.material.uniforms = { tMap: { value: this.flowRT.texture } };
+    this.heatView.material.uniforms = { tMap: { value: this.heatRT.texture }, tOld: { value: this.heatOld.texture }, uRef: this.uni.uRef, uClip: this.uni.uClip, uHeat: { value: 1 }, uMix: { value: 1 } };
+    this.flowView = full(`uniform sampler2D tMap; varying vec2 vU; ${CLIP}
+      void main() { clip(); vec3 c = texture2D(tMap, vU).rgb; float m = max(c.r, max(c.g, c.b)); gl_FragColor = vec4(c / max(m, 1e-4) * (1.0 - exp(-1.6 * m)), 1.0); }`, { blending: THREE.AdditiveBlending });
+    this.flowView.material.uniforms = { tMap: { value: this.flowRT.texture }, uClip: this.uni.uClip };
     this.fade = full('uniform float uA; void main() { gl_FragColor = vec4(0.0, 0.0, 0.0, uA); }');
     this.fade.material.uniforms = { uA: { value: 0.04 } };
     this.post = new THREE.Scene();
@@ -122,17 +122,23 @@ export class Net {
     this.shift = full('uniform sampler2D tMap; uniform vec2 uOff; varying vec2 vU; void main() { vec2 u = vU - uOff; gl_FragColor = u == clamp(u, 0.0, 1.0) ? texture2D(tMap, u) : vec4(0.0); }', { blending: THREE.NoBlending, transparent: false });
     this.shift.material.uniforms = { tMap: { value: null }, uOff: { value: new THREE.Vector2() } };
     this.shiftScene = new THREE.Scene().add(this.shift);
-    Object.assign(this, { vp: new THREE.Matrix4(), vp0: new THREE.Matrix4(), o: new THREE.Vector3(), o2: new THREE.Vector3(), rest: new THREE.Vector2(), size: new THREE.Vector2(), col: new THREE.Color(), gen: 0, pl: [], opt: { particles: 1, trail: 1, radius: 1, heat: 1 } });
+    Object.assign(this, { vp: new THREE.Matrix4(), vp0: new THREE.Matrix4(), o: new THREE.Vector3(), o2: new THREE.Vector3(), rest: new THREE.Vector2(), size: new THREE.Vector2(), col: new THREE.Color(), gen: 0, kick: 0, on: false, share: 1, cut: null, pl: [], opt: { particles: 1, trail: 1, radius: 1, heat: 1, sources: false, abs: false } });
     this.postCam = new THREE.Camera();
     this.N = 60000;
     this.M = 12000;
     this.px = new Float32Array(this.N); this.py = new Float32Array(this.N); this.age = new Float32Array(this.N);
-    this.tq = new Array(this.M); this.ts = new Float32Array(this.M); this.td = new Float32Array(this.M); this.tage = new Float32Array(this.M);
+    const pool = n => ({ q: new Array(n), s: new Float32Array(n), d: new Float32Array(n), age: new Float32Array(n), lat: new Float32Array(n) });
+    this.T = pool(this.M);
+    this.S = pool(this.N);
     this.paths = []; this.tn = 0;
     const seg = n => {
-      const g = new THREE.BufferGeometry();
-      for (const a of ['position', 'color']) g.setAttribute(a, new THREE.BufferAttribute(new Float32Array(n * 6), 3).setUsage(THREE.DynamicDrawUsage));
-      const m = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthTest: false }));
+      const g = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1));
+      g.instanceCount = n;
+      for (const a of ['aA', 'aC']) g.setAttribute(a, new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4).setUsage(THREE.DynamicDrawUsage));
+      const m = new THREE.Mesh(g, new THREE.ShaderMaterial({ uniforms: { uPx: this.uni.uPx }, transparent: true, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false,
+        vertexShader: `attribute vec4 aA, aC; uniform float uPx; varying vec3 vC;
+          void main() { vec2 d = aA.zw - aA.xy, u = d / max(length(d), 1e-6), p = mix(aA.xy, aA.zw, position.x + 0.5) + vec2(-u.y, u.x) * position.y * aC.w * uPx; vC = aC.rgb; gl_Position = projectionMatrix * viewMatrix * vec4(p.x, 1.0, -p.y, 1.0); }`,
+        fragmentShader: 'varying vec3 vC; void main() { gl_FragColor = vec4(vC, 1.0); }' }));
       m.frustumCulled = false;
       return m;
     };
@@ -153,7 +159,7 @@ export class Net {
   calib(run) {
     const y = run.years[0], loss = [], fl = [], q = (a, p) => a.sort((u, v) => u - v)[Math.floor(a.length * p)] || 1;
     this.base.forEach((l, i) => { const f = y.flow[i]; if (f > 0) { fl.push(f); loss.push(f * Math.max(y.time[i] - l.len / (l.kmh / 3.6), 0) / 3.6 / l.len); } });
-    this.scale = q(loss.filter(v => v > 0), 0.9);
+    this.scale = this.uni.uRef.value = q(loss.filter(v => v > 0), 0.99);
     this.fref = q(fl, 0.9);
     this.dirty = true;
   }
@@ -183,6 +189,7 @@ export class Net {
     if (this.group) { this.scene.remove(this.group); this.heatScene.remove(this.heat); }
     if (!this.cache.has(run)) this.cache.set(run, this.build(run));
     Object.assign(this, this.cache.get(run), { run });
+    this.S.q = this.S.q.map(q => q && q.i < this.base.length ? this.lp(q.i) : null);
     this.scene.add(this.group);
     this.heatScene.add(this.heat);
     if (!this.scale) this.calib(run);
@@ -197,6 +204,9 @@ export class Net {
     }));
     const L = this.base.concat(ext), n = L.length, F = () => new Float32Array(n);
     const c = { links: L, id: this.cache.size, ff: Float32Array.from(L, l => l.len / (l.kmh / 3.6)), speed: F(), flow: F(), loss: F(), ratio: F(), cap: F().fill(1), cond: F(), cum: L.map(l => lengths(l.geom)), pl: [], paths: [], opens: new Set(), tags: [] };
+    c.adj = [];
+    L.forEach((l, i) => (c.adj[l.a] ||= []).push(i));
+    c.oflow = new Float32Array(c.adj.length + L.length); c.iflow = new Float32Array(c.adj.length + L.length);
     c.box = L.map(l => { const xs = l.geom.map(p => p[0]), ys = l.geom.map(p => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; });
     const P = [], link = [];
     L.forEach((l, i) => {
@@ -212,8 +222,8 @@ export class Net {
     q.setAttribute('aI', new THREE.InstancedBufferAttribute(new Float32Array(link.length), 1));
     c.heat = new THREE.Mesh(q, new THREE.ShaderMaterial({
       uniforms: this.uni, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, transparent: true,
-      vertexShader: `attribute vec2 aP; attribute float aI; uniform float uSigma; varying vec2 vQ; varying float vI;
-        void main() { vQ = position.xy * 3.0; vI = aI * ${STEP}.0 / (2.5066 * uSigma); gl_Position = projectionMatrix * viewMatrix * vec4(aP.x + vQ.x * uSigma, 0.0, -aP.y - vQ.y * uSigma, 1.0); }`,
+      vertexShader: `attribute vec2 aP; attribute float aI; uniform float uSigma, uRef; varying vec2 vQ; varying float vI;
+        void main() { float s = uSigma * (1.0 + 0.2 * clamp(log2(max(aI, 1e-6) / uRef) + 3.0, 0.0, 4.0)); vQ = position.xy * 3.0; vI = aI * ${STEP}.0 / (2.5066 * s); gl_Position = projectionMatrix * viewMatrix * vec4(aP.x + vQ.x * s, 0.0, -aP.y - vQ.y * s, 1.0); }`,
       fragmentShader: 'varying vec2 vQ; varying float vI; void main() { gl_FragColor = vec4(vI * exp(-0.5 * dot(vQ, vQ)), 0.0, 0.0, 1.0); }'
     }));
     c.heat.frustumCulled = false;
@@ -227,7 +237,7 @@ export class Net {
       for (const m of p.mod || []) link(m.osm, KIND[p.kind]);
       for (const m of p.new || []) { ways.push(m.geom); lines.push({ geom: m.geom, w: (m.oneway ? 1 : 2) * Math.max(m.lanes || 1, 1) * 3.3 + 2, k: key(2) }); }
       const route = (p.pt || []).map((t, i) => { const g = this.line(p, i, t.stops); lines.push({ geom: g, w: 3, k: key(4) }); stops.push(...t.stops.map(s => [...s, b])); return g; })[0];
-      const kind = p.toll ? 'toll' : p.park ? 'park' : p.pnr ? 'pnr' : p.pt ? 'pt' : 'road', tag = (x, y) => c.tags.push({ x, y, kind, a: k, b, cost: p.cost || 0, name: short(p.name), build: !!(p.works || p.new) });
+      const kind = p.toll ? 'toll' : p.park ? 'park' : p.pnr ? 'pnr' : p.pt ? 'pt' : 'road', tag = (x, y) => c.tags.push({ x, y, kind, a: k, b, cost: p.cost || 0, what: p.kind, build: !!(p.works || p.new) });
       if (p.toll) for (const o of p.toll.osm) for (const i of this.byOsm.get(o) || []) {
         const g = at(i), [x, y2] = mid(g), [ax, ay] = g[0], [bx, by] = g[g.length - 1], d = Math.hypot(bx - ax, by - ay) || 1, h = W(this.base[i]) * (this.two[i] ? 1 : 0.5) + 2;
         lines.push({ geom: [[x - (by - ay) / d * h, y2 + (bx - ax) / d * h], [x + (by - ay) / d * h, y2 - (bx - ax) / d * h]], w: 2.5, k: key(5) });
@@ -248,7 +258,7 @@ export class Net {
     sg.setAttribute('aK', new THREE.Float32BufferAttribute(stops.map(s => s[2]), 1));
     const dots = new THREE.Points(sg, new THREE.ShaderMaterial({ uniforms: this.uni, transparent: true, depthTest: false,
       vertexShader: 'attribute float aK; uniform float uYear; varying float vA; void main() { vA = step(aK, uYear); gl_PointSize = 6.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'uniform vec3 uMark; varying float vA; void main() { float r = length(gl_PointCoord - 0.5); if (vA < 0.5 || r > 0.5) discard; gl_FragColor = vec4(r > 0.36 ? vec3(0.08) : uMark, 1.0); }' }));
+      fragmentShader: CLIP + ' uniform vec3 uMark; varying float vA; void main() { clip(); float r = length(gl_PointCoord - 0.5); if (vA < 0.5 || r > 0.5) discard; gl_FragColor = vec4(r > 0.36 ? vec3(0.08) : uMark, 1.0); }' }));
     works.renderOrder = 3; dots.renderOrder = 4;
     c.group = new THREE.Group().add(works, dots);
     for (const m of [works, dots]) m.frustumCulled = false;
@@ -305,6 +315,10 @@ export class Net {
       this.cond[i] = (A.cond?.[i] ?? 1) * (1 - t) + (B.cond?.[i] ?? 1) * t;
       if (this.cap[i] < SHUT) shut.push(i);
     }
+    const O = this.oflow.fill(0), I = this.iflow.fill(0);
+    this.links.forEach((l, i) => { O[l.a] += this.flow[i]; I[l.b] += this.flow[i]; });
+    let src = 0;
+    this.srcCdf = Float64Array.from(O, (o, u) => src += Math.max(o - I[u], 0));
     const sk = shut.join();
     if (sk !== this.shutKey) {
       this.shutKey = sk;
@@ -323,6 +337,7 @@ export class Net {
     }
     const yr = Math.floor(f + 1e-6);
     if (run === this.lastRun && yr > Math.floor(this.lastF + 1e-6) && f - this.lastF < 1.5 && this.opens.has(yr)) this.anim = { y: yr, t0: performance.now() };
+    this.kick += run === this.lastRun ? Math.abs(f - this.lastF) : 1;
     this.lastRun = run; this.lastF = f;
     for (let p = 0; p < this.plink.length; p++) this.dots.array[p] = this.loss[this.plink[p]];
     this.dots.needsUpdate = true;
@@ -335,11 +350,11 @@ export class Net {
 
   field(rect, span, fresh) {
     const [x0, y0, x1, y1] = rect, c = Math.max(span / 300, 6), W = Math.ceil((x1 - x0) / c) + 1, H = Math.ceil((y1 - y0) / c) + 1;
-    const U = new Float32Array(W * H), V = new Float32Array(W * H), D = new Float32Array(W * H), R = new Float32Array(W * H), sg = 2 * (1.1 * c) ** 2;
+    const U = new Float32Array(W * H), V = new Float32Array(W * H), D = new Float32Array(W * H), B = new Float32Array(W * H), K = new Int32Array(W * H), sg = 2 * (1.1 * c) ** 2;
     this.links.forEach((l, i) => {
       const b = this.box[i], f = this.flow[i];
       if (!(f > 0) || b[0] > x1 || b[2] < x0 || b[1] > y1 || b[3] < y0) return;
-      const sp = this.speed[i], r = this.ratio[i];
+      const sp = this.speed[i];
       for (let k = 1; k < l.geom.length; k++) {
         const [ax, ay] = l.geom[k - 1], [bx, by] = l.geom[k], d = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / d, uy = (by - ay) / d;
         for (let s = 0; s < d; s += c / 2) {
@@ -347,15 +362,16 @@ export class Net {
           for (let j = Math.max(0, Math.round(gy) - 2); j <= Math.min(H - 1, Math.round(gy) + 2); j++)
             for (let m = Math.max(0, Math.round(gx) - 2); m <= Math.min(W - 1, Math.round(gx) + 2); m++) {
               const w = f * Math.exp(-(((m - gx) * c) ** 2 + ((j - gy) * c) ** 2) / sg), o = j * W + m;
-              U[o] += w * ux * sp; V[o] += w * uy * sp; R[o] += w * r; D[o] += w;
+              U[o] += w * ux * sp; V[o] += w * uy * sp; D[o] += w;
+              if (w > B[o]) { B[o] = w; K[o] = i; }
             }
         }
       }
     });
     const ref = 5.5 * (this.fref || 1), cdf = new Float64Array(D.length);
     let acc = 0;
-    for (let o = 0; o < D.length; o++) { if (D[o] > 0) { U[o] /= D[o]; V[o] /= D[o]; R[o] /= D[o]; } cdf[o] = acc += D[o] > ref * 0.04 ? (D[o] / ref) ** 1.5 : 0; }
-    this.F = { x0, y0, c, W, H, U, V, D, R, cdf, ref, min: ref * 0.02, r: rect, span };
+    for (let o = 0; o < D.length; o++) { if (D[o] > 0) { U[o] /= D[o]; V[o] /= D[o]; } cdf[o] = acc += D[o] > ref * 0.04 ? (D[o] / ref) ** 1.5 : 0; }
+    this.F = { x0, y0, c, W, H, U, V, D, K, cdf, ref, min: ref * 0.02, r: rect, span };
     if (fresh) for (let p = 0; p < this.N; p++) this.spawn(p);
   }
 
@@ -364,9 +380,10 @@ export class Net {
     this.links.forEach((l, i) => {
       if (!(this.flow[i] > 0) || out(this.box[i])) return;
       const m = l.geom[l.geom.length >> 1];
+      if (!this.keep(m[0], m[1])) return;
       v[2] = 0;
       this.sample(m[0], m[1], v);
-      if (v[2] < this.F.ref * 0.04) P.push(Object.assign(this.pl[i] ||= { g: l.geom, cum: this.cum[i], i, off: this.two[i], w: 1 }, { gen }));
+      if (v[2] < this.F.ref * 0.04) P.push(Object.assign(this.lp(i), { gen }));
     });
     if (px < 4) for (const t of tiles?.values() || []) {
       if (!t?.userData.res) continue;
@@ -380,32 +397,53 @@ export class Net {
     this.tn = Math.min(this.M, Math.floor(s * this.opt.particles / (25 * Math.max(px, 0.5))));
   }
 
-  stream(dt, px) {
-    const pos = this.thin.geometry.attributes.position.array, col = this.thin.geometry.attributes.color.array, e = [0, 0, 0, 0], c = this.col, k = px * 0.45 * dt, rf = Math.min(Math.max((4 - px) / 1.5, 0), 1);
-    for (let p = 0; p < this.M; p++) {
-      let q = this.tq[p];
-      this.tage[p] -= dt;
-      const sp = q && (q.i < 0 ? 7 : this.speed[q.i]), s = q && this.ts[p] + this.td[p] * sp * k;
-      if (p >= this.tn || !q || q.gen !== this.gen || this.tage[p] < 0 || s < 0 || s > q.cum[q.cum.length - 1]) {
-        pos.fill(0, p * 6, p * 6 + 6);
-        if (p < this.tn && this.paths.length) {
-          this.tq[p] = q = this.paths[pick(this.pcdf)];
-          this.ts[p] = Math.random() * q.cum[q.cum.length - 1];
-          this.td[p] = q.i < 0 && Math.random() < 0.5 ? -1 : 1;
-          this.tage[p] = 3 + Math.random() * 5;
-        }
+  lp(i) {
+    return this.pl[i] ||= { g: this.links[i].geom, cum: this.cum[i], i, off: this.two[i] ?? 0, w: 1 };
+  }
+
+  rel(i) {
+    return this.opt.abs ? this.speed[i] / 27.8 : this.ratio[i];
+  }
+
+  hop(u, from = -1) {
+    const back = from < 0 ? -1 : this.links[from].a;
+    if (!(this.oflow[u] > 0) || from >= 0 && Math.random() * this.iflow[u] > this.oflow[u]) return -1;
+    const o = (this.adj[u] || []).filter(j => this.links[j].b !== back && this.flow[j] > 0);
+    let r = Math.random() * o.reduce((a, j) => a + this.flow[j], 0);
+    return o.find(j => (r -= this.flow[j]) < 0) ?? -1;
+  }
+
+  stream(mesh, P, n, dt, px, src) {
+    const pos = mesh.geometry.attributes.aA.array, col = mesh.geometry.attributes.aC.array, e = [0, 0, 0, 0], c = this.col, k = px * 0.45 * dt, rf = Math.min(Math.max((4 - px) / 1.5, 0), 1);
+    let born = src && this.srcCdf.at(-1) > 0 ? Math.ceil(n * dt / 12) : 0;
+    for (let p = 0; p < P.q.length; p++) {
+      let q = P.q[p], s0 = P.s[p];
+      P.age[p] -= dt;
+      let s = q ? s0 + P.d[p] * (q.i < 0 ? 7 : this.speed[q.i]) * k : 0;
+      while (src && q && s > q.cum.at(-1)) { const j = this.hop(this.links[q.i].b, q.i); s -= q.cum.at(-1); s0 = 0; q = j < 0 ? null : this.lp(j); }
+      P.q[p] = q;
+      if (p >= n || !q || !src && q.gen !== this.gen || P.age[p] < 0 || s < 0 || s > q.cum.at(-1)) {
+        pos.fill(0, p * 4, p * 4 + 4);
+        P.q[p] = null;
+        const j = p >= n ? -1 : src ? born-- > 0 ? this.hop(pick(this.srcCdf)) : -1 : this.paths.length ? -2 : -1;
+        if (j === -1) continue;
+        P.q[p] = q = j < 0 ? this.paths[pick(this.pcdf)] : this.lp(j);
+        P.s[p] = src ? 0 : Math.random() * q.cum[q.cum.length - 1];
+        P.d[p] = !src && q.i < 0 && Math.random() < 0.5 ? -1 : 1;
+        P.age[p] = src ? 120 : 3 + Math.random() * 5;
+        P.lat[p] = Math.random() - 0.5;
         continue;
       }
-      const off = this.td[p] * (q.i < 0 ? Math.max(2, px * 1.2) : q.off * Math.max(3.3, px * 1.5));
-      along(q.g, q.cum, this.ts[p], e);
-      pos.set([e[0] + e[3] * off, 1, -(e[1] - e[2] * off)], p * 6);
+      const off = src ? ((q.off ? 0.5 : 0) + P.lat[p]) * Math.max(Math.max(this.links[q.i].lanes || 1, 1) * 3.3, px * 3) : P.d[p] * (q.i < 0 ? Math.max(2, px * 1.2) : q.off * Math.max(3.3, px * 1.5));
+      along(q.g, q.cum, s0, e);
+      pos.set([e[0] + e[3] * off, e[1] - e[2] * off], p * 4);
       along(q.g, q.cum, s, e);
-      pos.set([e[0] + e[3] * off, 1, -(e[1] - e[2] * off)], p * 6 + 3);
-      hue(c, q.i < 0 ? 1 : this.ratio[q.i], (q.i < 0 ? 0.9 * rf : 0.8) * Math.min(Math.abs(s - this.ts[p]) / px, 1));
-      this.ts[p] = s;
-      col.set([c.r, c.g, c.b, c.r, c.g, c.b], p * 6);
+      pos.set([e[0] + e[3] * off, e[1] - e[2] * off], p * 4 + 2);
+      const w = tone(c, q.i < 0 ? 1 : this.rel(q.i), (q.i < 0 ? 0.6 * rf : src ? 0.35 : 0.55) * Math.min(Math.abs(s - s0) / px, 1));
+      P.s[p] = s;
+      col.set([c.r, c.g, c.b, w], p * 4);
     }
-    this.thin.geometry.attributes.position.needsUpdate = this.thin.geometry.attributes.color.needsUpdate = true;
+    mesh.geometry.attributes.aA.needsUpdate = mesh.geometry.attributes.aC.needsUpdate = true;
   }
 
   spawn(p) {
@@ -420,15 +458,22 @@ export class Net {
 
   seen(x, y) {
     const v = this.view;
-    return x > v[0] && x < v[2] && y > v[1] && y < v[3];
+    return x > v[0] && x < v[2] && y > v[1] && y < v[3] && this.keep(x, y);
+  }
+
+  keep(x, y) {
+    const c = this.cut;
+    return !c || ((x - c[0]) * (c[3] - c[1]) - (y - c[1]) * (c[2] - c[0])) * c[4] >= 0;
   }
 
   sample(x, y, out) {
     const F = this.F, gx = (x - F.x0) / F.c, gy = (y - F.y0) / F.c, i = Math.floor(gx), j = Math.floor(gy);
     if (i < 0 || j < 0 || i >= F.W - 1 || j >= F.H - 1) return false;
     const fx = gx - i, fy = gy - j, o = j * F.W + i, w = [(1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy], os = [o, o + 1, o + F.W, o + F.W + 1];
-    out[0] = out[1] = out[2] = out[3] = 0;
-    for (let k = 0; k < 4; k++) { out[0] += F.U[os[k]] * w[k]; out[1] += F.V[os[k]] * w[k]; out[2] += F.D[os[k]] * w[k]; out[3] += F.R[os[k]] * w[k]; }
+    let r = 0;
+    out[0] = out[1] = out[2] = 0;
+    for (let k = 0; k < 4; k++) { const d = F.D[os[k]] * w[k]; out[0] += F.U[os[k]] * w[k]; out[1] += F.V[os[k]] * w[k]; out[2] += d; r += d * this.ratio[F.K[os[k]]]; }
+    out[3] = r / (out[2] || 1);
     return out[2] > F.min;
   }
 
@@ -437,7 +482,7 @@ export class Net {
     if (this.flowRT.width !== size.x || this.flowRT.height !== size.y) { this.flowRT.setSize(size.x, size.y); this.flowRT2.setSize(size.x, size.y); for (const t of [this.heatRT, this.heatOld]) t.setSize(Math.ceil(size.x / 2), Math.ceil(size.y / 2)); }
     this.uni.uPx.value = px;
     this.uni.uSigma.value = Math.max((5 + 19 * Math.min(Math.max((4 - px) / 3, 0), 1)) * px, 30) * this.opt.radius;
-    if (!this.run) return;
+    if (!this.run || !this.on) return;
     const now = performance.now(), hv = this.heatView.material.uniforms;
     this.uni.uOy.value = this.anim ? this.anim.y : -99;
     this.uni.uT.value = this.anim ? (now - this.anim.t0) / 1000 : 0;
@@ -448,7 +493,7 @@ export class Net {
     hv.tMap.value = this.heatRT.texture;
     hv.tOld.value = this.heatOld.texture;
     hv.uMix.value = Math.min((now - this.xf) / 400, 1);
-    hv.uScale.value = this.scale * 4 / this.opt.heat;
+    hv.uHeat.value = this.opt.heat;
     const key = this.camera.matrixWorld.elements.join() + this.camera.zoom + size.x;
     const hk = key + this.uni.uYear.value + this.id + this.opt.radius;
     if (mode === 'heat' && hk !== this.heatKey) {
@@ -456,7 +501,16 @@ export class Net {
       r.setRenderTarget(this.heatRT); r.setClearColor(0, 0); r.clear();
       r.render(this.heatScene, this.camera);
     }
-    if (mode === 'flow') {
+    const src = this.opt.sources;
+    this.thin.visible = !src;
+    if (src && !this.srcOn) this.S.q.fill(null);
+    if (mode === 'flow' && src) {
+      this.pan(size);
+      r.setRenderTarget(this.flowRT);
+      this.stream(this.lines, this.S, Math.floor(this.N * this.opt.particles * this.share), dt, px, true);
+    }
+    this.srcOn = src;
+    if (mode === 'flow' && !src) {
       const [x0, y0, x1, y1] = rect, w = x1 - x0, h = y1 - y0, span = Math.max(w, h), F = this.F;
       this.view = rect;
       if (this.dirty || !F || x0 < F.r[0] || y0 < F.r[1] || x1 > F.r[2] || y1 > F.r[3] || span > F.span * 1.33 || span < F.span * 0.75) {
@@ -469,8 +523,11 @@ export class Net {
       this.pan(size);
       r.setRenderTarget(this.flowRT);
       this.advect(dt, px);
-      this.stream(dt, px);
-      this.fade.material.uniforms.uA.value = 1 - Math.exp(-0.25 * dt / this.opt.trail);
+      this.stream(this.thin, this.T, this.tn, dt, px, false);
+    }
+    if (mode === 'flow') {
+      this.fade.material.uniforms.uA.value = 1 - Math.exp(-0.25 * dt / this.opt.trail - Math.min(2 * this.kick, 3));
+      this.kick = 0;
       r.autoClear = false;
       r.render(this.flowScene, this.camera);
       r.autoClear = true;
@@ -504,24 +561,24 @@ export class Net {
   }
 
   advect(dt, px) {
-    const pos = this.lines.geometry.attributes.position.array, col = this.lines.geometry.attributes.color.array, v = [0, 0, 0, 0], c = this.col, k = px * 0.45 * dt;
+    const pos = this.lines.geometry.attributes.aA.array, col = this.lines.geometry.attributes.aC.array, v = [0, 0, 0, 0], c = this.col, k = px * 0.45 * dt;
     for (let p = 0; p < this.N; p++) {
       const x = this.px[p], y = this.py[p];
       this.age[p] -= dt;
-      if (p >= this.N * this.opt.particles) { pos.fill(0, p * 6, p * 6 + 6); continue; }
-      if (this.age[p] < 0 || !this.seen(x, y) || !this.sample(x, y, v)) { this.spawn(p); pos.fill(0, p * 6, p * 6 + 6); continue; }
+      if (p >= this.N * this.opt.particles * this.share) { pos.fill(0, p * 4, p * 4 + 4); continue; }
+      if (this.age[p] < 0 || !this.seen(x, y) || !this.sample(x, y, v)) { this.spawn(p); pos.fill(0, p * 4, p * 4 + 4); continue; }
       this.px[p] = x + v[0] * k; this.py[p] = y + v[1] * k;
-      hue(c, v[3], 0.3 * Math.min(Math.max(v[2] / this.F.ref, 0.25), 2));
-      pos.set([x, 1, -y, this.px[p], 1, -this.py[p]], p * 6);
-      col.set([c.r, c.g, c.b, c.r, c.g, c.b], p * 6);
+      const w = tone(c, this.opt.abs ? Math.hypot(v[0], v[1]) / 27.8 : v[3], 0.2 * Math.min(Math.max(v[2] / this.F.ref, 0.25), 2));
+      pos.set([x, y, this.px[p], this.py[p]], p * 4);
+      col.set([c.r, c.g, c.b, w], p * 4);
     }
-    this.lines.geometry.attributes.position.needsUpdate = this.lines.geometry.attributes.color.needsUpdate = true;
+    this.lines.geometry.attributes.aA.needsUpdate = this.lines.geometry.attributes.aC.needsUpdate = true;
   }
 
   overlay(mode) {
     this.heatView.visible = mode === 'heat';
     this.flowView.visible = mode === 'flow';
-    if (!this.run || mode === 'cars') return;
+    if (!this.run || !this.on || mode === 'cars') return;
     this.renderer.autoClear = false;
     this.renderer.render(this.post, this.postCam);
     this.renderer.autoClear = true;
@@ -529,6 +586,6 @@ export class Net {
 
   show(mode) {
     this.mode = mode;
-    for (const m of [this.roads, this.group]) if (m) m.visible = mode !== 'flow';
+    for (const m of [this.roads, this.group]) if (m) m.visible = this.on && mode !== 'flow';
   }
 }

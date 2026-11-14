@@ -52,7 +52,6 @@ export class Cars {
     this.t = 0;
     this.heading = new Float32Array(meta.veh.length);
     this.box = meta.box || [0, 1, 0, 1].map((a, k) => pts.filter((v, i) => i % 2 === a).reduce((m, v) => (k < 2 ? Math.min : Math.max)(m, v / 10), k < 2 ? Infinity : -Infinity));
-    this.mac = [];
     this.meshes = meta.types.map((t, k) => {
       const n = meta.veh.filter(v => v[0] === k).length;
       const [hi, lo, len] = vehicle(t), m = new THREE.InstancedMesh(hi, carMat, n + MAX);
@@ -66,7 +65,7 @@ export class Cars {
     });
   }
 
-  tick(dt, net, rect, px, tiles) {
+  tick(dt, nets, rect, px, tiles) {
     this.t = (this.t + dt * this.meta.dt) % this.end;
     const o = new THREE.Object3D(), P = this.pts, count = this.meshes.map(() => 0);
     for (const m of this.meshes) { const s = m.userData.len / px; m.userData.off = s < 2; m.geometry = s < 10 ? m.userData.lo : m.userData.hi; }
@@ -87,9 +86,10 @@ export class Cars {
       const x = (P[a] + (P[a + 2] - P[a]) * f) / 10, y = (P[a + 1] + (P[a + 3] - P[a + 1]) * f) / 10;
       const dx = P[a + 2] - P[a], dy = P[a + 3] - P[a + 1];
       if (dx * dx + dy * dy > 4) this.heading[id] = Math.atan2(dy, dx);
-      if (!net?.blocked(x, y)) put(type, x, y, this.heading[id], id);
+      if (!nets.find(n => n.keep(x, y))?.blocked(x, y)) put(type, x, y, this.heading[id], id);
     });
-    if (net?.links && px < 2.25) { this.macro(net, rect, dt, put); this.streets(tiles, rect, put); } else this.mac = [];
+    for (const n of nets) if (px < 2.25) this.macro(n, rect, dt, put); else if (n.carState) n.carState.mac = [];
+    if (px < 2.25) this.streets(tiles, rect, put);
     this.meshes.forEach((m, k) => {
       m.count = count[k];
       m.instanceMatrix.needsUpdate = true;
@@ -107,30 +107,30 @@ export class Cars {
   }
 
   macro(net, [x0, y0, x1, y1], dt, put) {
-    const L = net.links, n = L.length, e = [0, 0, 0, 0];
-    if (L !== this.L) {
+    const S = net.carState ||= { mac: [] }, L = net.links, n = L.length, e = [0, 0, 0, 0];
+    if (L !== S.L) {
       const twin = new Set(L.map(l => l.a + ',' + l.b));
-      this.L = L; this.mac = this.mac.filter(c => c.i < n); this.out = [];
-      L.forEach((l, i) => (this.out[l.a] ||= []).push(i));
-      this.cum = L.map(l => lengths(l.geom));
-      this.two = L.map(l => twin.has(l.b + ',' + l.a));
-      this.inside = L.map(l => this.inBox(...l.geom[l.geom.length >> 1]));
+      S.L = L; S.mac = S.mac.filter(c => c.i < n); S.out = [];
+      L.forEach((l, i) => (S.out[l.a] ||= []).push(i));
+      S.cum = L.map(l => lengths(l.geom));
+      S.two = L.map(l => twin.has(l.b + ',' + l.a));
+      S.inside = L.map(l => this.inBox(...l.geom[l.geom.length >> 1]));
     }
-    const vis = new Uint8Array(n), want = new Float32Array(n), on = new Map(), len = i => this.cum[i][this.cum[i].length - 1];
+    const vis = new Uint8Array(n), want = new Float32Array(n), on = new Map(), len = i => S.cum[i][S.cum[i].length - 1];
     let sum = 0;
     for (let i = 0; i < n; i++) {
       const b = net.box[i];
-      if (this.inside[i] || b[0] > x1 + 100 || b[2] < x0 - 100 || b[1] > y1 + 100 || b[3] < y0 - 100 || !(net.flow[i] > 0)) continue;
+      if (S.inside[i] || !net.keep(...L[i].geom[L[i].geom.length >> 1]) || b[0] > x1 + 100 || b[2] < x0 - 100 || b[1] > y1 + 100 || b[3] < y0 - 100 || !(net.flow[i] > 0)) continue;
       vis[i] = 1;
       sum += want[i] = Math.min(net.flow[i] * len(i) / Math.max(net.speed[i], 0.5) / 3600, len(i) * Math.max(L[i].lanes, 1) / 8);
     }
     const k = Math.min(1, this.max / Math.max(sum, 1));
     const next = i => {
-      const o = (this.out[L[i].b] || []).filter(j => vis[j]), tot = o.reduce((a, j) => a + net.flow[j], 0);
+      const o = (S.out[L[i].b] || []).filter(j => vis[j]), tot = o.reduce((a, j) => a + net.flow[j], 0);
       let r = Math.random() * tot;
       return o.find(j => (r -= net.flow[j]) < 0) ?? -1;
     };
-    this.mac = this.mac.filter(c => {
+    S.mac = S.mac.filter(c => {
       if (!vis[c.i]) return false;
       c.s += net.speed[c.i] * dt;
       while (c.s > len(c.i)) { c.s -= len(c.i); c.i = next(c.i); if (c.i < 0) return false; }
@@ -149,12 +149,12 @@ export class Cars {
       const lane = c.r * L[i].lanes | 0;
       if (l.some(d => (d.r * L[i].lanes | 0) === lane && Math.abs(d.s - c.s) < 12)) continue;
       c.type = MIX.findIndex(m => hash(c.id) < m);
-      this.mac.push(c); budget--;
+      S.mac.push(c); budget--;
     }
-    for (const c of this.mac) {
-      const l = L[c.i], m = Math.max(l.lanes, 1), j = Math.min(c.r * m | 0, m - 1), off = (j + 0.5 - (this.two[c.i] ? 0 : m / 2)) * 3.3;
-      along(l.geom, this.cum[c.i], c.s, e);
-      put(c.type, e[0] + e[3] * off, e[1] - e[2] * off, Math.atan2(e[3], e[2]), c.id);
+    for (const c of S.mac) {
+      const l = L[c.i], m = Math.max(l.lanes, 1), j = Math.min(c.r * m | 0, m - 1), off = (j + 0.5 - (S.two[c.i] ? 0 : m / 2)) * 3.3;
+      along(l.geom, S.cum[c.i], c.s, e);
+      if (net.keep(e[0], e[1])) put(c.type, e[0] + e[3] * off, e[1] - e[2] * off, Math.atan2(e[3], e[2]), c.id);
     }
   }
 

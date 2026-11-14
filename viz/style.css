@@ -18,11 +18,12 @@ canvas { display: block; }
 .pulse { position: absolute; left: 0; top: 0; pointer-events: none; }
 .pulse::after { content: ""; position: absolute; left: -130px; top: -130px; width: 260px; height: 260px; box-sizing: border-box; border: 3px solid var(--mark, #fff); border-radius: 50%; animation: pulse 1.4s ease-out forwards; }
 @keyframes pulse { from { transform: scale(0.04); opacity: 1; } to { transform: scale(1); opacity: 0; } }
-#yl { display: flex; flex-direction: column; align-items: flex-end; min-width: 40px; }
-#vs { color: var(--hi); font-size: 9px; font-weight: 700; white-space: nowrap; }
-#vs:empty { display: none; }
-#peek { padding: 8px 7px; font-size: 10px; }
-#peek.on { background: var(--mark, #fff); }
+#split { padding: 8px 7px; font-size: 10px; }
+#cut { position: fixed; top: 50%; width: 21px; height: 130vmax; margin-left: -10px; transform: translateY(-50%) rotate(15deg); cursor: ew-resize; touch-action: none; z-index: 1; }
+#cut::before { content: ""; position: absolute; left: 9px; top: 0; bottom: 0; width: 3px; background: #fff; box-shadow: 0 0 6px #0009; }
+#cut i { position: absolute; left: 3px; top: 50%; width: 15px; height: 36px; margin-top: -18px; background: #fff; border-radius: 8px; box-shadow: 0 0 6px #0009; }
+.side { position: fixed; top: 18px; padding: 6px 10px; background: var(--ink); color: var(--hi); font-size: 12px; font-weight: 700; letter-spacing: .08em; border-radius: 6px; pointer-events: none; }
+[hidden] { display: none !important; }
 #ylab { color: var(--hi); font-weight: 700; font-size: 14px; }
 #speed { font: 700 12px "JetBrains Mono", monospace; color: var(--hi); background: #222; border: 0; border-radius: 6px; padding: 6px 0; width: 36px; cursor: pointer; }
 #labels { position: fixed; inset: 0; pointer-events: none; }

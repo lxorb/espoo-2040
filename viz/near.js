@@ -132,7 +132,7 @@ const SPRITE_FRAG = `uniform sampler2D uMap, uMask; uniform float uDim, uSat, uS
   void main() {
     vec4 c = texture2D(uMap, vUv);
     if (c.a < 0.45 || ${DITHER} >= uShow) discard;
-    c.rgb = mix(vec3(dot(c.rgb, vec3(0.3, 0.59, 0.11))), c.rgb, uSat) * uDim * 1.1 * mix(uOut, 1.0, texture2D(uMask, (vec2(vW.x, -vW.y) - uBox.xy) * uBox.zw).r);
+    c.rgb = mix(vec3(dot(c.rgb, vec3(0.3, 0.59, 0.11))), c.rgb, uSat) * uDim * 1.1 * mix(uOut, 1.0, smoothstep(0.46, 0.54, texture2D(uMask, (vec2(vW.x, -vW.y) - uBox.xy) * uBox.zw).r));
     gl_FragColor = vec4(c.rgb, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>

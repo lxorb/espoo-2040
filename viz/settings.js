@@ -1,6 +1,6 @@
 const CODE = 'ArrowUp ArrowUp ArrowDown ArrowDown ArrowLeft ArrowRight ArrowLeft ArrowRight b a';
 const PALETTE = ['#ffffff', '#f6d32d', '#ff7a45', '#4fd1ff', '#ff5fc8', '#8cff6b'];
-const KEY = 'espoo.settings.2';
+const KEY = 'espoo.settings.3';
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
 const save = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch {} };
 const make = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
