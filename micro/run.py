@@ -11,9 +11,9 @@ import sumolib
 
 from data.geo import PBF, VIZ, local, lonlat
 
-HYPE = (24.6345, 60.1555)
-R = 1500
-WARM, REC = 600, 1200
+X0, Y0, R = -1511.7, 1239.2, 2500
+BOX = [X0 - R, Y0 - R, X0 + R, Y0 + R]
+WARM, REC, PER = 600, 1200, 200
 OUT = Path(__file__).resolve().parent / "out"
 TOOLS = Path(sumo.SUMO_HOME) / "tools"
 TYPES = ["car", "van", "truck", "bus", "moto"]
@@ -45,15 +45,19 @@ def vtypes():
                      tau=str(p["tau"]), delta="4", sigma="0", carFollowModel="IDM", laneChangeModel="LC2013",
                      lcStrategic="1", lcCooperative="1", lcSpeedGain="1", lcKeepRight="1")
             ET.SubElement(dist.get(k, dist["mix"]), "vType", a, probability=str(SHARE.get(k, 1) * w))
+    ET.SubElement(root, "edgeData", id="d", file="edges.out.xml", begin=str(WARM), end=str(WARM + REC))
     ET.ElementTree(root).write(OUT / "types.add.xml")
 
 
 def network():
-    x0, y0 = local(*HYPE)
-    (w, s), (e, n) = lonlat(x0 - R, y0 - R), lonlat(x0 + R, y0 + R)
-    sh("osmium", "extract", "-O", "-s", "complete_ways", "-b", f"{w},{s},{e},{n}", PBF, "-o", "focus.osm")
+    (w, s), (e, n) = lonlat(*BOX[:2]), lonlat(*BOX[2:])
+    sh("osmium", "extract", "-O", "-s", "complete_ways", "-b", f"{w},{s},{e},{n}", PBF, "-o", "box.osm")
+    sh("osmium", "tags-filter", "-O", "-i", "box.osm", "w/service=parking_aisle,driveway,drive-through",
+       "w/access=private,no", "-o", "focus.osm")
+    (OUT / "service.typ.xml").write_text('<types><type id="highway.service" numLanes="1" speed="5.56" priority="1" '
+                                         'oneway="false" allow="passenger delivery bus pedestrian bicycle"/></types>')
     sh(Path(sumo.SUMO_HOME) / "bin" / "netconvert", "--osm-files", "focus.osm", "-o", "net.xml",
-       "--type-files", Path(sumo.SUMO_HOME) / "data/typemap/osmNetconvert.typ.xml",
+       "--type-files", f"{Path(sumo.SUMO_HOME) / 'data/typemap/osmNetconvert.typ.xml'},service.typ.xml",
        "--keep-edges.by-vclass", "passenger,bus", "--remove-edges.isolated", "--geometry.remove",
        "--ramps.guess", "--junctions.join", "--tls.guess-signals", "--tls.join", "--tls.default-type", "actuated",
        "--roundabouts.guess", "--ptstop-output", "stops.xml", "--ptline-output", "lines.xml",
@@ -63,20 +67,42 @@ def network():
 def scale_from_log(path, year):
     years = json.loads(Path(path).read_text())["years"]
     links = json.loads((VIZ / "net.json").read_text())["links"]
-    x0, y0 = local(*HYPE)
-    near = [i for i, l in enumerate(links) if min(np.hypot(gx - x0, gy - y0) for gx, gy in l["geom"]) < R]
+    near = [i for i, l in enumerate(links) if any(BOX[0] < x < BOX[2] and BOX[1] < y < BOX[3] for x, y in l["geom"])]
     return sum(years[year]["flow"][i] for i in near) / max(sum(years[0]["flow"][i] for i in near), 1)
 
 
-def demand(scale):
+def local_trips(net, scale):
+    rng = np.random.default_rng(7)
+    edges = [e for e in net.getEdges() if e.allows("passenger")]
+    home = [e for e in edges if not any(k in e.getType() for k in ("motorway", "trunk", "link"))]
+    main = [e for e in edges if e.getSpeed() > 13 or e.getLaneNumber() > 1]
+    w = np.array([e.getLaneNumber() * e.getSpeed() ** 2 for e in main])
+    mid = np.array([np.mean(e.getShape(), axis=0) for e in main])
+    trips = []
+    for e in home:
+        gap = REC * PER / (e.getLength() * scale)
+        p = w * np.exp(-np.hypot(*(mid - np.mean(e.getShape(), axis=0)).T) / 800)
+        for t in np.arange(rng.uniform(0, gap), WARM + REC, gap):
+            m = main[rng.choice(len(main), p=p / p.sum())]
+            a, b = (e, m) if rng.random() < 0.7 else (m, e)
+            trips.append((t, a.getID(), b.getID()))
+    root = ET.Element("routes")
+    for i, (t, a, b) in enumerate(sorted(trips)):
+        ET.SubElement(root, "trip", id=f"l{i}", depart=f"{t:.1f}", type="mix", departLane="best",
+                      departPos="random", arrivalPos="random", **{"from": a, "to": b})
+    ET.ElementTree(root).write(OUT / "local.xml")
+
+
+def demand(net, scale):
     end = WARM + REC
+    local_trips(net, scale)
     tool("randomTrips.py", "-n", "net.xml", "-o", "trips.xml", "-r", "cars.rou.xml", "-e", end,
          "-p", 3600 / (4200 * scale), "--fringe-factor", "20", "--lanes", "--speed-exponent", "6",
          "--min-distance", "600",
          "--trip-attributes", 'type="mix" departLane="best" departSpeed="max"', "--seed", "7",
          "--additional-file", "types.add.xml", "--vclass", "passenger", "--validate", "--remove-loops")
     tool("ptlines2flows.py", "-n", "net.xml", "-s", "stops.xml", "-l", "lines.xml", "-o", "bus.rou.xml",
-         "-p", 600 / scale, "-e", end, "--types", "bus", "--use-osm-routes", "--extend-to-fringe",
+         "-p", 600 / scale, "-e", end, "--types", "bus", "--extend-to-fringe",
          "--no-vtypes", "--ignore-errors", "--random-begin", "--seed", "7", "--min-stops", "2")
     t = ET.parse(OUT / "bus.rou.xml")
     for f in list(t.getroot().iter("flow")):
@@ -88,14 +114,13 @@ def demand(scale):
 
 def simulate():
     sh(Path(sumo.SUMO_HOME) / "bin" / "sumo", "-n", "net.xml", "-a", "types.add.xml,stops.xml",
-       "-r", "trips.xml,bus.rou.xml", "-e", WARM + REC, "--step-length", "1", "--fcd-output", "fcd.xml",
+       "-r", "trips.xml,local.xml,bus.rou.xml", "-e", WARM + REC, "--step-length", "1", "--fcd-output", "fcd.xml",
        "--fcd-output.attributes", "x,y,type", "--device.fcd.begin", WARM, "--time-to-teleport", "120",
        "--device.rerouting.probability", "0.5", "--device.rerouting.period", "60",
        "--ignore-route-errors", "--no-step-log", "--no-warnings", "--seed", "7", "--tripinfo-output", "trips.out.xml")
 
 
-def export():
-    net = sumolib.net.readNet(str(OUT / "net.xml"))
+def export(net):
     tracks, kind = {}, {}
     for _, el in ET.iterparse(OUT / "fcd.xml"):
         if el.tag == "timestep":
@@ -108,19 +133,25 @@ def export():
     off = 0
     for vid, tr in tracks.items():
         a = np.array(tr)
+        lon, lat = net.convertXY2LonLat(a[:, 1], a[:, 2])
+        a[:, 1], a[:, 2] = local(lon, lat)
+        a = a[(a[:, 1] > BOX[0]) & (a[:, 1] < BOX[2]) & (a[:, 2] > BOX[1]) & (a[:, 2] < BOX[3])]
         cut = np.flatnonzero(np.diff(a[:, 0]) != 1) + 1
         for seg in np.split(a, cut):
             if len(seg) < 2:
                 continue
-            lon, lat = net.convertXY2LonLat(seg[:, 1], seg[:, 2])
-            x, y = local(lon, lat)
-            pts.append(np.round(np.c_[x, y] * 10).astype("<i4"))
+            pts.append(np.round(seg[:, 1:] * 10).astype("<i4"))
             veh.append([kind[vid], int(seg[0, 0]), off, len(seg)])
             off += len(seg)
     VIZ.mkdir(parents=True, exist_ok=True)
     np.concatenate(pts).tofile(VIZ / "cars.bin")
-    (VIZ / "cars.json").write_text(json.dumps({"dt": 1.0, "types": TYPES, "veh": veh}, separators=(",", ":")))
-    return net, veh
+    (VIZ / "cars.json").write_text(json.dumps({"dt": 1.0, "types": TYPES, "box": BOX, "veh": veh}, separators=(",", ":")))
+    return veh
+
+
+def inside(net, e):
+    x, y = local(*net.convertXY2LonLat(*np.mean(e.getShape(), axis=0)))
+    return BOX[0] < x < BOX[2] and BOX[1] < y < BOX[3]
 
 
 def report(net, veh):
@@ -129,6 +160,13 @@ def report(net, veh):
     spd = [float(t["routeLength"]) / float(t["duration"]) * 3.6 for t in trips if float(t["duration"]) > 0]
     print(f"tracks {len(v)}  points {v[:, 3].sum()}  tls {len(net.getTrafficLights())}  edges {len(net.getEdges())}")
     print("share", {t: round(float((v[:, 0] == i).mean()), 3) for i, t in enumerate(TYPES)})
+    used = {e.get("id"): float(e.get("sampledSeconds", 0)) for e in ET.parse(OUT / "edges.out.xml").iter("edge")}
+    live = [e for e in net.getEdges() if e.allows("passenger") and inside(net, e)
+            and any(o.getToNode() != e.getFromNode() for o in e.getToNode().getOutgoing())
+            and any(i.getFromNode() != e.getToNode() for i in e.getFromNode().getIncoming())]
+    empty = sum(e.getLength() for e in live if not used.get(e.getID())) / sum(e.getLength() for e in live)
+    conc = np.bincount(np.concatenate([np.arange(s, s + n) for _, s, _, n in veh]))
+    print(f"empty edges {empty:.3f} of {len(live)}  concurrent mean {conc.mean():.0f} max {conc.max()}")
     print(f"mean trip speed {np.mean(spd):.1f} km/h  bin {(VIZ / 'cars.bin').stat().st_size / 1e6:.1f} MB")
 
 
@@ -144,9 +182,10 @@ def main():
     vtypes()
     if not a.reuse_net or not (OUT / "net.xml").exists():
         network()
-    demand(scale)
+    net = sumolib.net.readNet(str(OUT / "net.xml"))
+    demand(net, scale)
     simulate()
-    report(*export())
+    report(net, export(net))
 
 
 if __name__ == "__main__":
