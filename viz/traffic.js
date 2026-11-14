@@ -107,9 +107,8 @@ export class Net {
         vec3 c = mix(vec3(0.2, 0.75, 0.35), vec3(1.0, 0.88, 0.15), smoothstep(-2.3, -1.7, t));
         c = mix(c, vec3(1.0, 0.5, 0.08), smoothstep(-1.2, -0.8, t));
         c = mix(c, vec3(0.92, 0.06, 0.06), smoothstep(-0.2, 0.2, t));
-        c = mix(c, vec3(0.5, 0.0, 0.42), smoothstep(0.8, 1.2, t));
-        c = mix(c, vec3(0.9, 0.4, 1.0), smoothstep(1.3, 3.5, t));
-        gl_FragColor = vec4(c, smoothstep(-4.0, -3.2, t) * mix(0.7, 0.92, smoothstep(-2.0, 0.0, t)));
+        c = mix(c, vec3(0.5, 0.0, 0.42), smoothstep(1.5, 2.5, t));
+        gl_FragColor = vec4(c, smoothstep(-5.5, -4.5, t) * mix(0.7, 0.92, smoothstep(-2.0, 0.0, t)));
       }`);
     this.heatView.material.uniforms = { tMap: { value: this.heatRT.texture }, tOld: { value: this.heatOld.texture }, uRef: this.uni.uRef, uClip: this.uni.uClip, uHeat: { value: 1 }, uMix: { value: 1 } };
     this.flowView = full(`uniform sampler2D tMap; varying vec2 vU; ${CLIP}
@@ -222,8 +221,8 @@ export class Net {
     q.setAttribute('aI', new THREE.InstancedBufferAttribute(new Float32Array(link.length), 1));
     c.heat = new THREE.Mesh(q, new THREE.ShaderMaterial({
       uniforms: this.uni, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, transparent: true,
-      vertexShader: `attribute vec2 aP; attribute float aI; uniform float uSigma, uRef; varying vec2 vQ; varying float vI;
-        void main() { float s = uSigma * (1.0 + 0.2 * clamp(log2(max(aI, 1e-6) / uRef) + 3.0, 0.0, 4.0)); vQ = position.xy * 3.0; vI = aI * ${STEP}.0 / (2.5066 * s); gl_Position = projectionMatrix * viewMatrix * vec4(aP.x + vQ.x * s, 0.0, -aP.y - vQ.y * s, 1.0); }`,
+      vertexShader: `attribute vec2 aP; attribute float aI; uniform float uSigma; varying vec2 vQ; varying float vI;
+        void main() { float s = uSigma; vQ = position.xy * 3.0; vI = aI * ${STEP}.0 / (2.5066 * s); gl_Position = projectionMatrix * viewMatrix * vec4(aP.x + vQ.x * s, 0.0, -aP.y - vQ.y * s, 1.0); }`,
       fragmentShader: 'varying vec2 vQ; varying float vI; void main() { gl_FragColor = vec4(vI * exp(-0.5 * dot(vQ, vQ)), 0.0, 0.0, 1.0); }'
     }));
     c.heat.frustumCulled = false;
@@ -339,7 +338,8 @@ export class Net {
     if (run === this.lastRun && yr > Math.floor(this.lastF + 1e-6) && f - this.lastF < 1.5 && this.opens.has(yr)) this.anim = { y: yr, t0: performance.now() };
     this.kick += run === this.lastRun ? Math.abs(f - this.lastF) : 1;
     this.lastRun = run; this.lastF = f;
-    for (let p = 0; p < this.plink.length; p++) this.dots.array[p] = this.loss[this.plink[p]];
+    const base = (this.scale || 0) * 0.06;
+    for (let p = 0; p < this.plink.length; p++) this.dots.array[p] = Math.max(this.loss[this.plink[p]], base);
     this.dots.needsUpdate = true;
     const k = this.roads.geometry.attributes.aK;
     for (let v = 0; v < this.vlink.length; v++) { k.array[3 * v] = this.cond[this.vlink[v]]; k.array[3 * v + 1] = this.cap[this.vlink[v]]; }
@@ -380,7 +380,6 @@ export class Net {
     this.links.forEach((l, i) => {
       if (!(this.flow[i] > 0) || out(this.box[i])) return;
       const m = l.geom[l.geom.length >> 1];
-      if (!this.keep(m[0], m[1])) return;
       v[2] = 0;
       this.sample(m[0], m[1], v);
       if (v[2] < this.F.ref * 0.04) P.push(Object.assign(this.lp(i), { gen }));
@@ -458,7 +457,7 @@ export class Net {
 
   seen(x, y) {
     const v = this.view;
-    return x > v[0] && x < v[2] && y > v[1] && y < v[3] && this.keep(x, y);
+    return x > v[0] && x < v[2] && y > v[1] && y < v[3];
   }
 
   keep(x, y) {
@@ -507,7 +506,7 @@ export class Net {
     if (mode === 'flow' && src) {
       this.pan(size);
       r.setRenderTarget(this.flowRT);
-      this.stream(this.lines, this.S, Math.floor(this.N * this.opt.particles * this.share), dt, px, true);
+      this.stream(this.lines, this.S, Math.floor(this.N * this.opt.particles), dt, px, true);
     }
     this.srcOn = src;
     if (mode === 'flow' && !src) {
@@ -565,7 +564,7 @@ export class Net {
     for (let p = 0; p < this.N; p++) {
       const x = this.px[p], y = this.py[p];
       this.age[p] -= dt;
-      if (p >= this.N * this.opt.particles * this.share) { pos.fill(0, p * 4, p * 4 + 4); continue; }
+      if (p >= this.N * this.opt.particles) { pos.fill(0, p * 4, p * 4 + 4); continue; }
       if (this.age[p] < 0 || !this.seen(x, y) || !this.sample(x, y, v)) { this.spawn(p); pos.fill(0, p * 4, p * 4 + 4); continue; }
       this.px[p] = x + v[0] * k; this.py[p] = y + v[1] * k;
       const w = tone(c, this.opt.abs ? Math.hypot(v[0], v[1]) / 27.8 : v[3], 0.2 * Math.min(Math.max(v[2] / this.F.ref, 0.25), 2));

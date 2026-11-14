@@ -14,7 +14,7 @@ const RUNS = ['agent', 'rl'];
 const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 5: 12 }, TILT = Math.tan(15 * Math.PI / 180);
 const q = new URLSearchParams(location.search);
 const opt = { heat: 0.3, flow: 0.07, tl: 1.4, dz: 1, cars: 20000, fps: false }, flowOpt = { particles: 1, trail: 1, radius: 1, heat: 1, sources: false, abs: false };
-const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 1, split: true, pair: [], shown: [], cut: 0.5 };
+const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 1, split: false, pair: [], shown: [], cut: 0.5 };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -57,8 +57,7 @@ fetch('data/net.json').then(r => r.json()).then(async n => {
   apply();
   runList.then(loadRun);
 });
-Promise.all([fetch('data/cars.json').then(r => r.json()), fetch('data/cars.bin').then(r => r.arrayBuffer())])
-  .then(([m, b]) => { cars = new Cars(scene, m, new Int32Array(b)); apply(); }).catch(e => console.log(e));
+cars = new Cars(scene);
 const hypeMats = [], fine = [];
 let lod = 0, coarse = false, close = false;
 function hull(pts) {
@@ -152,7 +151,6 @@ cut.ondblclick = () => { state.cut = 0.5; };
 const ground = (cx, cy) => { ray.setFromCamera({ x: cx / innerWidth * 2 - 1, y: 1 - cy / innerHeight * 2 }, camera); return ray.ray.intersectPlane(plane, hit) ? [hit.x, -hit.z] : null; };
 function split() {
   const on = state.split && state.shown.length === 2, W = innerWidth, H = innerHeight, X = state.cut * W, pr = renderer.getPixelRatio();
-  for (const m of nets) m.share = on ? 0.5 : 1;
   if (!on) { if (nets[0]) { nets[0].uni.uClip.value.set(0, 0, 1); nets[0].cut = null; } return; }
   cut.style.left = `${X}px`;
   const top = X + (H / 2 - 30) * TILT;

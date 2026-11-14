@@ -44,17 +44,11 @@ carMat.onBeforeCompile = s => {
 };
 
 export class Cars {
-  constructor(scene, meta, pts) {
-    this.meta = meta;
+  constructor(scene) {
     this.max = MAX;
-    this.pts = pts;
-    this.end = Math.max(...meta.veh.map(v => v[1] + v[3]));
     this.t = 0;
-    this.heading = new Float32Array(meta.veh.length);
-    this.box = meta.box || [0, 1, 0, 1].map((a, k) => pts.filter((v, i) => i % 2 === a).reduce((m, v) => (k < 2 ? Math.min : Math.max)(m, v / 10), k < 2 ? Infinity : -Infinity));
-    this.meshes = meta.types.map((t, k) => {
-      const n = meta.veh.filter(v => v[0] === k).length;
-      const [hi, lo, len] = vehicle(t), m = new THREE.InstancedMesh(hi, carMat, n + MAX);
+    this.meshes = ['car', 'van', 'truck', 'bus', 'moto'].map(t => {
+      const [hi, lo, len] = vehicle(t), m = new THREE.InstancedMesh(hi, carMat, MAX);
       Object.assign(m.userData, { hi, lo, len });
       m.setColorAt(0, new THREE.Color());
       m.castShadow = true;
@@ -66,8 +60,8 @@ export class Cars {
   }
 
   tick(dt, nets, rect, px, tiles) {
-    this.t = (this.t + dt * this.meta.dt) % this.end;
-    const o = new THREE.Object3D(), P = this.pts, count = this.meshes.map(() => 0);
+    this.t += dt;
+    const o = new THREE.Object3D(), count = this.meshes.map(() => 0);
     for (const m of this.meshes) { const s = m.userData.len / px; m.userData.off = s < 2; m.geometry = s < 10 ? m.userData.lo : m.userData.hi; }
     const put = (type, x, y, h, id) => {
       const m = this.meshes[type], c = count[type];
@@ -79,16 +73,6 @@ export class Cars {
       m.setMatrixAt(c, o.matrix);
       m.setColorAt(c, m.userData.paint[(id * 7919) % m.userData.paint.length]);
     };
-    this.meta.veh.forEach(([type, start, off, n], id) => {
-      const s = (this.t - start) / this.meta.dt, k = Math.floor(s);
-      if (k < 0 || k >= n - 1) return;
-      const a = 2 * (off + k), f = s - k;
-      const dx = P[a + 2] - P[a], dy = P[a + 3] - P[a + 1], d = dx * dx + dy * dy;
-      if (d > 2e5 * this.meta.dt ** 2) return;
-      const x = (P[a] + dx * f) / 10, y = (P[a + 1] + dy * f) / 10;
-      if (d > 4) this.heading[id] = Math.atan2(dy, dx);
-      if (!nets.find(n => n.keep(x, y))?.blocked(x, y)) put(type, x, y, this.heading[id], id);
-    });
     for (const n of nets) if (px < 2.25) this.macro(n, rect, dt, put); else if (n.carState) n.carState.mac = [];
     if (px < 2.25) this.streets(tiles, rect, put);
     this.meshes.forEach((m, k) => {
@@ -102,11 +86,6 @@ export class Cars {
     for (const m of this.meshes) m.visible = mode === 'cars';
   }
 
-  inBox(x, y) {
-    const B = this.box;
-    return x > B[0] && x < B[2] && y > B[1] && y < B[3];
-  }
-
   macro(net, [x0, y0, x1, y1], dt, put) {
     const S = net.carState ||= { mac: [] }, L = net.links, n = L.length, e = [0, 0, 0, 0];
     if (L !== S.L) {
@@ -115,13 +94,12 @@ export class Cars {
       L.forEach((l, i) => (S.out[l.a] ||= []).push(i));
       S.cum = L.map(l => lengths(l.geom));
       S.two = L.map(l => twin.has(l.b + ',' + l.a));
-      S.inside = L.map(l => this.inBox(...l.geom[l.geom.length >> 1]));
     }
     const vis = new Uint8Array(n), want = new Float32Array(n), on = new Map(), len = i => S.cum[i][S.cum[i].length - 1];
     let sum = 0;
     for (let i = 0; i < n; i++) {
       const b = net.box[i];
-      if (S.inside[i] || !net.keep(...L[i].geom[L[i].geom.length >> 1]) || b[0] > x1 + 100 || b[2] < x0 - 100 || b[1] > y1 + 100 || b[3] < y0 - 100 || !(net.flow[i] > 0)) continue;
+      if (!net.keep(...L[i].geom[L[i].geom.length >> 1]) || b[0] > x1 + 100 || b[2] < x0 - 100 || b[1] > y1 + 100 || b[3] < y0 - 100 || !(net.flow[i] > 0)) continue;
       vis[i] = 1;
       sum += want[i] = Math.min(net.flow[i] * len(i) / Math.max(net.speed[i], 0.5) / 3600, len(i) * Math.max(L[i].lanes, 1) / 8);
     }
@@ -173,7 +151,7 @@ export class Cars {
         const u = (this.t * 5 + h * 1e4) % (2 * L), back = u > L;
         along(f.g, f.cum, back ? 2 * L - u : u, e);
         const dx = back ? -e[2] : e[2], dy = back ? -e[3] : e[3];
-        if (this.inBox(e[0], e[1]) || e[0] < x0 || e[0] > x1 || e[1] < y0 || e[1] > y1) return;
+        if (e[0] < x0 || e[0] > x1 || e[1] < y0 || e[1] > y1) return;
         put(h < 0.02 ? 1 : 0, e[0] + dy * 1.4, e[1] - dx * 1.4, Math.atan2(dy, dx), q);
       });
     }
