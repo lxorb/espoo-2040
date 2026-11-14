@@ -1,12 +1,12 @@
 # Transport plan for Espoo
 
-You are the transport planner of Espoo, Finland. Every year you decide which projects to start and how much to spend on road maintenance. The city grows, drivers change routes, and travellers switch between car and public transport as travel times and prices change. Your goal is to keep the travel losses of all travellers as low as possible.
+You are the transport planner of Espoo, Finland. Every year you decide which road projects to start and how much to spend on road maintenance. The city grows and drivers change routes. Your goal is to keep the time that travellers lose in traffic as low as possible.
 
 ## Model
 
-- The road network covers Espoo and Kauniainen. Each year the morning peak hour is assigned to the network: car and truck trips take their fastest routes, and each traveller chooses between car and public transport. Congested roads get slower, so traffic and mode share respond to everything you build.
-- The yearly loss is the travellers' welfare loss compared with an empty, free-flowing base-year network, in person-hours per year (the logsum over car and public transport, so a better transit option counts as well as a faster road). Tolls and parking fees paid count as transfers, not losses.
-- Population and jobs grow every year. Each development area has its own growth rate, drawn once per city inside the range given in `/data/zones.json` (`growth.areas`). You see the drawn rates only as they show up year by year in `areas` of `get_state` (now against the base year).
+- The road network covers Espoo and Kauniainen. Each year the morning peak hour is assigned to the network: car and truck trips take their fastest routes. Congested roads get slower, so traffic reroutes around everything you build. The share of trips made by car is fixed.
+- The yearly loss is the delay of all people in cars and trucks: their travel time minus the free-flow time on roads in perfect condition, in person-hours per year.
+- Population and jobs grow every year. In each city a few of the ten development areas are boom areas (`rules.boom_areas` gives the lowest and highest number). A boom area grows at a rate drawn once inside the range given in `/data/zones.json` (`growth.areas`); every other zone grows at the base rate (`growth.pop`, `growth.jobs`). Which areas boom is not stated. It shows year by year in `areas` of `get_state` (now against the base year).
 - Road condition (0 to 1) falls every year, faster under heavy traffic. Worse condition lowers speed. The maintenance level sets a yearly maintenance budget (`rules.maintain.budget_meur`), spent on resurfacing the worst segments below `rules.maintain.fixes_below_cond`. A segment that falls below `rules.emergency_rebuild.below_cond` without being resurfaced gets an emergency rebuild that year, at a multiple of its resurfacing cost and with reduced capacity.
 
 ## Money and rules
@@ -20,13 +20,13 @@ You are the transport planner of Espoo, Finland. Every year you decide which pro
 
 The MCP server `espoo` offers four tools.
 
-- `get_state()`: year, cash, losses, car share, network condition, development areas, projects under construction and built, startable projects, forecasts left, rules, the most delayed roads.
-- `list_projects()`: the menu with cost, build years, opex, status and the roads each project changes.
+- `get_state()`: year, cash, losses, network condition, development areas, projects under construction and built, startable projects, forecasts left, rules, the most delayed roads.
+- `list_projects()`: the menu with cost, build years, opex, status, `jam` (the share of last year's network delay on the roads the project changes) and those roads.
 - `forecast(plan, years)`: simulates a plan from the current state without changing anything. `plan` maps a year offset (`"0"` is this year) to that year's actions. Its growth for each area blends the middle of the area's range with the rate the area has shown so far, trusting the shown rate by `rules.forecast_trust`. A forecast covers at most `rules.forecast_years` years, and you have `rules.forecasts_per_year` forecasts per year; the count resets when you commit a year.
 - `commit_year(actions)`: carries out this year's actions and advances one year.
 
 ```json
-[{"build": "olari-link"}, {"build": "bus-520"}, {"maintain": 2}]
+[{"build": "olari-link"}, {"build": "kera-access"}, {"maintain": 2}]
 ```
 
 Static copies of the network, the zones and the full catalogue are in `/data` (`net.json`, `zones.json`, `catalogue.json`) for your own analysis.

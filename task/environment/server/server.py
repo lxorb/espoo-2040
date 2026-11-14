@@ -13,7 +13,7 @@ STATE = "/var/lib/env/state.json"
 SEED, YEARS, RUNOUT = (int(os.environ.get(k) or d) for k, d in (("SEED", 0), ("YEARS", 15), ("RUNOUT", 5)))
 TRIES, HORIZON = P.FORECASTS, P.FORECAST_YEARS
 LEVELS = range(len(P.MAINT))
-RULES = {"years": YEARS, "runout": RUNOUT, "builds_per_year": P.BUILDS, "forecasts_per_year": TRIES, "forecast_years": HORIZON, "forecast_trust": f"step / (step + {P.LEARN:g})",
+RULES = {"years": YEARS, "runout": RUNOUT, "boom_areas": list(P.BOOMS), "builds_per_year": P.BUILDS, "forecasts_per_year": TRIES, "forecast_years": HORIZON, "forecast_trust": f"step / (step + {P.LEARN:g})",
          "maintain": {"budget_meur": P.MAINT, "default": P.MAINT_DEFAULT, "runout_level": 0, "fixes_below_cond": P.MAINT_BELOW},
          "emergency_rebuild": {"below_cond": P.COND_MIN, "cost_x_resurface": P.REBUILD, "capacity": P.REBUILD_CAP}}
 
