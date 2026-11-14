@@ -31,7 +31,7 @@ const controls = new MapControls(camera, renderer.domElement);
 controls.enableDamping = false;
 controls.minZoom = 0.03;
 controls.maxZoom = 30;
-controls.maxPolarAngle = 1.25;
+controls.minPolarAngle = controls.maxPolarAngle = Math.acos(1 / Math.sqrt(3));
 controls.zoomToCursor = true;
 const [tx, ty] = (q.get('at') || HYPE.join(',')).split(',').map(Number);
 controls.target.set(tx, 0, -ty);
