@@ -12,7 +12,7 @@ const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Sou
   ['Matinkylä', 4518, 1343], ['Niittykumpu', 5884, 2487], ['Urheilupuisto', 6902, 2920], ['Tapiola', 8165, 2929], ['Aalto-yliopisto', 9295, 3944], ['Keilaniemi', 9590, 2952]];
 const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 3: 7.5, 4: 10, 5: 12 }, TILT = Math.tan(15 * Math.PI / 180);
 const q = new URLSearchParams(location.search);
-const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 1.4, dz: 1 }, flowOpt = {};
+const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 0.35, dz: 1 }, flowOpt = {};
 const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 3, split: false, pair: [], shown: [], cut: 0.5 };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
@@ -434,7 +434,7 @@ settings([
   knob('cv', 'congestion against', 'choice', ['2026', 'free flow'], '2026', v => { flowOpt.free = v === 'free flow'; }),
   knob('hb', 'heat background', 'range', [0.05, 1, 0.05], 0.2, v => { opt.heat = v; apply(); }),
   knob('fb', 'flow background', 'range', [0.02, 1, 0.01], 0.2, v => { opt.flow = v; apply(); }),
-  knob('tl', 'timelapse', 'range', [0.3, 5, 0.1], 1.4, v => { opt.tl = v; }),
+  knob('spy', 'seconds per year', 'range', [0.1, 5, 0.05], 0.35, v => { opt.tl = v; }),
   knob('fps', 'fps', 'toggle', 0, false, v => { fps.hidden = !v; })
 ]);
 frame();
