@@ -22,7 +22,7 @@ GTFS = "https://infopalvelut.storage.hsldev.com/gtfs/hsl.zip"
 LAM_DAYS, GTFS_DAY, GTFS_WD = (258, 259, 260), "20261117", "tuesday"
 DAILY, ODME = 3.2 * 0.60 * 0.92, 40
 OCC, WALK, TERM = SP.OCC, 4.5 / 3.6 / 1.3, SP.TERMINAL
-YEARS, BOOM, BASE, AREA_R, AREA_ACT = 15, (2.5, 4.0), 0.002, 2000, 25000
+YEARS, BOOM, BASE, AREA_R, AREA_ACT = 15, (1.6, 2.2), 0.002, 2000, 25000
 AREAS = [
     ("Finnoo", 24.7121, 60.1586),
     ("Kera", 24.7538, 60.2146),

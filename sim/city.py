@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 
 import numpy as np
-import shapely
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
@@ -64,25 +63,14 @@ class City:
             self.znode[m] = c[cKDTree(self.nodes[c]).query(self.zxy[m])[1]]
         same = self.znode[:, None] == self.znode[None, :]
         self.od0, self.truck0 = (np.where(same, 0.0, np.load(self.data / f)) for f in ("od.npy", "truck.npy"))
-        s["pt"], s["wait"] = np.load(self.data / "pt.npy").astype(float)
-        s["park"] = np.zeros(len(zs))
         s["fp"], s["fj"] = np.ones(len(zs)), np.ones(len(zs))
         self.ff0 = skim(self._graph(), self._t0()[L])
-        self.L0 = self._ls(self.ff0 + P.ASC_CAR + P.TERMINAL, s["pt"])
+        self.share = 1 / (1 + np.exp(P.THETA * (self.ff0 + P.ASC_CAR + P.TERMINAL - np.load(self.data / "pt.npy")[0])))
         if str(self.data) not in WARM:
             f = self.fork(False)
             f.step()
             WARM[str(self.data)] = f.s["eq"]
         s["eq"] = copy.deepcopy(WARM[str(self.data)])
-
-    @staticmethod
-    def _ls(gc, gp):
-        return -np.logaddexp(-P.THETA * gc, -P.THETA * gp) / P.THETA
-
-    def _pt(self, m, t, w):
-        s = self.s
-        m = m & (t < s["pt"])
-        s["pt"], s["wait"] = np.where(m, t, s["pt"]), np.where(m, w, s["wait"])
 
     def _add(self, links):
         s = self.s
@@ -93,7 +81,7 @@ class City:
         live = ~np.isin(cls, P.DROP) if "live" not in s else np.ones(len(links), bool)
         col.update(cap0=col["cap"], cond=np.ones(len(links)), wear=np.array([P.WEAR[c] for c in cls]) * live, life=np.array([P.LIFE[c] for c in cls]),
                    cls=cls, live=live,
-                   **{k: np.zeros(len(links)) for k in ("toll", "heavy", "carv")})
+                   **{k: np.zeros(len(links)) for k in ("heavy", "carv")})
         for k, v in col.items():
             s[k] = np.concatenate([s[k], v]) if k in s else v
         s["L"], s["g"] = np.flatnonzero(s["live"]), None
@@ -162,24 +150,6 @@ class City:
             s["cap"][k] *= nl / s["lanes"][k] * m.get("cap", 1.0)
             s["lanes"][k] = nl
             s["kmh"][k] = m.get("kmh", s["kmh"][k])
-        for ln in p.get("pt", []):
-            st = np.array(ln["stops"], float)
-            cum = np.r_[0, np.cumsum(np.linalg.norm(np.diff(st, axis=0), axis=1))]
-            d = np.linalg.norm(self.zxy[:, None] - st[None], axis=2)
-            i, w = d.argmin(1), d.min(1)
-            t = ((w[:, None] + w[None]) / 1000 / P.WALK_KMH * 60 + ln["headway"] / 2 + np.abs(cum[i][:, None] - cum[i][None]) / 1000 / ln["kmh"] * 60)
-            self._pt((w[:, None] <= P.STOP_R) & (w[None] <= P.STOP_R), t, ln["headway"] / 2)
-        if "pnr" in p:
-            k = cKDTree(self.zxy).query(p["pnr"]["at"])[1]
-            alt = self.ff0[:, k:k + 1] + s["pt"][k] + P.PNR_PEN
-            gain = (self.ff0[:, k] <= P.PNR_REACH)[:, None] & (alt < s["pt"])
-            w = min(1.0, p["pnr"]["spaces"] / max((self.od0 * gain).sum(), 1e-9))
-            self._pt(gain, s["pt"] - w * (s["pt"] - alt), s["wait"] - w * (s["wait"] - s["wait"][k]))
-        if "toll" in p:
-            m = np.isin(s["osm"], p["toll"]["osm"])
-            s["toll"][m & ~np.isin(s["a"], s["b"][m])] = p["toll"]["eur"]
-        if "park" in p:
-            s["park"][shapely.contains_xy(shapely.Polygon(p["park"]["area"]), *self.zxy.T)] = p["park"]["eur"]
         return new
 
     def _demand(self):
@@ -250,20 +220,14 @@ class City:
         ev += [f"{s['segname'].get(int(g), g)} emergency rebuild" for g in ids[bad]]
         cut[bad[inv]] *= P.REBUILD_CAP
         s["cond"][np.isin(inv, fix) | bad[inv]] = 1.0
-        kc = np.broadcast_to(P.ASC_CAR + P.TERMINAL + s["park"] / P.VOT * 60, T.shape)
-        f = np.clip(((s["p0"] + 1e-3) / (np.maximum(s["plast"], 0) + 1e-3)) ** 0.5, *P.MOHRING) if y else 1.0
-        pt = s["pt"] + s["wait"] * (f - 1)
         L, t0 = s["L"], self._t0()
-        r = equilibrium(self._graph(), t0[L], (s["cap"] * cut)[L], s["toll"][L] / P.VOT * 60, T, kc, pt, qt, s.get("eq"), self.gap)
-        s["eq"], s["plast"] = r["st"], r["p"]
-        s.setdefault("p0", r["p"])
+        r = equilibrium(self._graph(), t0[L], (s["cap"] * cut)[L], 0.0, T * self.share, qt, s.get("eq"), self.gap)
+        s["eq"] = r["st"]
         s["heavy"], s["carv"], t = np.zeros(s["a"].size), np.zeros(s["a"].size), t0.copy()
         s["heavy"][L], s["carv"][L], t[L] = r["vt"], r["v"] - P.PCU * r["vt"], r["t"]
-        s["car"] = float(r["q"].sum() / T.sum())
-        pay = (s["toll"] / P.VOT * 60 * s["carv"]).sum() * P.OCC + (r["q"] * (kc - P.ASC_CAR - P.TERMINAL)).sum()
-        delay = ((T * (self._ls(r["gc"] + kc, pt) - self.L0)).sum() - pay) / 60 * P.ANNUAL
-        jam = ((s["carv"] * P.OCC + s["heavy"]) * (t - t0)).sum() / 60 * P.ANNUAL
-        rec = dict(year=P.Y0 + y, budget=s["cash"], spent=c0 - s["cash"], actions=acts, maint=s["maint"], delay=float(delay), jam=float(jam),
+        s["car"] = float((T * self.share).sum() / T.sum())
+        delay = jam = float(((s["carv"] * P.OCC + s["heavy"]) * (t - s["len"] / 1000 / s["kmh"] * 60)).sum() / 60 * P.ANNUAL)
+        rec = dict(year=P.Y0 + y, budget=s["cash"], spent=c0 - s["cash"], actions=acts, maint=s["maint"], delay=delay, jam=jam,
                    car=s["car"], flow=s["carv"] + s["heavy"], time=t * 60, cond=s["cond"].copy(), cap=s["cap"] * cut / s["cap0"], new=new,
                    works=works, open=opened, events=ev, it=r["it"], gap=float(r["gap"]))
         s["year"] += 1

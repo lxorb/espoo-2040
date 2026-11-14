@@ -71,7 +71,7 @@ def _move(pool, a, n, x, xt, v, vt, cost, der, c0, c1, pw):
 
 
 @njit(cache=True, error_model="numpy")
-def _sweep(ptr, adj, tail, head, znode, zm, cost, der, c0, c1, pw, T, K, pt, qt, theta, occ, pcu, pool, top, pst, pln, h, ht, v, vt, gc):
+def _sweep(ptr, adj, tail, head, znode, zm, cost, der, c0, c1, pw, T, qt, occ, pcu, pool, top, pst, pln, h, ht, v, vt):
     Z, MP = T.shape[0], pln.shape[1]
     gn, gd, full = 0.0, 0.0, False
     C, S = np.zeros(MP), np.zeros(MP)
@@ -117,7 +117,6 @@ def _sweep(ptr, adj, tail, head, znode, zm, cost, der, c0, c1, pw, T, K, pt, qt,
                         S[j] += der[pool[i]]
             b = C.argmin()
             cm = C[b]
-            gc[o, d] = cm
             y = qt[o, d] - ht[k].sum()
             if y > 1e-9:
                 ht[k, b] += y
@@ -125,12 +124,9 @@ def _sweep(ptr, adj, tail, head, znode, zm, cost, der, c0, c1, pw, T, K, pt, qt,
             stamp += 1
             for i in range(pst[k, b], pst[k, b] + pln[k, b]):
                 mark[pool[i]] = stamp
-            if T[o, d] > 0:
-                q, hc = h[k].sum(), (h[k] * np.minimum(C, 1e12)).sum()
-                qs = T[o, d] / (1.0 + np.exp(min(theta * (cm + K[o, d]), 700.0)))
-                if q > 0:
-                    gn += hc - q * cm + (q - qs) * (cm + K[o, d] + np.log(q / max(T[o, d] - q, 1e-12)) / theta)
-                gd += hc + (T[o, d] - q) * pt[o, d]
+            hc = (h[k] * np.minimum(C, 1e12)).sum()
+            gn += hc - h[k].sum() * cm
+            gd += hc
             for j in range(MP):
                 if j != b and pln[k, j] and C[j] > cm and (h[k, j] > 0 or ht[k, j] > 0):
                     sh = 0.0
@@ -146,22 +142,16 @@ def _sweep(ptr, adj, tail, head, znode, zm, cost, der, c0, c1, pw, T, K, pt, qt,
                     _move(pool, pst[k, j], pln[k, j], -x / occ - pcu * y, -y, v, vt, cost, der, c0, c1, pw)
                     _move(pool, pst[k, b], pln[k, b], x / occ + pcu * y, y, v, vt, cost, der, c0, c1, pw)
                     cm += der[pool[pst[k, b]:pst[k, b] + pln[k, b]]].sum() * (x / occ + pcu * y)
-            if T[o, d] > 0:
-                q = h[k].sum()
-                if q <= 1e-9:
-                    x = T[o, d] / (1.0 + np.exp(min(theta * (cm + K[o, d]), 700.0))) - q
-                else:
-                    f = cm + K[o, d] + np.log(q / max(T[o, d] - q, 1e-12)) / theta
-                    x = min(max(-f / (S[b] / occ + T[o, d] / (theta * q * max(T[o, d] - q, 1e-12))), -0.9 * q), 0.5 * (T[o, d] - q))
-                if x >= 0:
-                    h[k, b] += x
-                    _move(pool, pst[k, b], pln[k, b], x / occ, 0.0, v, vt, cost, der, c0, c1, pw)
-                else:
-                    for j in range(MP):
-                        if pln[k, j] and h[k, j] > 0:
-                            y = h[k, j] * x / q
-                            h[k, j] += y
-                            _move(pool, pst[k, j], pln[k, j], y / occ, 0.0, v, vt, cost, der, c0, c1, pw)
+            x = T[o, d] - h[k].sum()
+            if x >= 0:
+                h[k, b] += x
+                _move(pool, pst[k, b], pln[k, b], x / occ, 0.0, v, vt, cost, der, c0, c1, pw)
+            else:
+                for j in range(MP):
+                    if pln[k, j] and h[k, j] > 0:
+                        y = h[k, j] * x / (T[o, d] - x)
+                        h[k, j] += y
+                        _move(pool, pst[k, j], pln[k, j], y / occ, 0.0, v, vt, cost, der, c0, c1, pw)
     return gn, gd, top, full
 
 
@@ -251,8 +241,8 @@ def skim(g, cost):
     return np.array([_tree(o, g["ptr"], g["adj"], g["head"], c, c, zm, zm.sum())[0][g["znode"]] for o in g["znode"]])
 
 
-def equilibrium(g, t0, cap, toll, T, kc, pt, qt, st, gap):
-    K, Z, n, ne = kc - pt, T.shape[0], g["ptr"].size - 1, g["tail"].size
+def equilibrium(g, t0, cap, toll, T, qt, st, gap):
+    Z, n, ne = T.shape[0], g["ptr"].size - 1, g["tail"].size
     zm = np.zeros(n, np.int64)
     zm[g["znode"]] = 1
     if st is None:
@@ -267,14 +257,12 @@ def equilibrium(g, t0, cap, toll, T, kc, pt, qt, st, gap):
         st["pool"], top = _pack(st["pool"], st["pst"], st["pln"], st["h"], st["ht"], v, vt, P.OCC, P.PCU, st["pool"].size)
         x = g["MT"] @ v / cap
         t = t0 * (1 + P.BPR_A * x ** P.BPR_B)
-        gc = np.full(T.shape, np.inf)
         gn, gd, top, full = _sweep(g["ptr"], g["adj"], g["tail"], g["head"], g["znode"], zm, g["M"] @ (t + toll), g["M"] @ (t0 * P.BPR_A * P.BPR_B * x ** (P.BPR_B - 1) / cap), c0, c1, int(P.BPR_B),
-                                   T, K, pt, qt, P.THETA, P.OCC, P.PCU, st["pool"], top, st["pst"], st["pln"], st["h"], st["ht"], v, vt, gc)
+                                   T, qt, P.OCC, P.PCU, st["pool"], top, st["pst"], st["pln"], st["h"], st["ht"], v, vt)
         if full or top > st["pool"].size // 2:
             st["pool"] = np.concatenate([st["pool"], np.zeros_like(st["pool"])])
-        if it and gn / gd < gap:
+        if it and gn < gap * gd:
             break
     vo = g["MT"] @ v
     t = t0 * (1 + P.BPR_A * (vo / cap) ** P.BPR_B)
-    q = np.clip(st["h"].sum(1).reshape(T.shape), 0, T)
-    return dict(v=vo, vt=g["MT"] @ vt, t=t, q=q, p=T - q, it=it, gap=gn / gd, gc=gc, st=st)
+    return dict(v=vo, vt=g["MT"] @ vt, t=t, it=it, gap=gn / max(gd, 1e-12), st=st)
