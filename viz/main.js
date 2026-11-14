@@ -197,7 +197,7 @@ addEventListener('keydown', e => {
   if (e.key.toLowerCase() === 's') toggleSplit();
   if (e.key === ' ') play.onclick();
   if (e.key === 'o') go(2422, 7758, 0.052, HOME);
-  if (e.key === 'O') go(1626, 9935, 0.0411, HOME);
+  if (e.key === 'O') go(7437, 7120, 0.157, HOME);
   const m = { 1: 'cars', 2: 'heat', 3: 'flow' }[e.key];
   if (m) { state.mode = m; apply(); }
 });
