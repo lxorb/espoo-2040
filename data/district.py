@@ -306,7 +306,7 @@ def model(bs, lib, ortho, A, f=1.0, pages=99, crops={}, far=0.6):
             wl, t = b["walls"][i], b["walls"][i]["tris"]
             sw = pick(lib, b["style"], sum(map(ord, b["id"])))
             im = bake(b, wl, s, sw) if sw else draw(b, wl, s)
-            px = np.stack([(t[..., :2] @ wl["e"] - wl["u0"]) * s + x, (wl["zt"] - t[..., 2]) * s + y], -1)
+            px = np.stack([(wl["u"] if "u" in wl else t[..., :2] @ wl["e"]) * s - wl["u0"] * s + x, (wl["zt"] - t[..., 2]) * s + y], -1)
         if key in crops:
             im = Image.open(TEX / crops[key][0]).crop(tuple(crops[key][1])).resize((w, h), Image.LANCZOS)
         out[pg][0].paste(im.resize((w + 4, h + 4)), (x - 2, y - 2))
@@ -356,11 +356,11 @@ def build():
         if b["id"] in fine:
             dress(b)
     for name, part in (("district.glb", [b for b in bs if b["id"] not in fine]), ("district-near.glb", [b for b in bs if b["id"] in fine])):
-        if part:
-            prims = model(part, lib, o, 4096, crops=crops)
-            (OUT / name).write_bytes(glb(prims))
-            files.append(name)
-            print(name, len(part), sum(len(v) // 3 for _, v, _ in prims), "tris", len(prims), "pages")
+        prims = model(part, lib, o, 4096, crops=crops) if part else []
+        for k in range(0, len(prims), 5):
+            files.append(name if len(prims) <= 5 else name.replace(".glb", f"-{k // 5}.glb"))
+            (OUT / files[-1]).write_bytes(glb(prims[k:k + 5]))
+            print(files[-1], len(part), sum(len(v) // 3 for _, v, _ in prims[k:k + 5]), "tris")
     hide = [list(np.round(np.array(p.exterior.coords)[:-1], 1).ravel()) for b in bs
             for p in getattr(b["foot"], "geoms", [b["foot"]]) if not p.is_empty] + rings
     (OUT / "district.json").write_text(json.dumps({"models": files, "hide": hide}, separators=(",", ":")))
