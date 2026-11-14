@@ -119,20 +119,19 @@ class Ground {
   }
 }
 
-const SPRITE_VERT = `attribute vec4 aI; uniform vec4 uRect[NS]; uniform vec4 uInfo[NS]; varying vec2 vUv, vW;
+const SPRITE_VERT = `attribute vec4 aI; uniform vec4 uRect[NS]; uniform vec4 uInfo[NS]; varying vec2 vUv;
   void main() {
     int k = int(aI.z); vec4 r = uRect[k], f = uInfo[k]; float sc = abs(aI.w), flip = step(aI.w, 0.0), bx = mix(f.x, 1.0 - f.x, flip);
     vec3 right = normalize(vec3(viewMatrix[0][0], 0.0, viewMatrix[2][0]));
     vec3 p = vec3(aI.x, 0.3, -aI.y) + right * (position.x - bx) * f.z * sc + vec3(0.0, position.y * f.y * sc, 0.0);
     vUv = vec2(mix(r.x, r.z, mix(position.x, 1.0 - position.x, flip)), mix(r.y, r.w, position.y));
-    vW = p.xz;
     gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
   }`;
-const SPRITE_FRAG = `uniform sampler2D uMap, uMask; uniform float uDim, uSat, uShow, uOut; uniform vec4 uBox; varying vec2 vUv, vW;
+const SPRITE_FRAG = `uniform sampler2D uMap; uniform float uDim, uSat, uShow; varying vec2 vUv;
   void main() {
     vec4 c = texture2D(uMap, vUv);
     if (c.a < 0.45 || ${DITHER} >= uShow) discard;
-    c.rgb = mix(vec3(dot(c.rgb, vec3(0.3, 0.59, 0.11))), c.rgb, uSat) * uDim * 1.1 * mix(uOut, 1.0, smoothstep(0.46, 0.54, texture2D(uMask, (vec2(vW.x, -vW.y) - uBox.xy) * uBox.zw).r));
+    c.rgb = mix(vec3(dot(c.rgb, vec3(0.3, 0.59, 0.11))), c.rgb, uSat) * uDim * 1.1;
     gl_FragColor = vec4(c.rgb, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -174,7 +173,7 @@ class Sprites {
     this.list = list;
     this.groups = GROUPS.map(g => g.map(p => list.flatMap((s, k) => s.name.startsWith(p) ? [k] : [])));
     this.walkers = list.flatMap((s, k) => s.name.startsWith('walker') ? [k] : []);
-    const uni = { uMap: { value: map }, uMask: looks.mask, uBox: looks.box, uDim: looks.dim, uSat: looks.sat, uOut: looks.out, uShow: looks.near,
+    const uni = { uMap: { value: map }, uDim: looks.dim, uSat: looks.sat, uShow: looks.near,
       uRect: { value: list.map(s => new THREE.Vector4(s.x / W, 1 - (s.y + s.h) / H, (s.x + s.w) / W, 1 - s.y / H)) },
       uInfo: { value: list.map(s => new THREE.Vector4(s.base[0], s.m, s.m * s.w / s.h, 0)) } };
     const defines = { NS: list.length };

@@ -3,9 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const HYPE = [-1511.7, 1239.2];
 export const looks = { dim: { value: 1 }, sat: { value: 1 }, tree: { value: 1 }, lane: { value: 1 }, path: { value: 1 }, one: { value: 1 }, px: { value: 1 }, coarse: { value: 0 }, fine: { value: 1 }, near: { value: 0 }, far: { value: 1 }, out: { value: 0.3 }, mark: { value: new THREE.Vector3(1, 1, 1) }, trees: { value: 1 }, sky: { value: new THREE.Vector3() },
-  cover: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, cbox: { value: new THREE.Vector4() },
-  mask: { value: new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1) }, box: { value: new THREE.Vector4() } };
-looks.mask.value.needsUpdate = true;
+  cover: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, cbox: { value: new THREE.Vector4() } };
 
 const GROUND = { land: '#8e8f8b', water: '#15191c', forest: '#4f6339', park: '#667f48', grass: '#6f864e', field: '#959872',
   wetland: '#6d7a58', sand: '#b5ad92', rock: '#97958f', paved: '#9a9b97', rail: '#7d7a74', pitch: '#7a9c56',
@@ -29,12 +27,11 @@ export function fadeDepth(show) {
 export function patch(mat, vert = '', frag = '', pars = '', fade = looks.one, show = looks.one) {
   mat.customProgramCacheKey = () => vert + frag + pars;
   mat.onBeforeCompile = s => {
-    Object.assign(s.uniforms, { uDim: looks.dim, uSat: looks.sat, uTree: looks.tree, uLane: looks.lane, uFade: fade, uPx: looks.px, uMask: looks.mask, uBox: looks.box, uShow: show, uOut: looks.out, uSky: looks.sky, uCover: looks.cover, uCbox: looks.cbox });
-    s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>\nuniform float uTree;\nvarying vec2 vMask;\n${pars}`).replace('#include <begin_vertex>', `#include <begin_vertex>\n${vert}`)
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvec4 wq = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\nwq = instanceMatrix * wq;\n#endif\nvMask = (modelMatrix * wq).xz;');
-    s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\nuniform float uDim, uSat, uLane, uFade, uShow, uOut;\nuniform sampler2D uMask;\nuniform vec4 uBox;\nuniform vec3 uSky;\nvarying vec2 vMask;\n${hash}\n${COVER}\n${pars.replace(/attribute[^;]*;/g, '')}`)
-      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\nif (sky > 0.5) gl_FragColor.rgb = uSky * mix(uOut, 1.0, mk);')
-      .replace('#include <color_fragment>', `#include <color_fragment>\nfloat sky = 0.0, mk = smoothstep(0.46, 0.54, texture2D(uMask, (vec2(vMask.x, -vMask.y) - uBox.xy) * uBox.zw).r);\nif (${DITHER} >= uShow) discard;\n${frag}\ndiffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, uSat) * mix(uOut, 1.0, mk);`);
+    Object.assign(s.uniforms, { uDim: looks.dim, uSat: looks.sat, uTree: looks.tree, uLane: looks.lane, uFade: fade, uPx: looks.px, uShow: show, uSky: looks.sky, uCover: looks.cover, uCbox: looks.cbox });
+    s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>\nuniform float uTree;\n${pars}`).replace('#include <begin_vertex>', `#include <begin_vertex>\n${vert}`);
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\nuniform float uDim, uSat, uLane, uFade, uShow;\nuniform vec3 uSky;\n${hash}\n${COVER}\n${pars.replace(/attribute[^;]*;/g, '')}`)
+      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\nif (sky > 0.5) gl_FragColor.rgb = uSky;')
+      .replace('#include <color_fragment>', `#include <color_fragment>\nfloat sky = 0.0;\nif (${DITHER} >= uShow) discard;\n${frag}\ndiffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, uSat);`);
   };
   return mat;
 }

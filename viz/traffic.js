@@ -15,8 +15,8 @@ const pick = cdf => {
   while (lo < hi) { const m = (lo + hi) >> 1; if (cdf[m] < r) lo = m + 1; else hi = m; }
   return lo;
 };
-const tone = (c, r, a) => { const s = Math.min(Math.max((r - 0.3) / 0.6, 0), 1); c.setHSL(0.47 * s * Math.sqrt(s), 1, 0.5).multiplyScalar(a * (1.7 - 1.2 * s)); return 1 + 2.4 * (1 - s); };
-const STEP = 20, SHUT = 0.35, GRID = 40;
+const tone = (c, r, a) => { const s = Math.min(Math.max((r - 0.3) / 0.6, 0), 1); c.setHSL(0.47 * s * Math.sqrt(s), 1, 0.5).multiplyScalar(a * (1.7 - 0.7 * s)); return 1.5 + 2 * (1 - s); };
+const STEP = 20, SHUT = 0.35, GRID = 40, FINE = 10;
 const W = l => Math.max(l.lanes || 1, 1) * 3.3 + 1, len = g => lengths(g).at(-1);
 const full = (frag, extra = {}) => new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
   depthTest: false, depthWrite: false, transparent: true, ...extra,
@@ -50,7 +50,7 @@ const BAND_VERT = `attribute vec3 aS; attribute vec2 aN; attribute vec3 aK; attr
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   }`;
 const CLIP = 'uniform vec3 uClip; void clip() { if (dot(vec3(gl_FragCoord.xy, 1.0), uClip) < 0.0) discard; }';
-const BAND_FRAG = (body, mark) => `uniform float uYear, uDim, uSat, uOut, uOy, uT, uPx; uniform vec3 uMark; uniform sampler2D uMask; uniform vec4 uBox; varying vec3 vK; varying vec2 vW, vU; varying float vS;
+const BAND_FRAG = (body, mark) => `uniform float uYear, uDim, uSat, uOy, uT, uPx; uniform vec3 uMark; varying vec3 vK; varying vec2 vW, vU; varying float vS;
   ${CLIP}
   ${COVER}
   float hs(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -60,7 +60,7 @@ const BAND_FRAG = (body, mark) => `uniform float uYear, uDim, uSat, uOut, uOy, u
     float z = exp2(ceil(log2(max(1.0, 1.25 * uPx)))), stripe = step(0.5, fract((vW.x + vW.y) / (8.0 * z))), dash = step(0.5, fract(vU.x / (16.0 * z))), e = abs(vS);
     vec3 c = vec3(0.0); float al = 1.0;
     ${body}
-    c = ${mark ? 'c' : 'mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, uSat) * uDim'} * mix(uOut, 1.0, smoothstep(0.46, 0.54, texture2D(uMask, (vec2(vW.x, -vW.y) - uBox.xy) * uBox.zw).r));
+    c = ${mark ? 'c' : 'mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, uSat) * uDim'};
     gl_FragColor = vec4(c, al);
   }`;
 const SURFACE = BAND_FRAG(`float wear = 1.0 - vK.x, v = vn(vW * 0.35);
@@ -91,7 +91,7 @@ export class Net {
     net.links.forEach((l, i) => this.byOsm.set(l.osm, [...(this.byOsm.get(l.osm) || []), i]));
     const twin = new Set(net.links.map(l => l.a + ',' + l.b));
     this.two = net.links.map(l => twin.has(l.b + ',' + l.a) ? 1 : 0);
-    this.uni = { uPx: { value: 1 }, uRef: { value: 1 }, uClip: { value: new THREE.Vector3(0, 0, 1) }, uYear: { value: 0 }, uOy: { value: -99 }, uT: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat, uMask: looks.mask, uBox: looks.box, uCover: looks.cover, uCbox: looks.cbox, uOut: looks.out, uMark: looks.mark };
+    this.uni = { uPx: { value: 1 }, uRef: { value: 1 }, uClip: { value: new THREE.Vector3(0, 0, 1) }, uYear: { value: 0 }, uOy: { value: -99 }, uT: { value: 0 }, uSigma: { value: 30 }, uDim: looks.dim, uSat: looks.sat, uCover: looks.cover, uCbox: looks.cbox, uMark: looks.mark };
     this.heatRT = target();
     this.heatOld = target();
     this.xf = -1e9;
@@ -124,7 +124,7 @@ export class Net {
     Object.assign(this, { vp: new THREE.Matrix4(), vp0: new THREE.Matrix4(), o: new THREE.Vector3(), o2: new THREE.Vector3(), rest: new THREE.Vector2(), size: new THREE.Vector2(), col: new THREE.Color(), gen: 0, kick: 0, on: false, share: 1, cut: null, pl: [], opt: { particles: 1, trail: 1, radius: 1, heat: 1, sources: false, abs: false } });
     this.postCam = new THREE.Camera();
     this.N = 60000;
-    this.M = 12000;
+    this.M = 30000;
     this.px = new Float32Array(this.N); this.py = new Float32Array(this.N); this.age = new Float32Array(this.N);
     const pool = n => ({ q: new Array(n), s: new Float32Array(n), d: new Float32Array(n), age: new Float32Array(n), lat: new Float32Array(n) });
     this.T = pool(this.M);
@@ -352,7 +352,7 @@ export class Net {
     const [x0, y0, x1, y1] = rect, c = Math.max(span / 300, 6), W = Math.ceil((x1 - x0) / c) + 1, H = Math.ceil((y1 - y0) / c) + 1;
     const U = new Float32Array(W * H), V = new Float32Array(W * H), D = new Float32Array(W * H), B = new Float32Array(W * H), K = new Int32Array(W * H), sg = 2 * (1.1 * c) ** 2;
     this.links.forEach((l, i) => {
-      const b = this.box[i], f = this.flow[i];
+      const b = this.box[i], f = this.flow[i] > 0 ? this.flow[i] : this.cap[i] < SHUT ? 0 : 0.3 * (this.fref || 1);
       if (!(f > 0) || b[0] > x1 || b[2] < x0 || b[1] > y1 || b[3] < y0) return;
       const sp = this.speed[i];
       for (let k = 1; k < l.geom.length; k++) {
@@ -378,13 +378,14 @@ export class Net {
   trace(tiles, px) {
     const [x0, y0, x1, y1] = this.rect, P = [], v = [0, 0, 0, 0], gen = ++this.gen, out = b => b[0] > x1 || b[2] < x0 || b[1] > y1 || b[3] < y0;
     this.links.forEach((l, i) => {
-      if (!(this.flow[i] > 0) || out(this.box[i])) return;
+      if (out(this.box[i])) return;
+      if (!(this.flow[i] > 0)) { if (px < FINE && this.cap[i] >= SHUT) P.push(Object.assign(this.lp(i).z ||= { g: l.geom, cum: this.cum[i], i: -1, off: 1, w: 0.6 }, { gen })); return; }
       const m = l.geom[l.geom.length >> 1];
       v[2] = 0;
       this.sample(m[0], m[1], v);
       if (v[2] < this.F.ref * 0.04) P.push(Object.assign(this.lp(i), { gen }));
     });
-    if (px < 4) for (const t of tiles?.values() || []) {
+    if (px < FINE) for (const t of tiles?.values() || []) {
       if (!t?.userData.res) continue;
       const [i, j] = t.name.split('_').map(Number);
       if (out([i * 1000, j * 1000, i * 1000 + 1000, j * 1000 + 1000])) continue;
@@ -413,7 +414,7 @@ export class Net {
   }
 
   stream(mesh, P, n, dt, px, src) {
-    const pos = mesh.geometry.attributes.aA.array, col = mesh.geometry.attributes.aC.array, e = [0, 0, 0, 0], c = this.col, k = px * 0.45 * dt, rf = Math.min(Math.max((4 - px) / 1.5, 0), 1);
+    const pos = mesh.geometry.attributes.aA.array, col = mesh.geometry.attributes.aC.array, e = [0, 0, 0, 0], c = this.col, k = px * 0.45 * dt, rf = Math.min(Math.max((FINE - px) / 3, 0), 1);
     let born = src && this.srcCdf.at(-1) > 0 ? Math.ceil(n * dt / 12) : 0;
     for (let p = 0; p < P.q.length; p++) {
       let q = P.q[p], s0 = P.s[p];
@@ -438,7 +439,7 @@ export class Net {
       pos.set([e[0] + e[3] * off, e[1] - e[2] * off], p * 4);
       along(q.g, q.cum, s, e);
       pos.set([e[0] + e[3] * off, e[1] - e[2] * off], p * 4 + 2);
-      const w = tone(c, q.i < 0 ? 1 : this.rel(q.i), (q.i < 0 ? 0.6 * rf : src ? 0.35 : 0.55) * Math.min(Math.abs(s - s0) / px, 1));
+      const w = tone(c, q.i < 0 ? 1 : this.rel(q.i), (q.i < 0 ? 0.9 * rf : src ? 0.35 : 0.55) * Math.min(Math.abs(s - s0) / px, 1));
       P.s[p] = s;
       col.set([c.r, c.g, c.b, w], p * 4);
     }
@@ -517,7 +518,7 @@ export class Net {
         this.field(this.rect, span, !F);
         this.dirty = false;
       }
-      const tk = `${this.rect}${this.fieldF}${[...tiles?.values() || []].filter(Boolean).length}${px < 4}${this.opt.particles}${this.id}`;
+      const tk = `${this.rect}${this.fieldF}${[...tiles?.values() || []].filter(Boolean).length}${px < FINE}${this.opt.particles}${this.id}`;
       if (tk !== this.thinKey) { this.thinKey = tk; this.trace(tiles, px); }
       this.pan(size);
       r.setRenderTarget(this.flowRT);
