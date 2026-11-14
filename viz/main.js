@@ -365,7 +365,7 @@ function pick() {
   card.hidden = k < 0;
   if (k < 0) return;
   const l = m.links[k], pc = v => `${Math.round(v * 100)}%`;
-  card.replaceChildren(el('b', '', l.name || l.ref || l.cls), ...[['flow', `${Math.round(m.flow[k])} veh/h`], ['speed', `${Math.round(m.speed[k] * 3.6)} / ${l.kmh} km/h`], ['queue', pc(m.loss[k])], ['condition', pc(m.cond[k])],
+  card.replaceChildren(el('b', '', l.name || l.ref || l.cls), ...[['flow', `${Math.round(m.flow[k])} veh/h`], ['queue', pc(m.loss[k])], ['condition', pc(m.cond[k])],
     ...m.cap[k] < 1 ? [['works', `${pc(m.cap[k])} capacity`]] : []].map(([a, b]) => el('div', '', el('span', '', a), el('span', '', b))));
 }
 const cv = renderer.domElement;
