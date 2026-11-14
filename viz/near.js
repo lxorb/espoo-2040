@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { looks, patch, up, DITHER } from './city.js';
+import { looks, patch, up, DITHER, HYPE } from './city.js';
 import { lengths, along } from './traffic.js';
 
-export const caps = { ground: 64, texels: 40e6, sprites: 10000, walkers: 300, props: 3000, loads: 4 };
+export const caps = { ground: 64, texels: 40e6, cache: 80e6, sprites: 10000, walkers: 300, props: 3000, loads: 4 };
 const GROUPS = [['birch', 'linden'], ['pine', 'spruce'], ['linden', 'linden', 'birch'], ['pine', 'spruce', 'birch'], ['pine', 'spruce'], ['shrub']];
 const SHADOW = [0.51, 0.86];
 const v = new THREE.Vector3();
@@ -19,7 +19,7 @@ function quad() {
 
 class Ground {
   constructor(scene, renderer) {
-    Object.assign(this, { scene, tiles: new Map(), busy: 0, key: '', geo: quad(), aniso: Math.min(8, renderer.capabilities.getMaxAnisotropy()), renderer });
+    Object.assign(this, { scene, tiles: new Map(), blobs: new Map(), busy: 0, key: '', geo: quad(), aniso: Math.min(8, renderer.capabilities.getMaxAnisotropy()), renderer, born: performance.now() });
     fetch('data/ground.json').then(r => r.json()).then(m => {
       const is = m.tiles.map(t => t[0]), js = m.tiles.map(t => t[1]), s = m.size;
       this.i0 = Math.min(...is) - 1; this.j0 = Math.min(...js) - 1;
@@ -29,31 +29,41 @@ class Ground {
       looks.cover.value = this.cover = tex;
       looks.cbox.value.set(this.i0 * s, this.j0 * s, 1 / (this.ni * s), 1 / (this.nj * s));
       this.have = new Set(m.tiles.map(t => t.join('_')));
+      this.pre = m.tiles.map(([i, j]) => [Math.hypot((i + 0.5) * s - HYPE[0], (j + 0.5) * s - HYPE[1]), i, j]).sort((a, b) => a[0] - b[0]);
       this.meta = m;
     }).catch(() => {});
+  }
+
+  tile(k, i, j) {
+    return this.tiles.get(k) || this.tiles.set(k, { i, j, a: 0, res: 0, on: false, used: 0, show: { value: 0 } }).get(k);
   }
 
   update(camera, dt) {
     const m = this.meta;
     if (!m) return;
     const s = m.size, near = looks.near.value;
-    if (!near) { for (const k of [...this.tiles.keys()]) this.drop(k); return; }
-    const res = [160, 320, 640, 1280].find(r => r >= s * camera.zoom * this.renderer.getPixelRatio() * 1.3) || 1280;
-    const key = stamp(camera, res, this.busy);
-    if (key !== this.key) { this.key = key; this.plan(camera, res); }
+    if (near) {
+      const res = [160, 320, 640, 1280].find(r => r >= s * camera.zoom * this.renderer.getPixelRatio() * 1.3) || 1280;
+      const key = stamp(camera, res, this.busy);
+      if (key !== this.key) { this.key = key; this.plan(camera, res); }
+    } else if (!this.busy && this.pre.length && performance.now() - this.born > 4000) {
+      const [, i, j] = this.pre.shift(), k = `${i}_${j}`, t = this.tile(k, i, j);
+      if (!t.res) this.load(k, t, 160);
+    }
     const d = this.cover.image.data;
     let dirty = false;
-    for (const [k, t] of this.tiles) {
-      t.a = t.mesh ? Math.min(t.a + dt / 0.25, 1) : 0;
-      const val = t.a * near, o = (t.j - this.j0) * this.ni + t.i - this.i0, b = Math.round(val * 255);
+    for (const t of this.tiles.values()) {
+      t.a = t.mesh ? Math.min(t.a + dt / 0.2, 1) : 0;
+      const val = t.on ? t.a * near : 0, o = (t.j - this.j0) * this.ni + t.i - this.i0, b = Math.round(val * 255);
       if (t.show.value !== val) t.show.value = val;
+      if (t.mesh) t.mesh.visible = val > 0;
       if (d[o] !== b) { d[o] = b; dirty = true; }
     }
     if (dirty) this.cover.needsUpdate = true;
   }
 
   plan(camera, res) {
-    const s = this.meta.size, r = 2 * camera.zoom / innerWidth * s, want = [];
+    const s = this.meta.size, r = 2 * camera.zoom / innerWidth * s, want = [], now = performance.now();
     for (const k of this.have) {
       const [i, j] = k.split('_').map(Number);
       v.set((i + 0.5) * s, 0, -(j + 0.5) * s).project(camera);
@@ -61,32 +71,41 @@ class Ground {
     }
     want.sort((a, b) => a[0] - b[0]);
     want.length = Math.min(want.length, caps.ground, Math.floor(caps.texels / res / res));
-    const keep = new Set(want.map(w => w[1]));
-    for (const k of [...this.tiles.keys()]) if (!keep.has(k)) this.drop(k);
-    for (const [, k, i, j] of want) {
+    for (const t of this.tiles.values()) t.on = false;
+    const ts = want.map(([, k, i, j]) => Object.assign(this.tile(k, i, j), { on: true, used: now, k }));
+    for (const t of [...ts.filter(t => !t.res), ...ts.filter(t => t.res && t.res < res)]) {
       if (this.busy >= caps.loads) break;
-      const t = this.tiles.get(k) || this.tiles.set(k, { i, j, a: 0, res: 0, show: { value: 0 } }).get(k);
-      if (t.res !== res && !t.busy) this.load(k, t, res);
+      if (!t.busy) this.load(t.k, t, t.res ? res : 160);
+    }
+    let sum = 0;
+    for (const t of this.tiles.values()) sum += t.res * t.res;
+    for (const [k, t] of [...this.tiles].filter(([, t]) => !t.on && t.mesh).sort((a, b) => a[1].used - b[1].used)) {
+      if (sum <= caps.cache) break;
+      sum -= t.res * t.res;
+      this.drop(k);
     }
   }
 
   load(k, t, res) {
     t.busy = true; this.busy++;
-    fetch(`data/ground/${k}.webp`).then(r => r.blob()).then(b => createImageBitmap(b, { resizeWidth: res, resizeHeight: res, resizeQuality: 'high' })).then(img => {
-      if (this.tiles.get(k) !== t) return img.close();
+    const blob = this.blobs.get(k) || fetch(`data/ground/${k}.webp`).then(r => r.blob());
+    this.blobs.set(k, blob);
+    blob.then(b => createImageBitmap(b, { resizeWidth: res, resizeHeight: res, resizeQuality: 'high' })).then(img => {
+      if (this.tiles.get(k) !== t || t.res >= res) return img.close();
       const tex = new THREE.Texture(img), s = this.meta.size;
       Object.assign(tex, { colorSpace: THREE.SRGBColorSpace, flipY: false, anisotropy: this.aniso, needsUpdate: true, onUpdate: () => img.close() });
       if (t.mesh) { t.mesh.material.map.dispose(); t.mesh.material.map = tex; }
       else {
-        t.mesh = new THREE.Mesh(this.geo, patch(new THREE.MeshStandardMaterial({ roughness: 1, map: tex, depthTest: false, depthWrite: false }), '', 'diffuseColor.rgb *= uDim;', '', looks.one, t.show));
+        t.mesh = new THREE.Mesh(this.geo, patch(new THREE.MeshStandardMaterial({ roughness: 1, map: tex, alphaTest: 0.5, depthTest: false, depthWrite: false }), '', 'diffuseColor.rgb *= uDim;', '', looks.one, t.show));
         t.mesh.position.set(t.i * s, 0, -t.j * s);
         t.mesh.scale.set(s, 1, s);
         t.mesh.renderOrder = -0.5;
         t.mesh.receiveShadow = true;
+        t.mesh.visible = false;
         this.scene.add(t.mesh);
       }
       t.res = res;
-    }).catch(() => { t.res = res; }).finally(() => { t.busy = false; this.busy--; });
+    }).catch(() => { this.blobs.delete(k); }).finally(() => { t.busy = false; this.busy--; this.key = ''; });
   }
 
   drop(k) {

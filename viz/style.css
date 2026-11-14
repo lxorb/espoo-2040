@@ -14,8 +14,16 @@ canvas { display: block; }
 #play.on::before { left: 12px; width: 4px; height: 14px; border: 0; border-left: 4px solid currentColor; border-right: 4px solid currentColor; }
 #track { flex: 1; }
 #year { width: 100%; margin: 0; accent-color: var(--hi); }
-.lab.sign { font-size: 13px; padding: 3px 7px; color: var(--mark, #fff); }
-#ylab { color: var(--hi); font-weight: 700; font-size: 14px; min-width: 40px; text-align: right; }
+.lab.tag { font-size: 10px; padding: 3px 6px; letter-spacing: .06em; text-transform: uppercase; color: var(--mark, #fff); pointer-events: none; }
+.pulse { position: absolute; left: 0; top: 0; pointer-events: none; }
+.pulse::after { content: ""; position: absolute; left: -130px; top: -130px; width: 260px; height: 260px; box-sizing: border-box; border: 3px solid var(--mark, #fff); border-radius: 50%; animation: pulse 1.4s ease-out forwards; }
+@keyframes pulse { from { transform: scale(0.04); opacity: 1; } to { transform: scale(1); opacity: 0; } }
+#yl { display: flex; flex-direction: column; align-items: flex-end; min-width: 40px; }
+#vs { color: var(--hi); font-size: 9px; font-weight: 700; white-space: nowrap; }
+#vs:empty { display: none; }
+#peek { padding: 8px 7px; font-size: 10px; }
+#peek.on { background: var(--mark, #fff); }
+#ylab { color: var(--hi); font-weight: 700; font-size: 14px; }
 #speed { font: 700 12px "JetBrains Mono", monospace; color: var(--hi); background: #222; border: 0; border-radius: 6px; padding: 6px 0; width: 36px; cursor: pointer; }
 #labels { position: fixed; inset: 0; pointer-events: none; }
 .lab { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; user-select: none; padding: 5px 8px; background: var(--ink); color: var(--hi); font-weight: 700; font-size: 11px; letter-spacing: .08em; border-radius: 4px; white-space: nowrap; }

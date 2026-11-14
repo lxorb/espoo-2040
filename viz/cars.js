@@ -87,7 +87,7 @@ export class Cars {
       const x = (P[a] + (P[a + 2] - P[a]) * f) / 10, y = (P[a + 1] + (P[a + 3] - P[a + 1]) * f) / 10;
       const dx = P[a + 2] - P[a], dy = P[a + 3] - P[a + 1];
       if (dx * dx + dy * dy > 4) this.heading[id] = Math.atan2(dy, dx);
-      put(type, x, y, this.heading[id], id);
+      if (!net?.blocked(x, y)) put(type, x, y, this.heading[id], id);
     });
     if (net?.links && px < 2.25) { this.macro(net, rect, dt, put); this.streets(tiles, rect, put); } else this.mac = [];
     this.meshes.forEach((m, k) => {
@@ -110,7 +110,7 @@ export class Cars {
     const L = net.links, n = L.length, e = [0, 0, 0, 0];
     if (L !== this.L) {
       const twin = new Set(L.map(l => l.a + ',' + l.b));
-      this.L = L; this.mac = []; this.out = [];
+      this.L = L; this.mac = this.mac.filter(c => c.i < n); this.out = [];
       L.forEach((l, i) => (this.out[l.a] ||= []).push(i));
       this.cum = L.map(l => lengths(l.geom));
       this.two = L.map(l => twin.has(l.b + ',' + l.a));

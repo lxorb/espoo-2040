@@ -8,7 +8,7 @@ const v = new THREE.Vector3(), depth = fadeDepth(looks.fine);
 
 export class Detail {
   constructor(scene, city) {
-    Object.assign(this, { scene, city, tiles: new Map(), busy: 0, key: '', loader: new GLTFLoader() });
+    Object.assign(this, { scene, city, tiles: new Map(), spare: new Map(), busy: 0, key: '', loader: new GLTFLoader() });
     fetch('data/detail.json').then(r => r.json()).then(m => { this.meta = m; this.part = new Set((m.partial || []).map(t => t.join('_'))); }).catch(() => {});
   }
 
@@ -25,10 +25,18 @@ export class Detail {
     }).filter(w => w[2]).sort((a, b) => a[0] - b[0]).slice(0, DETAIL_CAP) : [];
     const keep = new Set(want.map(w => w[1]));
     for (const k of [...this.tiles.keys()]) if (!keep.has(k)) this.drop(k);
-    for (const [, k] of want) if (!this.tiles.has(k) && this.busy < 2) this.load(k);
+    for (const [, k] of want) if (!this.tiles.has(k) && (this.spare.has(k) || this.busy < 2)) this.load(k);
   }
 
   load(k) {
+    const g = this.spare.get(k);
+    if (g) {
+      this.spare.delete(k);
+      this.tiles.set(k, { g });
+      this.scene.add(g);
+      if (!this.part.has(k)) this.city.swap(k, true);
+      return;
+    }
     const t = {};
     this.tiles.set(k, t);
     this.busy++;
@@ -61,6 +69,9 @@ export class Detail {
     const t = this.tiles.get(k);
     this.tiles.delete(k);
     this.city.swap(k, false);
-    if (t.g) { this.scene.remove(t.g); this.free(t.g); }
+    if (!t.g) return;
+    this.scene.remove(t.g);
+    this.spare.set(k, t.g);
+    for (const [q, g] of this.spare) if (this.spare.size > DETAIL_CAP * 2) { this.spare.delete(q); this.free(g); }
   }
 }

@@ -14,7 +14,7 @@ const RUNS = ['agent', 'reference', 'nothing'];
 const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 5: 12 };
 const q = new URLSearchParams(location.search);
 const opt = { heat: 0.3, flow: 0.07, tl: 1.4, dz: 1, cars: 20000, fps: false }, flowOpt = { particles: 1, trail: 1, radius: 1, heat: 1 };
-const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, speed: 1 };
+const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, peek: false, speed: 1 };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -50,7 +50,7 @@ const city = new City(scene), near = new Near(scene, renderer, city), detail = n
 let net, cars;
 
 const catalogue = fetch('data/catalogue.json').then(r => r.json()).catch(() => []);
-fetch('data/net.json').then(r => r.json()).then(async n => { net = new Net(scene, n, renderer, camera, await catalogue); net.opt = flowOpt; apply(); runList.then(loadRun); });
+fetch('data/net.json').then(r => r.json()).then(async n => { net = new Net(scene, n, renderer, camera, await catalogue); net.opt = flowOpt; state.ref && net.calib(state.ref); apply(); runList.then(loadRun); });
 Promise.all([fetch('data/cars.json').then(r => r.json()), fetch('data/cars.bin').then(r => r.arrayBuffer())])
   .then(([m, b]) => { cars = new Cars(scene, m, new Int32Array(b)); apply(); }).catch(e => console.log(e));
 const hypeMats = [], fine = [];
@@ -89,31 +89,53 @@ fetch('assets/district.json').then(r => r.json()).then(d => {
   for (const m of d.models || []) place(`assets/${m}`, false);
 }).catch(() => {});
 
-const runs = {};
+const runs = {}, get = who => runs[who] ||= fetch(`data/runs/${who}.json`).then(r => r.json());
 const runList = fetch('data/runs/index.json').then(r => r.json()).catch(() => RUNS).then(list => {
   for (const r of list) document.getElementById('runs').insertAdjacentHTML('beforeend', `<button data-v="${r}">${r}</button>`);
+  document.getElementById('runs').insertAdjacentHTML('beforeend', '<button id="peek" title="hold N to compare with doing nothing">vs</button>');
+  const pk = document.getElementById('peek');
+  pk.onpointerdown = () => peek(true);
+  pk.onpointerup = pk.onpointerleave = pk.onpointercancel = () => peek(false);
   state.who ||= list[0];
   sync();
 });
+get('nothing').then(r => { state.ref = r; net?.calib(r); paint(); sync(); }).catch(() => {});
+const cur = () => state.peek && state.ref ? state.ref : state.run, paint = () => net && cur() && net.set(cur(), state.f);
+function peek(on) {
+  if (state.peek === on) return;
+  state.peek = on;
+  paint();
+  sync();
+}
 function loadRun() {
   const who = state.who;
-  (runs[who] ||= fetch(`data/runs/${who}.json`).then(r => r.json())).then(run => {
+  get(who).then(run => {
     if (who !== state.who) return;
     state.run = run;
     year.max = run.years.length - 1;
     state.f = Math.min(state.f, year.max);
-    net && net.set(run, state.f);
+    paint();
     sync();
   }).catch(() => { document.querySelector(`#runs [data-v=${who}]`).disabled = true; });
 }
+const delay = (run, f) => { const ys = run.years, a = Math.min(Math.floor(f), ys.length - 1), b = Math.min(a + 1, ys.length - 1), t = f - a; return ys[a].delay * (1 - t) + ys[b].delay * t; };
+function versus() {
+  const r = state.run, n = state.ref;
+  if (state.peek && n) return 'doing nothing';
+  if (!r || !n || r === n) return '';
+  const p = Math.round((delay(r, state.f) / delay(n, state.f) - 1) * 100);
+  return `${p < 0 ? '\u2212' : p > 0 ? '+' : ''}${Math.abs(p)}% vs doing nothing`;
+}
 
-const year = document.getElementById('year'), ylab = document.getElementById('ylab'), play = document.getElementById('play');
+const year = document.getElementById('year'), ylab = document.getElementById('ylab'), vs = document.getElementById('vs'), play = document.getElementById('play');
 function sync() {
   for (const b of document.querySelectorAll('#modes button')) b.classList.toggle('on', b.dataset.v === state.mode);
-  for (const b of document.querySelectorAll('#runs button')) b.classList.toggle('on', b.dataset.v === state.who);
+  for (const b of document.querySelectorAll('#runs button')) b.classList.toggle('on', state.peek ? b.dataset.v === 'nothing' || b.id === 'peek' : b.dataset.v === state.who);
   play.classList.toggle('on', state.play);
   year.value = state.f;
-  ylab.textContent = (state.run ? state.run.y0 : 2026) + Math.round(state.f);
+  ylab.textContent = (state.run ? state.run.y0 : 2026) + Math.floor(state.f + 1e-6);
+  const t = versus();
+  if (vs.textContent !== t) vs.textContent = t;
 }
 function apply() {
   looks.dim.value = { cars: 1, heat: opt.heat, flow: opt.flow }[state.mode];
@@ -129,17 +151,20 @@ function apply() {
 }
 document.getElementById('modes').onclick = e => { if (e.target.dataset.v) { state.mode = e.target.dataset.v; apply(); } };
 document.getElementById('runs').onclick = e => { if (e.target.dataset.v) { state.who = e.target.dataset.v; loadRun(); sync(); } };
-year.oninput = () => { state.f = +year.value; state.run && net && net.set(state.run, state.f); sync(); };
+year.oninput = () => { state.f = +year.value; paint(); sync(); };
 document.getElementById('speed').onclick = e => { state.speed = { 1: 2, 2: 5, 5: 1 }[state.speed]; e.target.textContent = `${state.speed}x`; };
 play.onclick = () => { state.play = !state.play; if (state.play && state.f >= +year.max) state.f = 0; sync(); };
+addEventListener('keyup', e => { if (e.key.toLowerCase() === 'n') peek(false); });
+addEventListener('blur', () => peek(false));
 addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 'n') peek(true);
   if (e.key === ' ') play.onclick();
   const m = { 1: 'cars', 2: 'heat', 3: 'flow' }[e.key];
   if (m) { state.mode = m; apply(); }
 });
 
 const UI = ['modes', 'runs', 'time'].map(id => document.getElementById(id));
-let signs = [], shownRun = null, espoo = null;
+let tags = [], shown = null, anim = null, hold = 0, espoo = null;
 function tag(text, x, y, cls) {
   const el = document.createElement('div');
   el.className = `lab ${cls}`;
@@ -147,16 +172,49 @@ function tag(text, x, y, cls) {
   document.getElementById('labels').append(el);
   return { el, p: new THREE.Vector3(x, 20, -y) };
 }
-function eventTags() {
-  if (!net?.run || !state.run) return;
-  if (net.run !== shownRun) {
-    shownRun = net.run;
-    for (const s of signs) s.el.remove();
-    signs = net.signs.map(s => Object.assign(tag(s.text, s.x, s.y, 'sign'), { a: s.a }));
+function words(t, f, y0) {
+  if (f < t.a - 1e-6) return '';
+  if (f < t.b - 1e-6) return t.build ? `BUILDING ${t.name} ${y0 + t.a}\u2013${y0 + t.b}` : '';
+  return { pt: t.name, toll: 'TOLL', park: 'PAID PARKING', pnr: 'PARK & RIDE' }[t.kind] ?? (f < t.b + 2.5 ? `${t.name} OPENED ${y0 + t.b}` : '');
+}
+function projectTags(put) {
+  if (net?.tags !== shown) {
+    for (const t of tags) t.el.remove();
+    shown = net?.tags;
+    tags = (shown || []).map(t => {
+      t.el ||= Object.assign(document.createElement('div'), { className: 'lab tag' });
+      t.p ||= new THREE.Vector3(t.x, 20, -t.y);
+      document.getElementById('labels').append(t.el);
+      return t;
+    });
+  }
+  if (net?.anim && net.anim !== anim) {
+    anim = net.anim;
+    for (const t of tags) if (t.b === anim.y) {
+      const el = Object.assign(document.createElement('div'), { className: 'pulse' });
+      document.getElementById('labels').append(el);
+      setTimeout(() => el.remove(), 1500);
+      labels.push({ el, p: t.p.clone().setY(0), ring: true });
+    }
+  }
+  const y0 = cur()?.y0 ?? 2026, cap = camera.zoom < 0.2 ? 3 : camera.zoom < 0.5 ? 6 : 99, w = innerWidth, h = innerHeight;
+  let n = 0;
+  for (const t of tags) {
+    const text = words(t, state.f, y0);
+    if (t.el.textContent !== text) t.el.textContent = text;
+    v.copy(t.p).project(camera);
+    const x = (v.x + 1) / 2 * w, y = (1 - v.y) / 2 * h - 8, bw = text.length * 6.6 + 14, r = [x - bw / 2, y - 20, x + bw / 2, y];
+    t.on = !!text && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && n < cap && !put.some(b => r[0] < b[2] + 4 && r[2] > b[0] - 4 && r[1] < b[3] + 2 && r[3] > b[1] - 2);
+    t.el.style.display = t.on ? '' : 'none';
+    if (!t.on) continue;
+    n++;
+    put.push(r);
+    t.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+    t.el.style.opacity = t.kind === 'road' ? Math.min(Math.max(1 - (state.f - t.b - 2) / 0.5, 0), 1) : 1;
   }
 }
 
-const labels = [['HYPE', ...HYPE, 40, 'big'], ...STATIONS.map(([n, x, y]) => [n.toUpperCase(), x, y, 12, 'st'])].map(([text, x, y, h, cls]) => {
+let labels = [['HYPE', ...HYPE, 40, 'big'], ...STATIONS.map(([n, x, y]) => [n.toUpperCase(), x, y, 12, 'st'])].map(([text, x, y, h, cls]) => {
   const el = document.createElement('div');
   el.className = `lab ${cls}`;
   el.textContent = text;
@@ -228,24 +286,31 @@ function frame() {
   sun.target.position.copy(t);
   Object.assign(sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: 100, far: 12000 });
   sun.shadow.camera.updateProjectionMatrix();
-  if (state.play && state.run) {
-    state.f = Math.min(state.f + dt / opt.tl, +year.max);
+  if (state.play && state.run && (hold -= dt) < 0) {
+    let f = Math.min(state.f + dt / opt.tl, +year.max);
+    if (Math.floor(f) > Math.floor(state.f + 1e-6) && net?.opens.has(Math.floor(f))) { f = Math.floor(f); hold = 1.3; }
+    state.f = f;
     if (state.f >= +year.max) state.play = false;
-    net && net.set(state.run, state.f);
+    paint();
     sync();
   }
   if (cars) cars.max = opt.cars;
   if (cars && state.mode === 'cars') cars.tick(dt * state.speed, net, [x0, y0, x1, y1], px, city.loaded);
   net && net.draw(state.mode, [x0, y0, x1, y1], dt * (state.mode === 'flow' ? FLOW[state.speed] : state.speed), px, city.loaded);
-  eventTags();
   if (city.tag && !espoo) labels.push(espoo = Object.assign(tag('ESPOO', ...city.tag, 'big'), { far: true }));
-  const w = innerWidth, h = innerHeight, all = [...labels, ...signs];
-  for (const l of all) {
+  const w = innerWidth, h = innerHeight, put = [];
+  labels = labels.filter(l => l.el.isConnected);
+  for (const l of labels) {
     v.copy(l.p).project(camera);
-    l.on = Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && (!l.el.classList.contains('st') || camera.zoom > 0.12) && !(l.a > state.f + 1e-6) && (l.a === undefined || state.mode !== 'flow') && (!l.far || camera.zoom < 0.35);
+    l.on = Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && (!l.el.classList.contains('st') || camera.zoom > 0.12) && (!l.far || camera.zoom < 0.35);
     l.el.style.display = l.on ? '' : 'none';
-    if (l.on) l.el.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h - 8 - (l.dy || 0)}px) translate(-50%, -100%)`;
+    if (!l.on) continue;
+    const x = (v.x + 1) / 2 * w, y = (1 - v.y) / 2 * h;
+    l.el.style.transform = l.ring ? `translate(${x}px, ${y}px)` : `translate(${x}px, ${y - 8}px) translate(-50%, -100%)`;
+    if (!l.ring) put.push([x - l.el.offsetWidth / 2, y - 8 - l.el.offsetHeight, x + l.el.offsetWidth / 2, y - 8]);
   }
+  projectTags(put);
+  const all = [...labels, ...tags];
   const ui = UI.map(e => e.getBoundingClientRect()), over = a => ui.some(b => a.left < b.right + 8 && a.right > b.left - 8 && a.top < b.bottom + 8 && a.bottom > b.top - 8);
   for (const l of all.filter(l => l.on && over(l.el.getBoundingClientRect()))) l.el.style.display = 'none';
   renderer.render(scene, camera);
