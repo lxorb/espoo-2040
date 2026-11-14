@@ -13,7 +13,7 @@ const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Sou
 const RUNS = ['agent', 'rl'];
 const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 3: 7.5, 4: 10, 5: 12 }, TILT = Math.tan(15 * Math.PI / 180);
 const q = new URLSearchParams(location.search);
-const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 1.4, dz: 1, cars: 20000, fps: false }, flowOpt = { particles: 1, trail: 1, radius: 1, heat: 1, sources: false, abs: false };
+const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 1.4, dz: 1, cars: 20000, fps: false }, flowOpt = { particles: 1, trail: 1, radius: 1, heat: 1, sources: false, abs: false, free: false };
 const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 3, split: false, pair: [], shown: [], cut: 0.5 };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
@@ -100,6 +100,7 @@ const runList = fetch('data/runs/index.json').then(r => r.json()).catch(() => RU
   const box = document.getElementById('runs');
   for (const r of list) box.insertAdjacentHTML('beforeend', `<button data-v="${r}">${r.toUpperCase()}</button>`);
   box.insertAdjacentHTML('beforeend', '<button id="split" title="split screen (S)">split</button>');
+  state.list = list;
   state.pair = list.slice(0, 2);
   state.split &&= state.pair.length === 2 && !state.who;
   state.who ||= list[0];
@@ -127,6 +128,7 @@ function loadRun() {
 const delay = (run, f) => { const ys = run.years, a = Math.min(Math.floor(f), ys.length - 1), b = Math.min(a + 1, ys.length - 1), t = f - a; return ys[a].delay * (1 - t) + ys[b].delay * t; };
 const year = document.getElementById('year'), ylab = document.getElementById('ylab'), play = document.getElementById('play');
 const cut = document.getElementById('cut'), sides = [...document.querySelectorAll('.side')];
+sides.forEach((e, k) => e.onclick = () => { const o = state.list.find(r => !state.pair.includes(r)); if (o) { state.pair[k] = o; loadRun(); } });
 const speed = document.getElementById('speed'), rate = () => state.mode === 'flow' ? 'flow' : 'speed';
 function sync() {
   for (const b of document.querySelectorAll('#modes button')) b.classList.toggle('on', b.dataset.v === state.mode);
@@ -450,6 +452,7 @@ settings([
   knob('ft', 'flow trail', 'range', [0.25, 4, 0.05], 1, v => { flowOpt.trail = v; }),
   knob('fs', 'flow sources', 'toggle', 0, false, v => { flowOpt.sources = v; }),
   knob('fc', 'flow color', 'choice', ['relative', 'absolute'], 'relative', v => { flowOpt.abs = v === 'absolute'; }),
+  knob('cv', 'congestion against', 'choice', ['2026', 'free flow'], '2026', v => { flowOpt.free = v === 'free flow'; }),
   knob('hb', 'heat background', 'range', [0.05, 1, 0.05], 0.2, v => { opt.heat = v; apply(); }),
   knob('fb', 'flow background', 'range', [0.02, 1, 0.01], 0.2, v => { opt.flow = v; apply(); }),
   knob('tl', 'timelapse', 'range', [0.3, 5, 0.1], 1.4, v => { opt.tl = v; }),

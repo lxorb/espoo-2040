@@ -333,12 +333,12 @@ export class Net {
     if (run !== this.run) this.use(run);
     const ys = run.years, a = Math.min(Math.floor(f), ys.length - 1), b = Math.min(a + 1, ys.length - 1), t = f - a, A = ys[a], B = ys[b], shut = [];
     for (let i = 0; i < this.links.length; i++) {
-      const ff = this.ff[i], tm = (A.time[i] ?? ff) * (1 - t) + (B.time[i] ?? ff) * t;
+      const ff = this.ff[i], tm = (A.time[i] ?? ff) * (1 - t) + (B.time[i] ?? ff) * t, t0 = this.opt.free ? ff : Math.max(ys[0].time[i] ?? ff, ff);
       this.cap[i] = A.cap?.[i] ?? 1;
       this.speed[i] = this.links[i].len / Math.max(tm, 0.1);
-      this.ratio[i] = Math.min(ff / Math.max(tm, 0.1), 1);
+      this.ratio[i] = Math.min(t0 / Math.max(tm, 0.1), 1);
       this.flow[i] = this.cap[i] < SHUT ? 0 : (A.flow[i] ?? 0) * (1 - t) + (B.flow[i] ?? 0) * t;
-      this.loss[i] = this.flow[i] * Math.max(tm - ff, 0) / 3600 * 7.5;
+      this.loss[i] = this.flow[i] * Math.max(tm - t0, 0) / 3600 * 7.5;
       this.cond[i] = (A.cond?.[i] ?? 1) * (1 - t) + (B.cond?.[i] ?? 1) * t;
       if (this.cap[i] < SHUT) shut.push(i);
     }

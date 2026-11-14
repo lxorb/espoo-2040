@@ -44,7 +44,7 @@ canvas, img { -webkit-user-drag: none; user-select: none; }
 #cut { position: fixed; top: 50%; width: 21px; height: 130vmax; margin-left: -10px; transform: translateY(-50%) rotate(15deg); cursor: ew-resize; touch-action: none; z-index: 1; }
 #cut::before { content: ""; position: absolute; left: 9px; top: 0; bottom: 0; width: 3px; background: #fff; box-shadow: 0 0 6px #0009; }
 #cut i { position: absolute; left: 3px; top: 50%; width: 15px; height: 36px; margin-top: -18px; background: #fff; border-radius: 8px; box-shadow: 0 0 6px #0009; }
-.side { position: fixed; top: 18px; padding: 6px 10px; background: var(--ink); color: var(--hi); font-size: 12px; font-weight: 700; letter-spacing: .08em; border-radius: 6px; pointer-events: none; }
+.side { position: fixed; top: 18px; padding: 6px 10px; background: var(--ink); color: var(--hi); font-size: 12px; font-weight: 700; letter-spacing: .08em; border-radius: 6px; cursor: pointer; }
 [hidden] { display: none !important; }
 #ylab { color: var(--hi); font-weight: 700; font-size: 14px; }
 #speed { font: 700 12px "JetBrains Mono", monospace; color: var(--hi); background: #222; border: 0; border-radius: 6px; padding: 6px 0; width: 36px; cursor: pointer; }
