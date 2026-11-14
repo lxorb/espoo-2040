@@ -46,6 +46,7 @@ carMat.onBeforeCompile = s => {
 export class Cars {
   constructor(scene, meta, pts) {
     this.meta = meta;
+    this.max = MAX;
     this.pts = pts;
     this.end = Math.max(...meta.veh.map(v => v[1] + v[3]));
     this.t = 0;
@@ -123,7 +124,7 @@ export class Cars {
       vis[i] = 1;
       sum += want[i] = Math.min(net.flow[i] * len(i) / Math.max(net.speed[i], 0.5) / 3600, len(i) * Math.max(L[i].lanes, 1) / 8);
     }
-    const k = Math.min(1, MAX / Math.max(sum, 1));
+    const k = Math.min(1, this.max / Math.max(sum, 1));
     const next = i => {
       const o = (this.out[L[i].b] || []).filter(j => vis[j]), tot = o.reduce((a, j) => a + net.flow[j], 0);
       let r = Math.random() * tot;

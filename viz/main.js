@@ -1,15 +1,19 @@
 import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, HYPE, looks, patch } from './city.js';
+import { City, HYPE, looks, patch, fadeDepth, borderMat } from './city.js';
+import { settings } from './settings.js';
+import { Near } from './near.js';
+import { Detail } from './detail.js';
 import { Net } from './traffic.js';
 import { Cars } from './cars.js';
 
 const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Soukka', 603, -544], ['Kaitaa', 1797, 312], ['Finnoo', 2981, 656],
   ['Matinkylä', 4518, 1343], ['Niittykumpu', 5884, 2487], ['Urheilupuisto', 6902, 2920], ['Tapiola', 8165, 2929], ['Aalto-yliopisto', 9295, 3944], ['Keilaniemi', 9590, 2952]];
 const RUNS = ['agent', 'reference', 'nothing'];
-const SKY = { cars: '#2b2e31', heat: '#1d1f22', flow: '#000000' };
+const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 5: 12 };
 const q = new URLSearchParams(location.search);
+const opt = { heat: 0.3, flow: 0.07, tl: 1.4, dz: 1, cars: 20000, fps: false }, flowOpt = { particles: 1, trail: 1, radius: 1, heat: 1 };
 const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, speed: 1 };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
@@ -42,15 +46,15 @@ sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.6;
 scene.add(hemi, sun, sun.target);
 
-const city = new City(scene);
+const city = new City(scene), near = new Near(scene, renderer, city), detail = new Detail(scene, city), fineDepth = fadeDepth(looks.fine);
 let net, cars;
 
 const catalogue = fetch('data/catalogue.json').then(r => r.json()).catch(() => []);
-fetch('data/net.json').then(r => r.json()).then(async n => { net = new Net(scene, n, renderer, camera, await catalogue); apply(); runList.then(loadRun); });
+fetch('data/net.json').then(r => r.json()).then(async n => { net = new Net(scene, n, renderer, camera, await catalogue); net.opt = flowOpt; apply(); runList.then(loadRun); });
 Promise.all([fetch('data/cars.json').then(r => r.json()), fetch('data/cars.bin').then(r => r.arrayBuffer())])
   .then(([m, b]) => { cars = new Cars(scene, m, new Int32Array(b)); apply(); }).catch(e => console.log(e));
 const hypeMats = [], fine = [];
-let lod = 0, coarse = false;
+let lod = 0, coarse = false, close = false;
 function hull(pts) {
   pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
@@ -65,6 +69,7 @@ function place(url, footprint) {
     g.scene.traverse(o => {
       if (!o.isMesh) return;
       o.castShadow = o.receiveShadow = true;
+      o.customDepthMaterial = fineDepth;
       for (const m of [o.material].flat()) { m.userData.base = m.color.clone(); hypeMats.push(patch(m, '', '', '', looks.one, looks.fine)); }
       if (!footprint) return;
       const a = o.geometry.attributes.position, w = new THREE.Vector3(), pts = [];
@@ -111,8 +116,10 @@ function sync() {
   ylab.textContent = (state.run ? state.run.y0 : 2026) + Math.round(state.f);
 }
 function apply() {
-  scene.background = new THREE.Color(SKY[state.mode]);
-  looks.dim.value = { cars: 1, heat: 0.8, flow: 0.07 }[state.mode];
+  looks.dim.value = { cars: 1, heat: opt.heat, flow: opt.flow }[state.mode];
+  const c = new THREE.Color(SKY).multiplyScalar(state.mode === 'flow' ? 0 : looks.dim.value).getRGB({}, THREE.SRGBColorSpace);
+  looks.sky.value.set(c.r, c.g, c.b);
+  scene.background = new THREE.Color().setRGB(c.r * looks.out.value, c.g * looks.out.value, c.b * looks.out.value, THREE.SRGBColorSpace);
   looks.sat.value = { cars: 1, heat: 0, flow: 0.25 }[state.mode];
   for (const m of hypeMats) m.userData.base && m.color.copy(m.userData.base).multiplyScalar(looks.dim.value);
   hemi.intensity = state.mode === 'flow' ? 0.5 : 1.2;
@@ -131,7 +138,7 @@ addEventListener('keydown', e => {
   if (m) { state.mode = m; apply(); }
 });
 
-const UI = ['modes', 'runs', 'time'].map(id => document.getElementById(id)), ticks = document.getElementById('ticks'), ROW = ['works', 'care', 'pt', 'toll'];
+const UI = ['modes', 'runs', 'time'].map(id => document.getElementById(id));
 let signs = [], shownRun = null, espoo = null;
 function tag(text, x, y, cls) {
   const el = document.createElement('div');
@@ -146,19 +153,6 @@ function eventTags() {
     shownRun = net.run;
     for (const s of signs) s.el.remove();
     signs = net.signs.map(s => Object.assign(tag(s.text, s.x, s.y, 'sign'), { a: s.a }));
-    const seen = new Set();
-    ticks.replaceChildren(...net.ticks.filter(t => !seen.has(t.k + t.cat) && seen.add(t.k + t.cat)).map(t => {
-      const b = document.createElement('i');
-      b.className = t.cat;
-      Object.assign(b.style, { left: `${t.k / +year.max * 100}%`, bottom: `${ROW.indexOf(t.cat) * 7}px` });
-      b.onclick = () => {
-        state.f = t.k; state.play = false;
-        net.set(state.run, state.f);
-        fly = { t: 0, a: controls.target.clone(), b: new THREE.Vector3(t.at[0], 0, -t.at[1]), z0: camera.zoom, z1: camera.zoom };
-        sync();
-      };
-      return b;
-    }));
   }
 }
 
@@ -208,7 +202,7 @@ let last = '';
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.1);
   if (fly) flying(dt);
-  coarse = state.mode !== 'cars' || camera.zoom < (coarse ? 1.0 : 0.8);
+  coarse = state.mode !== 'cars' || camera.zoom < (coarse ? 1.0 : 0.8) * opt.dz;
   const lt = coarse ? 1 : 0;
   if (lt !== lod) {
     lod = Math.min(Math.max(lod + Math.sign(lt - lod) * dt / 0.25, 0), 1);
@@ -217,11 +211,16 @@ function frame() {
     city.setLod(lod);
     for (const g of fine) g.visible = lod < 1;
   }
+  close = state.mode !== 'flow' && camera.zoom > (close ? 0.8 : 1.0) * opt.dz;
+  looks.near.value = Math.min(Math.max(looks.near.value + (close ? dt : -dt) / 0.25, 0), 1);
+  looks.far.value = 1 - looks.near.value;
   controls.update();
   const px = 1 / camera.zoom;
   const [x0, y0, x1, y1] = view();
   city.update(x0 - 200, y0 - 200, x1 + 200, y1 + 200);
   city.show(state.mode, camera.zoom);
+  near.update(camera, [x0, y0, x1, y1], dt * state.speed, state.mode);
+  detail.update(camera, lod);
   const span = Math.min(2 ** Math.ceil(Math.log2(Math.max(x1 - x0, y1 - y0) * 0.6)), 4096), texel = span / 2048;
   const t = snap.copy(controls.target);
   for (const a of [sunX, sunY]) { const s = t.dot(a); t.addScaledVector(a, Math.round(s / texel) * texel - s); }
@@ -230,13 +229,14 @@ function frame() {
   Object.assign(sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: 100, far: 12000 });
   sun.shadow.camera.updateProjectionMatrix();
   if (state.play && state.run) {
-    state.f = Math.min(state.f + dt / 1.4, +year.max);
+    state.f = Math.min(state.f + dt / opt.tl, +year.max);
     if (state.f >= +year.max) state.play = false;
     net && net.set(state.run, state.f);
     sync();
   }
+  if (cars) cars.max = opt.cars;
   if (cars && state.mode === 'cars') cars.tick(dt * state.speed, net, [x0, y0, x1, y1], px, city.loaded);
-  net && net.draw(state.mode, [x0, y0, x1, y1], dt * state.speed, px, city.loaded);
+  net && net.draw(state.mode, [x0, y0, x1, y1], dt * (state.mode === 'flow' ? FLOW[state.speed] : state.speed), px, city.loaded);
   eventTags();
   if (city.tag && !espoo) labels.push(espoo = Object.assign(tag('ESPOO', ...city.tag, 'big'), { far: true }));
   const w = innerWidth, h = innerHeight, all = [...labels, ...signs];
@@ -252,7 +252,33 @@ function frame() {
   net && net.overlay(state.mode);
   const s = `${city.loaded.size}`;
   if (s !== last) { last = s; document.body.dataset.tiles = s; }
+  frames++;
   requestAnimationFrame(frame);
 }
 apply();
+const fps = Object.assign(document.createElement('div'), { id: 'fps' }), rgb = v => [1, 3, 5].map(i => parseInt(v.slice(i, i + 2), 16) / 255);
+document.body.append(fps);
+let frames = 0, since = 0;
+setInterval(() => { fps.textContent = `${Math.round(frames / ((performance.now() - since) / 1000))} fps`; frames = 0; since = performance.now(); }, 500);
+const knob = (k, l, t, r, d, f) => ({ k, l, t, r, d, f });
+settings([
+  knob('mark', 'marker color', 'color', 0, '#ffffff', v => { looks.mark.value.set(...rgb(v)); document.body.style.setProperty('--mark', v); }),
+  knob('out', 'outside dim', 'range', [0, 1, 0.05], 0.3, v => { looks.out.value = v; apply(); }),
+  knob('border', 'border', 'toggle', 0, true, v => { borderMat.visible = v; }),
+  knob('labels', 'labels', 'toggle', 0, true, v => { document.getElementById('labels').hidden = !v; }),
+  knob('shadows', 'shadows', 'toggle', 0, true, v => { sun.castShadow = v; }),
+  knob('res', 'resolution', 'choice', [0.5, 1, 'native'], 'native', v => { renderer.setPixelRatio(v === 'native' ? Math.min(devicePixelRatio, 2) : v); resize(); }),
+  knob('dz', 'detail zoom', 'range', [0.5, 4, 0.1], 1, v => { opt.dz = v; }),
+  knob('cars', 'max cars', 'range', [0, 20000, 500], 20000, v => { opt.cars = v; }),
+  knob('walk', 'pedestrians', 'range', [0, 1, 0.1], 1, v => { near.walkers.density = v; near.key = ''; }),
+  knob('trees', 'trees', 'range', [0, 1, 0.1], 1, v => { looks.trees.value = v; near.key = ''; }),
+  knob('hr', 'heat radius', 'range', [0.25, 3, 0.05], 1, v => { flowOpt.radius = v; }),
+  knob('hi', 'heat intensity', 'range', [0.25, 4, 0.05], 1, v => { flowOpt.heat = v; }),
+  knob('fp', 'flow particles', 'range', [0.1, 1, 0.05], 1, v => { flowOpt.particles = v; }),
+  knob('ft', 'flow trail', 'range', [0.25, 4, 0.05], 1, v => { flowOpt.trail = v; }),
+  knob('hb', 'heat background', 'range', [0.05, 1, 0.05], 0.3, v => { opt.heat = v; apply(); }),
+  knob('fb', 'flow background', 'range', [0.02, 1, 0.01], 0.07, v => { opt.flow = v; apply(); }),
+  knob('tl', 'timelapse', 'range', [0.3, 5, 0.1], 1.4, v => { opt.tl = v; }),
+  knob('fps', 'fps', 'toggle', 0, false, v => { fps.hidden = !v; })
+]);
 frame();

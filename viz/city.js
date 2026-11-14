@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const HYPE = [-1511.7, 1239.2];
-export const looks = { dim: { value: 1 }, sat: { value: 1 }, tree: { value: 1 }, lane: { value: 1 }, path: { value: 1 }, one: { value: 1 }, px: { value: 1 }, coarse: { value: 0 }, fine: { value: 1 },
+export const looks = { dim: { value: 1 }, sat: { value: 1 }, tree: { value: 1 }, lane: { value: 1 }, path: { value: 1 }, one: { value: 1 }, px: { value: 1 }, coarse: { value: 0 }, fine: { value: 1 }, near: { value: 0 }, far: { value: 1 }, out: { value: 0.3 }, mark: { value: new THREE.Vector3(1, 1, 1) }, trees: { value: 1 }, sky: { value: new THREE.Vector3() },
+  cover: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, cbox: { value: new THREE.Vector4() },
   mask: { value: new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1) }, box: { value: new THREE.Vector4() } };
 looks.mask.value.needsUpdate = true;
 
@@ -12,14 +13,28 @@ const GROUND = { land: '#8e8f8b', water: '#15191c', forest: '#4f6339', park: '#6
 const BASE = new THREE.Color(GROUND.water);
 
 const hash = `float hash(float n){return fract(sin(n*12.9898)*43758.5453);}`;
+export const DITHER = 'fract(dot(gl_FragCoord.xy, vec2(0.7548777, 0.5698403)))';
+export const COVER = 'uniform sampler2D uCover; uniform vec4 uCbox; float cover(vec2 w) { return texture2D(uCover, (vec2(w.x, -w.y) - uCbox.xy) * uCbox.zw).r; }';
+
+export function fadeDepth(show) {
+  const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+  m.customProgramCacheKey = () => 'fade';
+  m.onBeforeCompile = s => {
+    s.uniforms.uShow = show;
+    s.fragmentShader = 'uniform float uShow;\n' + s.fragmentShader.replace('#include <alphatest_fragment>', `#include <alphatest_fragment>\nif (${DITHER} >= uShow) discard;`);
+  };
+  return m;
+}
 
 export function patch(mat, vert = '', frag = '', pars = '', fade = looks.one, show = looks.one) {
+  mat.customProgramCacheKey = () => vert + frag + pars;
   mat.onBeforeCompile = s => {
-    Object.assign(s.uniforms, { uDim: looks.dim, uSat: looks.sat, uTree: looks.tree, uLane: looks.lane, uFade: fade, uPx: looks.px, uMask: looks.mask, uBox: looks.box, uShow: show });
+    Object.assign(s.uniforms, { uDim: looks.dim, uSat: looks.sat, uTree: looks.tree, uLane: looks.lane, uFade: fade, uPx: looks.px, uMask: looks.mask, uBox: looks.box, uShow: show, uOut: looks.out, uSky: looks.sky, uCover: looks.cover, uCbox: looks.cbox });
     s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>\nuniform float uTree;\nvarying vec2 vMask;\n${pars}`).replace('#include <begin_vertex>', `#include <begin_vertex>\n${vert}`)
       .replace('#include <project_vertex>', '#include <project_vertex>\nvec4 wq = vec4(transformed, 1.0);\n#ifdef USE_INSTANCING\nwq = instanceMatrix * wq;\n#endif\nvMask = (modelMatrix * wq).xz;');
-    s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\nuniform float uDim, uSat, uLane, uFade, uShow;\nuniform sampler2D uMask;\nuniform vec4 uBox;\nvarying vec2 vMask;\n${hash}\n${pars.replace(/attribute[^;]*;/g, '')}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>\nif (fract(dot(gl_FragCoord.xy, vec2(0.7548777, 0.5698403))) >= uShow) discard;\n${frag}\ndiffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, uSat) * (0.3 + 0.7 * texture2D(uMask, (vec2(vMask.x, -vMask.y) - uBox.xy) * uBox.zw).r);`);
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\nuniform float uDim, uSat, uLane, uFade, uShow, uOut;\nuniform sampler2D uMask;\nuniform vec4 uBox;\nuniform vec3 uSky;\nvarying vec2 vMask;\n${hash}\n${COVER}\n${pars.replace(/attribute[^;]*;/g, '')}`)
+      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\nif (sky > 0.5) gl_FragColor.rgb = uSky * mix(uOut, 1.0, mk);')
+      .replace('#include <color_fragment>', `#include <color_fragment>\nfloat sky = 0.0, mk = texture2D(uMask, (vec2(vMask.x, -vMask.y) - uBox.xy) * uBox.zw).r;\nif (${DITHER} >= uShow) discard;\n${frag}\ndiffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, uSat) * mix(uOut, 1.0, mk);`);
   };
   return mat;
 }
@@ -34,25 +49,29 @@ const buildingLook = show => patch(new THREE.MeshStandardMaterial({ roughness: 0
   c *= 1.0 - (1.0 - roof) * (0.2 * win + 0.4 * (1.0 - smoothstep(0.0, 6.0, vB.y)));
   c *= 1.0 - roof * 0.05 * mix(0.5, step(0.5, fract(vB.x * 0.25)), clamp(1.6 - 4.0 * fwidth(vB.x * 0.25), 0.0, 1.0));
   diffuseColor.rgb = c * uDim;`, 'attribute vec3 aB; varying vec3 vB;', looks.one, show);
-const buildingMat = buildingLook(looks.one), coarseMat = buildingLook(looks.coarse);
+const buildingMat = buildingLook(looks.one), coarseMat = buildingLook(looks.coarse), coarseDepth = fadeDepth(looks.coarse);
+const dress = (m, mat) => { m.material = mat; m.customDepthMaterial = mat === coarseMat ? coarseDepth : undefined; };
 
 const roadLook = fade => patch(new THREE.MeshStandardMaterial({ roughness: 0.9, vertexColors: true }), 'vB = aB; vW = (modelMatrix * vec4(position, 1.0)).xz;', `
   float n = max(vB.z, 1.0), t = (vB.y * 0.5 + 0.5) * n;
   float focus = step(length(vW - vec2(${HYPE[0].toFixed(1)}, ${(-HYPE[1]).toFixed(1)})), 1500.0) * step(1.5, vB.z);
   float lane = step(abs(fract(t + 0.5) - 0.5), 0.035) * step(0.5, t) * step(t, n - 0.5) * step(0.5, fract(vB.x / 9.0));
   float edge = step(0.9, abs(vB.y)) * step(abs(vB.y), 0.95);
+  if (${DITHER} < cover(vW)) discard;
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.92, 0.88), focus * uLane * max(lane, edge));
   diffuseColor.rgb = mix(vec3(0.27, 0.275, 0.26), diffuseColor.rgb, uFade) * uDim;`, 'attribute vec3 aB; varying vec3 vB; varying vec2 vW;', fade);
 const roadMat = roadLook(looks.one), pathMat = roadLook(looks.path);
 const lineMat = (c, a) => new THREE.ShaderMaterial({ uniforms: { uPx: looks.px, uA: { value: a } },
   vertexShader: 'attribute vec3 aE; uniform float uPx; void main() { vec3 p = position; p.xz += aE.xy * aE.z * uPx * 0.5; gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }',
   fragmentShader: `uniform float uA; void main() { gl_FragColor = vec4(vec3(${new THREE.Color(c).toArray().map(v => v.toFixed(3))}) * uA, 1.0); }` });
-const borderMat = lineMat('#8a8a85', 1);
+export const borderMat = lineMat('#8a8a85', 1);
 const overMat = patch(new THREE.MeshStandardMaterial({ roughness: 0.9, vertexColors: true, depthTest: false, depthWrite: false }),
   'transformed.xz += aE.xy * max(0.0, uPx * 2.5 - aE.z) * 0.5;', 'diffuseColor.rgb *= uDim;', 'attribute vec3 aE; uniform float uPx;');
 
-const groundMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true, depthWrite: false, depthTest: false }), '', 'diffuseColor.rgb *= uDim;');
-const treeMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true }), 'transformed *= uTree;', 'diffuseColor.rgb *= uDim;');
+const groundMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true, depthWrite: false, depthTest: false }), '',
+  `diffuseColor.rgb *= uDim; sky = step(distance(vColor, vec3(${BASE.toArray().map(v => v.toFixed(5))})), 0.001);`);
+const treeMat = patch(new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true }), 'transformed *= uTree;', 'diffuseColor.rgb *= uDim;', '', looks.one, looks.far);
+const SCATTER = { forest: [3, 140], conifer_forest: [4, 140], hedge: [5, 6], scrub: [5, 40], garden: [5, 90] };
 
 const treeGeo = (() => {
   const crown = new THREE.IcosahedronGeometry(1, 0).scale(2.5, 3.2, 2.5).translate(0, 5, 0);
@@ -109,7 +128,8 @@ function buildings(list, mat = buildingMat) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('aB', new THREE.Float32BufferAttribute(ab, 3));
-  const m = new THREE.Mesh(g, mat);
+  const m = new THREE.Mesh(g);
+  dress(m, mat);
   m.castShadow = m.receiveShadow = true;
   return m;
 }
@@ -123,16 +143,17 @@ function ground(list, kinds, size, i, j, trees) {
     for (const v of p) { b[0] = Math.min(b[0], v.x); b[1] = Math.min(b[1], v.y); b[2] = Math.max(b[2], v.x); b[3] = Math.max(b[3], v.y); }
     return { name: kinds[k] || '', p, b };
   }).filter(q => q.p.length > 2);
-  const covered = (from, x, y) => polys.some((q, k) => k > from && !/forest/.test(q.name) && x > q.b[0] && x < q.b[2] && y > q.b[1] && y < q.b[3] && inside(q.p, x, y));
+  const covered = (from, x, y) => polys.some((q, k) => k > from && !SCATTER[q.name] && x > q.b[0] && x < q.b[2] && y > q.b[1] && y < q.b[3] && inside(q.p, x, y));
   polys.forEach(({ name, p, b }, k) => {
     c.set(GROUND[name] || GROUND.land);
     for (const t of tris(p))
       for (const v of t) { pos.push(p[v].x, 0, -p[v].y); col.push(c.r, c.g, c.b); }
-    if (!/forest/.test(name) || !trees) return;
-    const n = Math.min(3000, (b[2] - b[0]) * (b[3] - b[1]) / 140);
-    for (let s = 0; s < n && trees.length < 12000; s++) {
+    const sc = SCATTER[name];
+    if (!sc || !trees) return;
+    const n = Math.min(3000, (b[2] - b[0]) * (b[3] - b[1]) / sc[1]);
+    for (let s = 0; s < n && trees.length < 48000; s++) {
       const x = b[0] + Math.random() * (b[2] - b[0]), y = b[1] + Math.random() * (b[3] - b[1]);
-      if (inside(p, x, y) && !covered(k, x, y)) trees.push(x, y);
+      if (inside(p, x, y) && !covered(k, x, y)) trees.push(x, y, sc[0]);
     }
   });
   const g = new THREE.BufferGeometry();
@@ -184,10 +205,10 @@ function roads(list, kinds, minor) {
   return m;
 }
 
-function forest(xy) {
-  const n = xy.length / 2, m = new THREE.InstancedMesh(treeGeo, treeMat, n), o = new THREE.Object3D(), c = new THREE.Color();
+function forest(all) {
+  const xy = all.filter((v, i) => all[i - i % 3 + 2] < 5), n = xy.length / 3, m = new THREE.InstancedMesh(treeGeo, treeMat, n), o = new THREE.Object3D(), c = new THREE.Color();
   for (let k = 0; k < n; k++) {
-    o.position.set(xy[2 * k], 0, -xy[2 * k + 1]);
+    o.position.set(xy[3 * k], 0, -xy[3 * k + 1]);
     o.rotation.y = Math.random() * 6.28;
     o.scale.setScalar(0.7 + Math.random() * 0.7);
     o.updateMatrix(); m.setMatrixAt(k, o.matrix);
@@ -205,6 +226,7 @@ export class City {
     this.hidden = [];
     this.lod = 0;
     this.busy = 0;
+    this.whole = new Set();
     this.ready = fetch('data/tiles.json').then(r => r.json()).then(m => { this.meta = m; }).catch(() => {});
     Promise.all([this.ready, fetch('data/overview.json').then(r => r.json())]).then(([, o]) => {
       const e = [], lines = (o.r || []).filter(([k]) => /motorway|trunk|primary|secondary/.test(this.meta.rkinds[k])).map(([, lanes, f]) => ({ pts: f, w: Math.max(lanes, 1) * 3.3 + 1, ww: Math.max(lanes, 1) * 3.3 + 1, color: '#5e6164', y: 0 }));
@@ -257,7 +279,9 @@ export class City {
       this.busy++;
       fetch(`data/tiles/${k}.json`).then(r => r.json()).then(t => {
         if (!this.loaded.has(k)) return;
-        const g = new THREE.Group(), trees = t.t ? [...t.t] : [];
+        const g = new THREE.Group(), trees = [];
+        for (let q = 0; q < (t.t || []).length; q += 2) trees.push(t.t[q], t.t[q + 1], 0);
+        for (const [q, x, y] of t.p || []) if (/conifer|broadleaf/.test(m.pkinds[q])) trees.push(x, y, m.pkinds[q] === 'conifer' ? 1 : 2);
         const fine = [], coarse = [];
         for (const [h, kind, f] of t.b || []) {
           const p = ring(f);
@@ -265,15 +289,23 @@ export class City {
           const cx = p.reduce((a, v) => a + v.x, 0) / p.length, cy = p.reduce((a, v) => a + v.y, 0) / p.length;
           (this.hidden.some(q => inside(q, cx, cy)) ? coarse : fine).push([h, kind, p]);
         }
-        g.add(ground(t.g || [], m.gkinds, s, i, j, trees), roads(t.r || [], m.rkinds, false), roads(t.r || [], m.rkinds, true), buildings(fine));
+        g.add(ground(t.g || [], m.gkinds, s, i, j, trees), roads(t.r || [], m.rkinds, false), roads(t.r || [], m.rkinds, true), g.userData.b = buildings(fine, this.whole.has(k) ? coarseMat : buildingMat));
         if (coarse.length) { g.userData.lod = buildings(coarse, coarseMat); g.add(g.userData.lod); g.userData.lod.visible = this.lod > 0; }
         if (trees.length) g.add(forest(trees));
         g.name = k;
+        g.userData.trees = trees;
+        this.onTile?.(t, g);
         g.userData.res = (t.r || []).filter(([q]) => /residential|service|living|unclassified/.test(m.rkinds[q])).map(([q, , f]) => ({ s: m.rkinds[q] === 'service', g: f.reduce((a, v, i) => (i % 2 ? a[a.length - 1].push(v) : a.push([v]), a), []) }));
         this.root.add(g);
         this.loaded.set(k, g);
       }).catch(() => {}).finally(() => this.busy--);
     }
+  }
+
+  swap(k, on) {
+    this.whole[on ? 'add' : 'delete'](k);
+    const g = this.loaded.get(k);
+    if (g) dress(g.userData.b, on ? coarseMat : buildingMat);
   }
 
   setLod(t) {
@@ -297,6 +329,6 @@ export class City {
     looks.path.value = ramp(0.7, 1.1);
     looks.lane.value = ramp(2.5, 4);
     pathMat.visible = mode !== 'flow' && looks.path.value > 0;
-    treeMat.visible = mode !== 'flow' && looks.tree.value > 0;
+    treeMat.visible = mode !== 'flow' && looks.tree.value > 0 && looks.far.value > 0 && looks.trees.value > 0;
   }
 }
