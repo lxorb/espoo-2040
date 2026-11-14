@@ -56,12 +56,12 @@ const BAND_VERT = `attribute vec3 aS; attribute vec2 aN; attribute vec3 aK; attr
     vW = p.xz;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   }`;
-const BAND_FRAG = (body, mark) => `uniform float uYear, uDim, uSat, uOut, uOy, uT; uniform vec3 uMark; uniform sampler2D uMask; uniform vec4 uBox; varying vec3 vK; varying vec2 vW, vU; varying float vS;
+const BAND_FRAG = (body, mark) => `uniform float uYear, uDim, uSat, uOut, uOy, uT, uPx; uniform vec3 uMark; uniform sampler2D uMask; uniform vec4 uBox; varying vec3 vK; varying vec2 vW, vU; varying float vS;
   ${COVER}
   float hs(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
   float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f *= f * (3.0 - 2.0 * f); return mix(mix(hs(i), hs(i + vec2(1.0, 0.0)), f.x), mix(hs(i + vec2(0.0, 1.0)), hs(i + 1.0), f.x), f.y); }
   void main() {
-    float stripe = step(0.5, fract((vW.x + vW.y) / 8.0)), dash = step(0.5, fract(vU.x / 16.0)), e = abs(vS);
+    float z = exp2(ceil(log2(max(1.0, 1.25 * uPx)))), stripe = step(0.5, fract((vW.x + vW.y) / (8.0 * z))), dash = step(0.5, fract(vU.x / (16.0 * z))), e = abs(vS);
     vec3 c = vec3(0.0); float al = 1.0;
     ${body}
     c = ${mark ? 'c' : 'mix(vec3(dot(c, vec3(0.3, 0.59, 0.11))), c, uSat) * uDim'} * mix(uOut, 1.0, texture2D(uMask, (vec2(vW.x, -vW.y) - uBox.xy) * uBox.zw).r);
