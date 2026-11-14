@@ -15,15 +15,10 @@ canvas { display: block; }
 #track { flex: 1; position: relative; padding-top: 26px; }
 #year { width: 100%; margin: 0; accent-color: var(--hi); }
 #ticks { position: absolute; left: 8px; right: 8px; top: 4px; height: 22px; }
-#ticks i { position: absolute; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; cursor: pointer; background: var(--hi); }
-#ticks i.care { background: #eee; }
-#ticks i.pt { background: #3f8cff; }
-#ticks i.toll { background: #e2352b; }
-.lab.card { white-space: pre; line-height: 1.5; color: #eee; }
-.lab.card::first-line { color: var(--hi); }
-.lab.sign { font-size: 13px; padding: 3px 7px; }
+#ticks i { position: absolute; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; cursor: pointer; background: #fff; }
+.lab.sign { font-size: 13px; padding: 3px 7px; color: #fff; }
 #ylab { color: var(--hi); font-weight: 700; font-size: 14px; min-width: 40px; text-align: right; }
-#speed { font: 700 12px "JetBrains Mono", monospace; color: var(--hi); background: #222; border: 0; border-radius: 6px; padding: 6px 4px; cursor: pointer; }
+#speed { font: 700 12px "JetBrains Mono", monospace; color: var(--hi); background: #222; border: 0; border-radius: 6px; padding: 6px 0; width: 36px; cursor: pointer; }
 #labels { position: fixed; inset: 0; pointer-events: none; }
 .lab { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; user-select: none; padding: 5px 8px; background: var(--ink); color: var(--hi); font-weight: 700; font-size: 11px; letter-spacing: .08em; border-radius: 4px; white-space: nowrap; }
 .lab::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: 8px; background: var(--ink); }

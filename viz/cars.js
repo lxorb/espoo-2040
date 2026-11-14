@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { lengths } from './traffic.js';
+import { lengths, along } from './traffic.js';
 
 const SHAPES = {
-  car: [4.5, 1.8, 0.33, [0.85, 3.6], [[[0, 0.28], [4.5, 0.28], [4.5, 0.7], [3.4, 0.86], [1, 0.9], [0, 0.92]], [[0.72, 0.88], [3.45, 0.82], [2.6, 1.38], [1.3, 1.4]], [[1.2, 1.37], [2.7, 1.35], [2.62, 1.45], [1.3, 1.45]]]],
+  car: [4.5, 1.8, 0.325, [0.9, 3.55], [[[0, 0.3], [4.5, 0.3], [4.5, 0.66], [4.3, 0.8], [3.3, 0.92], [0.1, 0.98], [0, 0.9]], [[0.4, 0.95], [3.4, 0.9], [2.6, 1.36], [1.0, 1.4], [0.3, 1.0]], [[1.0, 1.36], [2.62, 1.33], [2.55, 1.44], [1.08, 1.46]]]],
   van: [5.2, 2, 0.36, [0.9, 4.2], [[[0, 0.3], [5.2, 0.3], [5.2, 1], [4.4, 1.15], [0, 1.15]], [[0.2, 1.1], [4.45, 1.1], [3.75, 1.9], [0.2, 1.9]], [[0, 1.12], [0.25, 1.12], [0.25, 1.88], [3.8, 1.88], [3.65, 2.15], [0, 2.15]]]],
   truck: [8.5, 2.5, 0.5, [1.3, 2.5, 7.3], [[[0, 0.6], [8.5, 0.6], [8.5, 1.5], [6.4, 1.5], [6.4, 3.4], [0, 3.4]], [[6.5, 1.45], [8.53, 1.45], [8.35, 2.4], [6.5, 2.4]], [[6.4, 2.35], [8.36, 2.35], [8.25, 2.8], [6.4, 2.8]]]],
   bus: [12, 2.55, 0.5, [2.5, 9.6], [[[0, 0.35], [12, 0.35], [12, 1.2], [0, 1.2]], [[0.3, 1.15], [12.03, 1.15], [11.95, 2.6], [0.3, 2.6]], [[0, 1.15], [0.3, 1.15], [0.3, 2.55], [12, 2.55], [11.85, 3.1], [0, 3.1]]]],
@@ -11,13 +11,6 @@ const SHAPES = {
 };
 const PAINT = { car: ['#e8e8e6', '#1c1d20', '#a9adb3', '#b3242a', '#2c4f8a', '#5d6267', '#d8d2c2', '#3d6b4f'], van: ['#f2f2ef', '#c9ccd0', '#2c4f8a'], truck: ['#f2f2ef', '#e07a1f', '#2c4f8a'], bus: ['#2a62b8'], moto: ['#1c1d20', '#b3242a'] };
 const MAX = 20000, MIX = [0.82, 0.9, 0.96, 0.97, 1], hash = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
-const along = (g, cum, s, out) => {
-  let k = 1;
-  while (k < g.length - 1 && cum[k] < s) k++;
-  const [ax, ay] = g[k - 1], [bx, by] = g[k], d = cum[k] - cum[k - 1] || 1, f = Math.min(Math.max((s - cum[k - 1]) / d, 0), 1);
-  out[0] = ax + (bx - ax) * f; out[1] = ay + (by - ay) * f; out[2] = (bx - ax) / d; out[3] = (by - ay) / d;
-  return out;
-};
 
 function vehicle(t) {
   const [L, W, R, wheels, parts] = SHAPES[t] || SHAPES.car, out = [], tint = new THREE.Color();
@@ -30,16 +23,16 @@ function vehicle(t) {
     out.push(g);
   };
   parts.forEach((pts, k) => {
-    const w = t === 'moto' ? (k ? 0.45 : 0.3) : k === 1 ? W - 0.06 : k ? W - 0.1 : W;
+    const w = t === 'moto' ? (k ? 0.45 : 0.3) : k === 1 ? W - 0.16 : k ? W - 0.1 : W;
     add(new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))), { depth: w, bevelEnabled: false }).translate(0, 0, -w / 2), k === 1 ? '#1d2226' : '#fff', k === 1 ? 0 : 1);
   });
   for (const x of wheels) for (const z of t === 'moto' ? [0] : [-1, 1])
-    add(new THREE.CylinderGeometry(R, R, t === 'moto' ? 0.12 : 0.24, 6).rotateX(Math.PI / 2).translate(x, R, z * (W / 2 - 0.12)), '#141516', 0);
+    add(new THREE.CylinderGeometry(R, R, t === 'moto' ? 0.12 : 0.22, 12).rotateX(Math.PI / 2).translate(x, R, z * (W / 2 - 0.17)), '#2a2c2f', 0);
   for (const z of t === 'moto' ? [0] : [-1, 1]) {
     add(new THREE.BoxGeometry(0.06, 0.12, 0.3).translate(L, R + 0.3, z * (W / 2 - 0.3)), '#fff4d0', 0);
     add(new THREE.BoxGeometry(0.06, 0.12, 0.3).translate(0, R + 0.35, z * (W / 2 - 0.3)), '#a3141a', 0);
   }
-  const box = new THREE.BoxGeometry(L, R + (t === 'moto' ? 0.9 : t === 'car' ? 0.9 : 1.6), W);
+  const box = new THREE.BoxGeometry(L, R + (t === 'moto' || t === 'car' ? 1.0 : 1.6), W);
   box.computeBoundingBox();
   add(box.translate(L / 2, -box.boundingBox.min.y, 0), '#fff', 1);
   const lo = out.pop();

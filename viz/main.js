@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { City, HYPE, looks } from './city.js';
+import { City, HYPE, looks, patch } from './city.js';
 import { Net } from './traffic.js';
 import { Cars } from './cars.js';
 
@@ -10,7 +10,7 @@ const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Sou
 const RUNS = ['agent', 'reference', 'nothing'];
 const SKY = { cars: '#2b2e31', heat: '#1d1f22', flow: '#000000' };
 const q = new URLSearchParams(location.search);
-const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, speed: 1, shown: '' };
+const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, speed: 1 };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -65,7 +65,7 @@ function place(url, footprint) {
     g.scene.traverse(o => {
       if (!o.isMesh) return;
       o.castShadow = o.receiveShadow = true;
-      for (const m of [o.material].flat()) { m.userData.base = m.color.clone(); hypeMats.push(m); }
+      for (const m of [o.material].flat()) { m.userData.base = m.color.clone(); hypeMats.push(patch(m, '', '', '', looks.one, looks.fine)); }
       if (!footprint) return;
       const a = o.geometry.attributes.position, w = new THREE.Vector3(), pts = [];
       for (let i = 0; i < a.count; i++) { w.fromBufferAttribute(a, i).applyMatrix4(o.matrixWorld); pts.push([w.x, -w.z]); }
@@ -73,7 +73,6 @@ function place(url, footprint) {
     });
     scene.add(g.scene);
     fine.push(g.scene);
-    g.scene.scale.y = Math.max(1 - lod, 0.001);
     g.scene.visible = lod < 1;
     if (polys.length) city.hide(polys);
     apply();
@@ -124,7 +123,7 @@ function apply() {
 document.getElementById('modes').onclick = e => { if (e.target.dataset.v) { state.mode = e.target.dataset.v; apply(); } };
 document.getElementById('runs').onclick = e => { if (e.target.dataset.v) { state.who = e.target.dataset.v; loadRun(); sync(); } };
 year.oninput = () => { state.f = +year.value; state.run && net && net.set(state.run, state.f); sync(); };
-document.getElementById('speed').onchange = e => { state.speed = +e.target.value; };
+document.getElementById('speed').onclick = e => { state.speed = { 1: 2, 2: 5, 5: 1 }[state.speed]; e.target.textContent = `${state.speed}x`; };
 play.onclick = () => { state.play = !state.play; if (state.play && state.f >= +year.max) state.f = 0; sync(); };
 addEventListener('keydown', e => {
   if (e.key === ' ') play.onclick();
@@ -132,8 +131,8 @@ addEventListener('keydown', e => {
   if (m) { state.mode = m; apply(); }
 });
 
-const ticks = document.getElementById('ticks'), ROW = ['works', 'care', 'pt', 'toll'];
-let events = [], signs = [], shownRun = null, espoo = null;
+const UI = ['modes', 'runs', 'time'].map(id => document.getElementById(id)), ticks = document.getElementById('ticks'), ROW = ['works', 'care', 'pt', 'toll'];
+let signs = [], shownRun = null, espoo = null;
 function tag(text, x, y, cls) {
   const el = document.createElement('div');
   el.className = `lab ${cls}`;
@@ -161,12 +160,6 @@ function eventTags() {
       return b;
     }));
   }
-  const k = Math.floor(state.f + 1e-6), key = state.who + k;
-  if (key === state.shown) return;
-  state.shown = key;
-  for (const e of events) e.el.remove();
-  const c = net.cards[k];
-  events = c ? [Object.assign(tag(c.text, c.x, c.y, 'card'), { a: -1 })] : [];
 }
 
 const labels = [['HYPE', ...HYPE, 40, 'big'], ...STATIONS.map(([n, x, y]) => [n.toUpperCase(), x, y, 12, 'st'])].map(([text, x, y, h, cls]) => {
@@ -218,9 +211,11 @@ function frame() {
   coarse = state.mode !== 'cars' || camera.zoom < (coarse ? 1.0 : 0.8);
   const lt = coarse ? 1 : 0;
   if (lt !== lod) {
-    lod = lt;
+    lod = Math.min(Math.max(lod + Math.sign(lt - lod) * dt / 0.25, 0), 1);
+    looks.coarse.value = lod;
+    looks.fine.value = 1 - lod;
     city.setLod(lod);
-    for (const g of fine) { g.scale.y = Math.max(1 - lod, 0.001); g.visible = lod < 1; }
+    for (const g of fine) g.visible = lod < 1;
   }
   controls.update();
   const px = 1 / camera.zoom;
@@ -241,16 +236,18 @@ function frame() {
     sync();
   }
   if (cars && state.mode === 'cars') cars.tick(dt * state.speed, net, [x0, y0, x1, y1], px, city.loaded);
-  net && net.draw(state.mode, [x0, y0, x1, y1], dt * state.speed, px);
+  net && net.draw(state.mode, [x0, y0, x1, y1], dt * state.speed, px, city.loaded);
   eventTags();
   if (city.tag && !espoo) labels.push(espoo = Object.assign(tag('ESPOO', ...city.tag, 'big'), { far: true }));
-  const w = innerWidth, h = innerHeight;
-  for (const l of [...labels, ...events, ...signs]) {
+  const w = innerWidth, h = innerHeight, all = [...labels, ...signs];
+  for (const l of all) {
     v.copy(l.p).project(camera);
-    const on = Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && (!l.el.classList.contains('st') || camera.zoom > 0.12) && !(l.a > state.f + 1e-6) && (l.a === undefined || state.mode !== 'flow') && (!l.far || camera.zoom < 0.35);
-    l.el.style.display = on ? '' : 'none';
-    if (on) l.el.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h - 8 - (l.dy || 0)}px) translate(-50%, -100%)`;
+    l.on = Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05 && (!l.el.classList.contains('st') || camera.zoom > 0.12) && !(l.a > state.f + 1e-6) && (l.a === undefined || state.mode !== 'flow') && (!l.far || camera.zoom < 0.35);
+    l.el.style.display = l.on ? '' : 'none';
+    if (l.on) l.el.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h - 8 - (l.dy || 0)}px) translate(-50%, -100%)`;
   }
+  const ui = UI.map(e => e.getBoundingClientRect()), over = a => ui.some(b => a.left < b.right + 8 && a.right > b.left - 8 && a.top < b.bottom + 8 && a.bottom > b.top - 8);
+  for (const l of all.filter(l => l.on && over(l.el.getBoundingClientRect()))) l.el.style.display = 'none';
   renderer.render(scene, camera);
   net && net.overlay(state.mode);
   const s = `${city.loaded.size}`;
