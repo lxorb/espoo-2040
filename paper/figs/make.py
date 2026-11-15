@@ -700,6 +700,10 @@ def norms_v1(d):
     M.update(normsVoneMaxDrop=f"{max(-v['diff'] / v['frozen'][1] * 100 for v in S):.1f}", normsVoneSeedsLower=str(sum(v["diff"] < 0 for v in S)),
              normsVoneSeedsHigher=str(sum(v["diff"] > 0 for v in S)), normsVoneLearnedMean=f"{mean('learned policy'):.3f}", normsVonePlannerMean=f"{mean('planner'):.3f}",
              normsVoneConstMean=f"{mean('grpo constant plan'):.3f}", normsVzeroOverOneLearned=str(over("learned policy")), normsVzeroOverOneConst=str(over("grpo constant plan")))
+    fm = lambda key: np.mean([v["score_with_frozen"][key] for v in S])
+    cmp = [v["best_with_frozen"] - v["frozen"][1] for v in S]
+    M.update(normsVoneFrozenLearnedMean=f"{fm('learned policy'):.3f}", normsVoneFrozenPlannerMean=f"{fm('planner'):.3f}", normsVoneFrozenConstMean=f"{fm('grpo constant plan'):.3f}",
+             normsVoneFrozenSeedsLower=str(sum(c < 0 for c in cmp)), normsVoneFrozenSeedsEqual=str(sum(c == 0 for c in cmp)), normsVoneFrozenSeedsHigher=str(sum(c > 0 for c in cmp)))
 
 
 def evidence():
