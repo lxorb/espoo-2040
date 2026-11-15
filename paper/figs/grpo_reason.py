@@ -136,6 +136,13 @@ def build(M):
                 w, l = int((d_ > 0).sum()), int((d_ < 0).sum())
                 pv = binomtest(w, w + l, alternative="greater").pvalue if w + l else 1.0
                 M.update({f"grpo{t}WinsRandomTest{k}": f"{w}/{len(d_)}", f"grpo{t}SignPRandomTest{k}": f"{pv:.2g}"})
+                base = D["zero"].get(("4b" if n.startswith("4b") else "1b") + "-" + ("think" if r["args"]["think"] else "nothink") + "-" + ("anon" if r["args"]["anon"] else "named") + "-test")
+                if base:
+                    bz = {s["seed"]: s["frac"] for s in base["seeds"]}
+                    d2 = np.array([s["frac"] - bz[s["seed"]] for s in te["seeds"]])
+                    w2, l2 = int((d2 > 0).sum()), int((d2 < 0).sum())
+                    M.update({f"grpo{t}WinsBaseTest{k}": f"{w2}/{len(d2)}",
+                              f"grpo{t}SignPBaseTest{k}": f"{binomtest(w2, w2 + l2, alternative='greater').pvalue:.2g}" if w2 + l2 else "1"})
                 RES.setdefault(n, {})[k or "Final"] = dict(frac=float(np.mean([s["frac"] for s in te["seeds"]])), p=pv, val=e["score"], step=e["step"])
         for k, e in (("Final", z), ("Best", b)):
             te = D["test"].get(f"{n}|{k.lower()}|{e['step']}")
