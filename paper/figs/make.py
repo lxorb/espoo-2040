@@ -34,7 +34,7 @@ norms, runs, growth, booms = load(ROOT / "sim" / "norms.json"), load(DATA / "run
 RLD, GRD = load(DATA / "rl.json"), load(DATA / "grpo.json")
 ASEEDS = sorted(runs["agent"], key=int)
 LEVEL, M, TLEVEL = {}, {}, {}
-BASE_JOBS, MAIN_JOB = {"gate4", "a1"}, "a1"
+BASE_JOBS, MAIN_JOB, TEST_JOB = {"gate4", "a1"}, "a1", "a1t"
 key = lambda n: n.split()[0].lower().replace("ä", "a")
 tot = lambda r: sum(r["delay"])
 raw = lambda s, d: (norms[s][0] - d) / (norms[s][0] - norms[s][1])
@@ -587,9 +587,35 @@ def agent_summary(runs, ref, sfx):
     return f"{len(sc)} & {m:.3f} [{lo:.3f}, {hi:.3f}] & {min(sc):.3f} & {max(sc):.3f} & {sum(a > b for a, b in paired_runs)}/{len(paired_runs)} & {w}/{n} & {pf(sp)}"
 
 
+JOBNAME = {"a1": "Aone", "a1t": "AoneTest"}
+
+
+def agent_test(runs, ref, plan):
+    by = {}
+    for r in sorted(runs, key=lambda r: (int(r["seed"]), r["batch"])):
+        by.setdefault(str(r["seed"]), []).append(r["score"])
+    seeds = sorted(by, key=int)
+    means = [np.mean(by[s]) for s in seeds]
+    m, lo, hi = boot(means)
+    w, n, sp, wp = paired([ref[s] for s in seeds], means)
+    (HERE / "agent_test.tex").write_text("".join(f"{s} & " + " & ".join(f"{x:.3f}" for x in by[s]) + f" & {np.mean(by[s]):.3f} & {np.std(by[s]):.3f} & {ref[s]:.3f} & {plan[s]:.3f} \\\\\n" for s in seeds))
+    M.update(agentTestRuns=str(len(runs)), agentTestSeeds=f"{seeds[0]} to {seeds[-1]}", agentTestMean=f"{m:.3f}", agentTestCI=f"{lo:.3f}--{hi:.3f}",
+             agentTestRefMean=f"{np.mean([ref[s] for s in seeds]):.3f}", agentTestPlannerMean=f"{np.mean([plan[s] for s in seeds]):.3f}",
+             agentTestRefWinsSeeds=f"{w}/{n}", agentTestRefWinsRuns=f"{sum(ref[s] > x for s in seeds for x in by[s])}/{len(runs)}",
+             agentTestBeatsRefRuns=str(sum(x > ref[s] for s in seeds for x in by[s])), agentTestSignP=pf(sp), agentTestWilcoxonP=pf(wp),
+             agentTestCostUsd=f"{sum(r.get('cost_usd') or 0 for r in runs):.2f}", agentTestWorstRun=f"{min(min(v) for v in by.values()):.3f}",
+             agentTestBestRun=f"{max(max(v) for v in by.values()):.3f}", agentTestSeedStd=f"{np.mean([np.std(by[s]) for s in seeds]):.3f}",
+             agentTestPlannerWinsSeeds=f"{sum(plan[s] > a for s, a in zip(seeds, means))}/{len(seeds)}")
+
+
 def agent_runs(rows):
     cost = sum(r.get("cost_usd", 0) or 0 for r in rows if r["job"] == MAIN_JOB)
     M.update(agentInvalidRuns=str(sum(r.get("valid") is False for r in rows)))
+    paid = [r for r in rows if r.get("cost_usd") is not None]
+    M.update(agentTotalCostUsd=f"{sum(r['cost_usd'] for r in paid):.2f}", agentTotalCostRuns=str(len(paid)),
+             agentTotalCostInvalid=str(sum(r.get("valid") is False for r in paid)))
+    for j in sorted({r["job"] for r in paid}):
+        M[f"costUsd{JOBNAME.get(j, letters(j))}"] = f"{sum(r['cost_usd'] for r in paid if r['job'] == j):.2f}"
     rows = [r for r in rows if r.get("valid", True)]
     if not rows:
         return
@@ -602,9 +628,15 @@ def agent_runs(rows):
     for r in rows:
         if r["who"] != "reference":
             m = r.get("model", r["who"])
-            v = r.get("variant", "base" if r["job"] in BASE_JOBS else r["job"])
+            v = "test" if r["job"] == TEST_JOB else r.get("variant", "base" if r["job"] in BASE_JOBS else r["job"])
             groups.setdefault((m, v if r["job"] not in BASE_JOBS or r["job"] == MAIN_JOB else f"{v} ({r['job']})"), []).append(r)
     out = []
+    tref = {}
+    test = [r for (m, v), g in groups.items() if v == "test" for r in g]
+    if test and (EVID / "test.json").exists():
+        tp = load(EVID / "test.json")["test"]["policies"]
+        tref = {s: v["score"] for s, v in tp["deploy"].items()}
+        agent_test(test, tref, {s: v["score"] for s, v in tp["planner"].items()})
     main = [r for (m, v), g in groups.items() if v == "base" for r in g]
     if main:
         agent_summary(main, ref, "")
@@ -615,9 +647,9 @@ def agent_runs(rows):
         M.update(agentCostUsd=f"{cost:.2f}", agentSeedsAll=f"{min(r['seed'] for r in main)} to {max(r['seed'] for r in main)}")
     for (m, v), g in sorted(groups.items()):
         sfx = letters(m) + ("" if v.startswith("base") else letters(v))
-        out.append(f"\\texttt{{{m}}} & {v} & " + agent_summary(g, ref, sfx) + " \\\\")
+        out.append(f"\\texttt{{{m}}} & {v} & " + agent_summary(g, tref if v == "test" else ref, sfx) + " \\\\")
     (HERE / "agentruns.tex").write_text("\n".join(out) + "\n")
-    ab = [(k, g) for k, g in groups.items() if not k[1].startswith(("base", "redteam"))]
+    ab = [(k, g) for k, g in groups.items() if not k[1].startswith(("base", "redteam", "test"))]
     if ab:
         base, base3 = {}, {}
         for (m, v), g in groups.items():

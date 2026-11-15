@@ -15,4 +15,5 @@ paper/main.fls
 paper/main.log
 paper/main.out
 paper/textonly.pdf
+paper/build/
 task-*/

@@ -92,6 +92,7 @@
 \newcommand{\agentBestRunOpenaiGptSolMax}{0.968}
 \newcommand{\agentBestRunOpenaiGptSolNotes}{0.966}
 \newcommand{\agentBestRunOpenaiGptSolRedteam}{0.982}
+\newcommand{\agentBestRunOpenaiGptSolTest}{1.008}
 \newcommand{\agentBoomEarly}{2}
 \newcommand{\agentBoomHits}{4}
 \newcommand{\agentCIAll}{0.717--0.827}
@@ -102,6 +103,7 @@
 \newcommand{\agentCIAllOpenaiGptSolMax}{0.814--0.957}
 \newcommand{\agentCIAllOpenaiGptSolNotes}{0.604--0.851}
 \newcommand{\agentCIAllOpenaiGptSolRedteam}{0.503--0.906}
+\newcommand{\agentCIAllOpenaiGptSolTest}{0.651--0.873}
 \newcommand{\agentCostUsd}{18.38}
 \newcommand{\agentForecastMax}{38}
 \newcommand{\agentForecastMin}{28}
@@ -117,6 +119,7 @@
 \newcommand{\agentMeanAllOpenaiGptSolMax}{0.892}
 \newcommand{\agentMeanAllOpenaiGptSolNotes}{0.720}
 \newcommand{\agentMeanAllOpenaiGptSolRedteam}{0.715}
+\newcommand{\agentMeanAllOpenaiGptSolTest}{0.764}
 \newcommand{\agentMinMax}{7}
 \newcommand{\agentMinMin}{6}
 \newcommand{\agentN}{5}
@@ -128,6 +131,7 @@
 \newcommand{\agentRunsOpenaiGptSolMax}{5}
 \newcommand{\agentRunsOpenaiGptSolNotes}{5}
 \newcommand{\agentRunsOpenaiGptSolRedteam}{7}
+\newcommand{\agentRunsOpenaiGptSolTest}{24}
 \newcommand{\agentScoreMean}{0.77}
 \newcommand{\agentSeedCount}{16}
 \newcommand{\agentSeedCountGptSol}{5}
@@ -137,6 +141,7 @@
 \newcommand{\agentSeedCountOpenaiGptSolMax}{5}
 \newcommand{\agentSeedCountOpenaiGptSolNotes}{5}
 \newcommand{\agentSeedCountOpenaiGptSolRedteam}{5}
+\newcommand{\agentSeedCountOpenaiGptSolTest}{8}
 \newcommand{\agentSeedStd}{0.125}
 \newcommand{\agentSeedStdGptSol}{0.000}
 \newcommand{\agentSeedStdOpenaiGptSol}{0.125}
@@ -145,6 +150,7 @@
 \newcommand{\agentSeedStdOpenaiGptSolMax}{0.000}
 \newcommand{\agentSeedStdOpenaiGptSolNotes}{0.000}
 \newcommand{\agentSeedStdOpenaiGptSolRedteam}{0.043}
+\newcommand{\agentSeedStdOpenaiGptSolTest}{0.106}
 \newcommand{\agentSeeds}{0 to 4}
 \newcommand{\agentSeedsAll}{0 to 15}
 \newcommand{\agentSignPAll}{$1.5\times 10^{-5}$}
@@ -155,6 +161,26 @@
 \newcommand{\agentSignPAllOpenaiGptSolMax}{0.031}
 \newcommand{\agentSignPAllOpenaiGptSolNotes}{0.031}
 \newcommand{\agentSignPAllOpenaiGptSolRedteam}{0.031}
+\newcommand{\agentSignPAllOpenaiGptSolTest}{0.035}
+\newcommand{\agentTestBeatsRefRuns}{2}
+\newcommand{\agentTestBestRun}{1.008}
+\newcommand{\agentTestCI}{0.651--0.873}
+\newcommand{\agentTestCostUsd}{9.07}
+\newcommand{\agentTestMean}{0.764}
+\newcommand{\agentTestPlannerMean}{0.854}
+\newcommand{\agentTestPlannerWinsSeeds}{5/8}
+\newcommand{\agentTestRefMean}{0.953}
+\newcommand{\agentTestRefWinsRuns}{22/24}
+\newcommand{\agentTestRefWinsSeeds}{7/8}
+\newcommand{\agentTestRuns}{24}
+\newcommand{\agentTestSeedStd}{0.106}
+\newcommand{\agentTestSeeds}{16 to 23}
+\newcommand{\agentTestSignP}{0.035}
+\newcommand{\agentTestWilcoxonP}{0.0078}
+\newcommand{\agentTestWorstRun}{0.209}
+\newcommand{\agentTotalCostInvalid}{1}
+\newcommand{\agentTotalCostRuns}{100}
+\newcommand{\agentTotalCostUsd}{40.56}
 \newcommand{\agentUsdMax}{0.43}
 \newcommand{\agentUsdMin}{0.33}
 \newcommand{\agentWilcoxonPAll}{$1.5\times 10^{-5}$}
@@ -165,6 +191,7 @@
 \newcommand{\agentWilcoxonPAllOpenaiGptSolMax}{0.031}
 \newcommand{\agentWilcoxonPAllOpenaiGptSolNotes}{0.031}
 \newcommand{\agentWilcoxonPAllOpenaiGptSolRedteam}{0.031}
+\newcommand{\agentWilcoxonPAllOpenaiGptSolTest}{0.0078}
 \newcommand{\agentWorstRun}{0.096}
 \newcommand{\agentWorstRunGptSol}{0.519}
 \newcommand{\agentWorstRunOpenaiGptSol}{0.096}
@@ -173,6 +200,7 @@
 \newcommand{\agentWorstRunOpenaiGptSolMax}{0.749}
 \newcommand{\agentWorstRunOpenaiGptSolNotes}{0.534}
 \newcommand{\agentWorstRunOpenaiGptSolRedteam}{0.306}
+\newcommand{\agentWorstRunOpenaiGptSolTest}{0.209}
 \newcommand{\aoneJaccard}{0.67}
 \newcommand{\aoneLag}{2.9}
 \newcommand{\aoneListProjects}{1.3}
@@ -207,6 +235,13 @@
 \newcommand{\cfRefMaintTwoDiffGate}{$-$0.280}
 \newcommand{\cfRefMaintTwoGapShare}{0.97}
 \newcommand{\cfRefMaintTwoGapShareGate}{1.36}
+\newcommand{\costUsdAone}{18.38}
+\newcommand{\costUsdAoneTest}{9.07}
+\newcommand{\costUsdHint}{1.90}
+\newcommand{\costUsdLongforecast}{1.94}
+\newcommand{\costUsdMax}{4.39}
+\newcommand{\costUsdNotes}{2.00}
+\newcommand{\costUsdRedteam}{2.88}
 \newcommand{\evoBcAcc}{0.67}
 \newcommand{\evoBcAccAt}{0}
 \newcommand{\evoBcAccScore}{0.91}
@@ -988,6 +1023,7 @@
 \newcommand{\refWinsBestRunOpenaiGptSolMax}{5/5}
 \newcommand{\refWinsBestRunOpenaiGptSolNotes}{5/5}
 \newcommand{\refWinsBestRunOpenaiGptSolRedteam}{5/5}
+\newcommand{\refWinsBestRunOpenaiGptSolTest}{6/8}
 \newcommand{\refWinsRuns}{47/48}
 \newcommand{\refWinsRunsGptSol}{5/5}
 \newcommand{\refWinsRunsOpenaiGptSol}{47/48}
@@ -996,6 +1032,7 @@
 \newcommand{\refWinsRunsOpenaiGptSolMax}{5/5}
 \newcommand{\refWinsRunsOpenaiGptSolNotes}{5/5}
 \newcommand{\refWinsRunsOpenaiGptSolRedteam}{7/7}
+\newcommand{\refWinsRunsOpenaiGptSolTest}{22/24}
 \newcommand{\refWinsSeeds}{16/16}
 \newcommand{\refWinsSeedsGptSol}{5/5}
 \newcommand{\refWinsSeedsOpenaiGptSol}{16/16}
@@ -1004,6 +1041,7 @@
 \newcommand{\refWinsSeedsOpenaiGptSolMax}{5/5}
 \newcommand{\refWinsSeedsOpenaiGptSolNotes}{5/5}
 \newcommand{\refWinsSeedsOpenaiGptSolRedteam}{5/5}
+\newcommand{\refWinsSeedsOpenaiGptSolTest}{7/8}
 \newcommand{\refoldLostC}{76.0}
 \newcommand{\refrlGap}{0.00}
 \newcommand{\refrlN}{5}
