@@ -207,7 +207,7 @@ addEventListener('keydown', e => {
 const UI = ['modes', 'right', 'time', 'sl', 'sr', 'card'].map(id => document.getElementById(id));
 let tags = [], shown = [], espoo = null;
 const HOME = -Math.PI / 4, turn = () => controls.getAzimuthalAngle();
-const VIEWS = { hype: [-1561, 1279, 3.91, HOME], o: [2275, 7610, 0.0733, HOME], O: [7437, 7120, 0.218, HOME], 0: [6369, 7760, 0.118, HOME], 1: [6369, 7760, 0.118, HOME], 2: [7267, 6620, 2.03, HOME], far: [6369, 7760, 0.035, HOME] };
+const VIEWS = { hype: [-1561, 1279, 3.91, HOME], o: [2275, 7610, 0.0733, HOME], O: [7437, 7120, 0.218, HOME], 0: [6369, 7760, 0.118, HOME], 1: [6369, 7760, 0.118, HOME], 2: [7267, 6620, 2.03, HOME], 3: [-974, 1084, 3.91, HOME], far: [6369, 7760, 0.035, HOME] };
 const go = (x, y, z1 = Math.max(camera.zoom, 2.5), r1 = turn()) => { fly = { t: 0, a: controls.target.clone(), b: new THREE.Vector3(x, 0, -y), z0: camera.zoom, z1, r0: turn(), r1 }; };
 function label(text, x, y, h, cls) {
   const el = document.createElement('div');
@@ -332,8 +332,9 @@ function frame() {
   Object.assign(sun.shadow.camera, { left: -span, right: span, top: span, bottom: -span, near: 100, far: 12000 });
   sun.shadow.camera.updateProjectionMatrix();
   if (state.play && state.run) {
-    state.f = Math.min(state.f + dt / opt.tl, +year.max);
-    if (state.f >= +year.max) state.play = false;
+    const end = Math.min(state.stop ?? 99, +year.max);
+    state.f = Math.min(state.f + dt / opt.tl, end);
+    if (state.f >= end) { const done = state.onstop; Object.assign(state, { play: false, stop: null, onstop: null }); done?.(); }
     if (!fly || !state.play) paint();
     sync();
   }
@@ -474,7 +475,7 @@ present({
     const idle = () => new Promise(done => { let n = 0; const t = setInterval(() => { n = city.busy || near.ground.busy || detail.busy ? 0 : n + 1; if (n > 5 || stop()) { clearInterval(t); done(); } }, 150); });
     const at = (k, o) => { fly = null; aim(new THREE.Vector3(VIEWS[k][0], 0, -VIEWS[k][1]), VIEWS[k][2], HOME); Object.assign(state, o); loadRun(); apply(); return idle(); };
     await Promise.all(state.list.map(get));
-    for (const [k, o] of [['o', { mode: 'cars' }], [2, {}], [2, { mode: 'flow' }], ['o', {}], ['O', { mode: 'heat' }], [0, { split: true }], ['hype', { mode: 'flow', split: false }], ['hype', { mode: 'cars' }]]) if (!stop()) await at(k, o);
+    for (const [k, o] of [['o', { mode: 'cars' }], [3, {}], [2, {}], [2, { mode: 'flow' }], ['o', {}], ['O', { mode: 'heat' }], [0, { split: true }], ['hype', { mode: 'flow', split: false }], ['hype', { mode: 'cars' }]]) if (!stop()) await at(k, o);
     Object.assign(state, { mode: 'cars', split: false });
     loadRun();
     apply();

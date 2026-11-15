@@ -21,8 +21,11 @@ export function present(v) {
       Object.assign(show('pa').style, { left: `${r.left + r.width / 2}px`, bottom: `${innerHeight - r.top + 32}px` });
     },
     () => { v.set({ mode: 'heat' }); show('pl', el('span', { textContent: 'Bad traffic' }), el('i'), el('span', { textContent: 'Good traffic' })); },
-    () => { hide('pa'); v.set({ play: true }); },
-    () => v.go('O'),
+    () => { hide('pa'); v.set({ play: true, stop: 10, onstop: () => { v.go(3); v.set({ mode: 'cars' }); } }); },
+    () => v.set({ mode: 'flow' }),
+    () => v.set({ f: 11 }),
+    () => { v.go('o'); v.set({ mode: 'cars', play: true }); },
+    () => { v.go('O'); v.set({ mode: 'heat' }); },
     () => { hide('pl'); v.go(2); v.set({ mode: 'cars' }); },
     () => v.set({ mode: 'flow' }),
     () => { v.go(0); v.set({ mode: 'heat', split: true, pair: ['rl', 'gpt-6.1'], cut: 0.2635 }); },
