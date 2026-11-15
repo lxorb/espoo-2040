@@ -1,9 +1,9 @@
 import json
-import re
 from pathlib import Path
 
 import matplotlib
 import numpy as np
+from scipy.stats import binomtest, wilcoxon
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
 DATA = HERE / "data"
+EVID = ROOT / "evidence"
 RLDIR = ROOT / "runs" / "rl" / "vm" / "6fae939a" / "runs" / "rl"
 Y0 = 2026
 
@@ -303,6 +304,60 @@ def cats():
     (HERE / "cats.tex").write_text("".join(f"{k} & {len(v)} & {rng([p['cost'] for p in v])} & {rng([p['years'] for p in v])} \\\\\n" for k, v in groups.items()))
 
 
+def boot(v, n=10000, seed=0):
+    v = np.asarray(v, float)
+    m = v[np.random.default_rng(seed).integers(0, v.size, (n, v.size))].mean(1)
+    return v.mean(), *np.percentile(m, [2.5, 97.5])
+
+
+def paired(a, b):
+    d = np.asarray(a, float) - np.asarray(b, float)
+    nz = d[d != 0]
+    sign = binomtest(int((nz > 0).sum()), nz.size, 0.5, alternative="greater").pvalue if nz.size else 1.0
+    wil = wilcoxon(nz, alternative="greater").pvalue if nz.size else 1.0
+    return int((d > 0).sum()), d.size, sign, wil
+
+
+def tag(p):
+    return "".join(w.title() for w in p.replace(":", " m").replace("1", " one").replace("5", " five").replace("2", " two").split())
+
+
+def test_tables(d):
+    for part in ("validation", "test"):
+        if part not in d:
+            continue
+        rows, pol = [], d[part]["policies"]
+        ref = pol.get("deploy")
+        for p, v in pol.items():
+            seeds = sorted(v, key=int)
+            sf = [v[s]["saved_frac"] for s in seeds]
+            m, lo, hi = boot(sf)
+            t = f"{part}{tag(p)}"
+            M.update({f"{t}Saved": f"{100 * m:.1f}", f"{t}SavedLo": f"{100 * lo:.1f}", f"{t}SavedHi": f"{100 * hi:.1f}", f"{t}Worst": f"{100 * min(sf):.1f}"})
+            cells = [NAME.get({"deploy": "rl"}.get(p, p).split(":")[0], p) + (f" ($m{{=}}{p.split(':')[1]}$)" if ":" in p else ""), f"{100 * m:.1f}", f"[{100 * lo:.1f}, {100 * hi:.1f}]", f"{100 * min(sf):.1f}"]
+            if ref and p != "deploy":
+                w, n, sp, wp = paired([ref[s]["saved_frac"] for s in seeds], sf)
+                M.update({f"{t}Wins": str(w), f"{t}N": str(n), f"{t}SignP": f"{sp:.2g}", f"{t}WilcoxonP": f"{wp:.2g}"})
+                cells += [f"{w}/{n}", f"{sp:.2g}", f"{wp:.2g}"]
+            else:
+                cells += ["--"] * 3
+            rows.append(" & ".join(cells) + " \\\\")
+        (HERE / f"{part}.tex").write_text("\n".join(rows) + "\n")
+
+
+def evidence():
+    f = EVID / "test.json"
+    if f.exists():
+        test_tables(load(f))
+    for name in ("test", "exploits", "failures", "counterfactual", "grpo", "norms"):
+        if not (EVID / f"{name}.json").exists():
+            print("missing", f"evidence/{name}.json")
+    agents = sorted(EVID.glob("*/plan.json"))
+    if agents:
+        rows = [load(p) for p in agents]
+        (HERE / "agent.tex").write_text("".join(f"{r['who']} & {r['seed']} & {r['delay'] / 1e6:.1f} & {r['score']:.3f} \\\\\n" for r in rows))
+
+
 def main():
     rescore()
     ev, zs, final = grpo_curve()
@@ -322,8 +377,8 @@ def main():
     table(vals, search, grpo)
     facts()
     cats()
-    used = set(re.findall(r"\\(\w+)\{\}", (HERE.parent / "main.tex").read_text()))
-    (HERE / "numbers.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(M.items()) if k in used))
+    evidence()
+    (HERE / "numbers.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(M.items())))
 
 
 if __name__ == "__main__":
