@@ -33,7 +33,7 @@ norms, runs, growth, booms = load(ROOT / "sim" / "norms.json"), load(DATA / "run
 RLD, GRD = load(DATA / "rl.json"), load(DATA / "grpo.json")
 ASEEDS = sorted(runs["agent"], key=int)
 LEVEL, M = {}, {}
-BASE_JOBS = {"gate4"}
+BASE_JOBS = {"gate4", "a1"}
 key = lambda n: n.split()[0].lower().replace("ä", "a")
 tot = lambda r: sum(r["delay"])
 raw = lambda s, d: (norms[s][0] - d) / (norms[s][0] - norms[s][1])
@@ -551,14 +551,21 @@ def rules_v2(d):
     var, mt = d["variants"], d["meta"]
     per = lambda v, k: [var[v][s][k]["score"] for s in sorted(var[v], key=int)]
     ci = lambda x: "{} [{}, {}]".format(*(neg(v) for v in boot(x)))
+    names = {"planner": "Rule planner", "learned": "Learned policy", "learned-m2": "Learned policy, maintenance 2", "learned-retrained": "Learned policy, retrained under v2",
+             "reactive": "Reactive", "maintain-0": "Do nothing, maintenance 0", "maintain-2": "Do nothing, maintenance 2"}
+    keys = [k for k in names if k in var["v2"]["0"]] + [k for k in var["v2"]["0"] if k not in names and k != "nothing"]
+    have = lambda v, k: all(k in var[v][s] for s in var[v])
     rows = []
-    for k, name in (("planner", "Rule planner"), ("learned", "Learned policy"), ("reactive", "Reactive"), ("maintain-0", "Do nothing, maintenance 0"), ("maintain-2", "Do nothing, maintenance 2")):
-        cells = [ci(per(v, k)) for v in ("v1", "v2", "v2e")]
-        wins = [paired(per(v, k), per(v, "planner"))[0] for v in ("v2", "v2e")] if k != "planner" else ["--", "--"]
-        rows.append(f"{name} & " + " & ".join(cells) + f" & {wins[0]} & {wins[1]} \\\\")
+    for k in keys:
+        cells = [ci(per(v, k)) if have(v, k) else "--" for v in ("v1", "v2", "v2e")]
+        wins = [paired(per(v, k), per(v, "planner"))[0] if have(v, k) and k != "planner" else "--" for v in ("v2", "v2e")]
+        rows.append(f"{names.get(k, k)} & " + " & ".join(cells) + f" & {wins[0]} & {wins[1]} \\\\")
     ex1 = load(EVID / "exploits.json")["strategies"]["reference-maintain-2"]["score"] if (EVID / "exploits.json").exists() else None
-    lm2 = [mt[f"exploits_{v}"]["reference-maintain-2"]["score_mean"] for v in ("v2", "v2e")]
-    rows.insert(2, f"Learned policy, maintenance 2 & {ci(ex1) if ex1 else '--'} & {lm2[0]:.3f} & {lm2[1]:.3f} & -- & -- \\\\")
+    lm2 = [np.mean(per(v, "learned-m2")) if have(v, "learned-m2") else mt[f"exploits_{v}"]["reference-maintain-2"]["score_mean"] for v in ("v2", "v2e")]
+    if "learned-m2" not in keys:
+        rows.insert(2, f"Learned policy, maintenance 2 & {ci(ex1) if ex1 else '--'} & {lm2[0]:.3f} & {lm2[1]:.3f} & -- & -- \\\\")
+    if have("v2", "learned-retrained"):
+        M.update(vTwoRetrained=f"{np.mean(per('v2', 'learned-retrained')):.3f}", vTwoRetrainedWins=str(paired(per("v2", "learned-retrained"), per("v2", "planner"))[0]))
     (HERE / "rules_v2.tex").write_text("\n".join(rows) + "\n")
     mean = lambda v, k: np.mean(per(v, k))
     cash = lambda v: min(var[v][s]["learned"]["min_cash"] for s in var[v])
