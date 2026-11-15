@@ -469,12 +469,15 @@ addEventListener('keydown', e => { if (e.key === 'Escape') fm.hidden = true; });
 
 present({
   hold: on => { held = on; },
-  warm: async () => {
-    const idle = () => new Promise(done => { let n = 0; const t = setInterval(() => { n = city.busy || near.ground.busy || detail.busy ? 0 : n + 1; if (n > 5) { clearInterval(t); done(); } }, 150); });
+  warm: async stop => {
+    const idle = () => new Promise(done => { let n = 0; const t = setInterval(() => { n = city.busy || near.ground.busy || detail.busy ? 0 : n + 1; if (n > 5 || stop()) { clearInterval(t); done(); } }, 150); });
     const at = (k, o) => { fly = null; aim(new THREE.Vector3(VIEWS[k][0], 0, -VIEWS[k][1]), VIEWS[k][2], HOME); Object.assign(state, o); loadRun(); apply(); return idle(); };
     await Promise.all(state.list.map(get));
-    for (const [k, o] of [['o', { mode: 'cars' }], [2, {}], ['O', { mode: 'heat' }], [0, { split: true }], ['hype', { mode: 'flow', split: false }], ['hype', { mode: 'cars' }]]) await at(k, o);
-    city.pin = true;
+    for (const [k, o] of [['o', { mode: 'cars' }], [2, {}], ['O', { mode: 'heat' }], [0, { split: true }], ['hype', { mode: 'flow', split: false }], ['hype', { mode: 'cars' }]]) if (!stop()) await at(k, o);
+    Object.assign(state, { mode: 'cars', split: false });
+    loadRun();
+    apply();
+    city.pin = !stop();
   },
   free: () => { city.pin = false; },
   go: k => go(...VIEWS[k]),

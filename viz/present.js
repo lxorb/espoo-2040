@@ -28,11 +28,12 @@ export function present(v) {
     () => show('pp', el('img', { src: 'assets/paper.jpg' })),
     () => { hide('pp'); v.go('far'); g.show(); setTimeout(() => n > 0 && v.hold(true), 950); }
   ];
-  let n = -1, taps = [], g, ready = false;
-  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp', 'pl', 'pw'].forEach(hide); g?.hide(); v.hold(false); v.free(); ready = false; if (on) { g ||= globe(); show('pw', 'Preloading'); v.warm().then(() => { hide('pw'); ready = true; }); for (const f of ['formulas.png', 'paper.jpg']) new Image().src = `assets/${f}`; } };
+  let n = -1, taps = [], g, ready = false, skip = false;
+  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp', 'pl', 'pw', 'pi'].forEach(hide); g?.hide(); v.hold(false); v.free(); ready = skip = false; if (on) { g ||= globe(); show('pi', 'p'); show('pw', 'Preloading'); v.warm(() => skip || n < 0).then(() => { hide('pw'); ready = n >= 0; }); for (const f of ['formulas.png', 'paper.jpg']) new Image().src = `assets/${f}`; } };
   addEventListener('keydown', e => {
     if (e.key === 'ArrowRight' && n >= 0 && ready) n < steps.length ? steps[n++]() : mode(false);
     if (e.key !== 'p') return;
+    if (n >= 0 && !ready) skip = true;
     taps = [...taps, performance.now()].slice(-3);
     if (taps.length < 3 || taps[2] - taps[0] > 900) return;
     taps = [];
