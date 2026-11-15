@@ -32,8 +32,8 @@
 \newcommand{\agentSeeds}{0 to 4}
 \newcommand{\agentUsdMax}{0.43}
 \newcommand{\agentUsdMin}{0.33}
-\newcommand{\bestPctMax}{60.9}
-\newcommand{\bestPctMin}{16.9}
+\newcommand{\bestPctMax}{64.7}
+\newcommand{\bestPctMin}{15.8}
 \newcommand{\cfAccessAccepted}{1/5}
 \newcommand{\cfAccessDiff}{0.004}
 \newcommand{\cfAccessGapShare}{0.018}
@@ -137,8 +137,24 @@
 \newcommand{\grpoBoomHitEnd}{0.22}
 \newcommand{\grpoBoomHitMax}{0.34}
 \newcommand{\grpoBoomShare}{0.31}
+\newcommand{\grpoConstTest}{28.6}
+\newcommand{\grpoConstVal}{0.831}
 \newcommand{\grpoDropFirst}{\texttt{keha2-north}, \texttt{espoonvayla-mid}, \texttt{kivenlahti-bridge}, \texttt{keha2-turunvayla-junction}, \texttt{kauklahti-access}}
 \newcommand{\grpoFinal}{0.83}
+\newcommand{\grpoFinalSignPConstTest}{1}
+\newcommand{\grpoFinalSignPConstVal}{1}
+\newcommand{\grpoFinalSignPRandomTest}{$7.7\times 10^{-9}$}
+\newcommand{\grpoFinalSignPRandomVal}{$1.5\times 10^{-5}$}
+\newcommand{\grpoFinalSignPWarmTest}{$2.3\times 10^{-10}$}
+\newcommand{\grpoFinalSignPWarmVal}{$1.5\times 10^{-5}$}
+\newcommand{\grpoFinalTest}{28.6}
+\newcommand{\grpoFinalVal}{0.831}
+\newcommand{\grpoFinalWinsConstTest}{0/32}
+\newcommand{\grpoFinalWinsConstVal}{0/16}
+\newcommand{\grpoFinalWinsRandomTest}{31/32}
+\newcommand{\grpoFinalWinsRandomVal}{16/16}
+\newcommand{\grpoFinalWinsWarmTest}{32/32}
+\newcommand{\grpoFinalWinsWarmVal}{16/16}
 \newcommand{\grpoFlatAt}{80}
 \newcommand{\grpoKept}{\texttt{espoonvayla-2x2}, \texttt{kiviruukki-access}, \texttt{otaniemi-access}}
 \newcommand{\grpoKeptAt}{50}
@@ -146,13 +162,22 @@
 \newcommand{\grpoMtwoAt}{10}
 \newcommand{\grpoOneAt}{60}
 \newcommand{\grpoPlan}{\texttt{otaniemi-access}, \texttt{kiviruukki-access}, \texttt{espoonvayla-2x2}}
+\newcommand{\grpoRandomTest}{8.2}
+\newcommand{\grpoRandomVal}{0.252}
+\newcommand{\grpoSameAsConst}{48}
 \newcommand{\grpoScoreEnd}{0.83}
 \newcommand{\grpoScoreWarmS}{0.19}
 \newcommand{\grpoSdWarm}{8.0}
+\newcommand{\grpoSensFinalShuffle}{0.000}
+\newcommand{\grpoSensFinalZero}{0.000}
+\newcommand{\grpoSensWarmShuffle}{0.743}
+\newcommand{\grpoSensWarmZero}{0.979}
 \newcommand{\grpoSteps}{90}
 \newcommand{\grpoValid}{1.00}
 \newcommand{\grpoValidAt}{20}
 \newcommand{\grpoWarm}{0.19}
+\newcommand{\grpoWarmTest}{4.7}
+\newcommand{\grpoWarmVal}{0.186}
 \newcommand{\grpoZero}{0.00}
 \newcommand{\hoGap}{3.6}
 \newcommand{\hoN}{32}
@@ -168,6 +193,11 @@
 \newcommand{\jamMany}{194}
 \newcommand{\jamManyGap}{0.01}
 \newcommand{\nBooms}{15}
+\newcommand{\normsCpuHours}{19.7}
+\newcommand{\normsSrcLearned}{2}
+\newcommand{\normsSrcLocal}{26}
+\newcommand{\normsSrcSingle}{4}
+\newcommand{\normsTestSeeds}{32}
 \newcommand{\nothingAbsMax}{0.003}
 \newcommand{\nothingRatioMax}{8.3}
 \newcommand{\nothingRatioMin}{2.0}
@@ -190,9 +220,23 @@
 \newcommand{\testGreedyFiveMOne}{7.6}
 \newcommand{\testGreedyFiveMOneHi}{8.6}
 \newcommand{\testGreedyFiveMOneLo}{6.6}
+\newcommand{\testGreedyFiveMOneScore}{0.286}
+\newcommand{\testGreedyFiveMOneScoreClip}{0.286}
+\newcommand{\testGreedyFiveMOneScoreHi}{0.354}
+\newcommand{\testGreedyFiveMOneScoreLo}{0.221}
+\newcommand{\testGreedyFiveMOneScoreMax}{0.708}
+\newcommand{\testGreedyFiveMOneScoreMin}{0.029}
+\newcommand{\testGreedyFiveMOneScoreMinSeed}{46}
 \newcommand{\testGreedyFiveMOneSignP}{$2.3\times 10^{-10}$}
 \newcommand{\testGreedyFiveMOneWilcoxonP}{$2.3\times 10^{-10}$}
 \newcommand{\testGreedyFiveMOneWorst}{1.6}
+\newcommand{\testGreedyFiveScore}{0.409}
+\newcommand{\testGreedyFiveScoreClip}{0.409}
+\newcommand{\testGreedyFiveScoreHi}{0.495}
+\newcommand{\testGreedyFiveScoreLo}{0.327}
+\newcommand{\testGreedyFiveScoreMax}{0.912}
+\newcommand{\testGreedyFiveScoreMin}{0.078}
+\newcommand{\testGreedyFiveScoreMinSeed}{26}
 \newcommand{\testGreedyFiveSignP}{$7.7\times 10^{-9}$}
 \newcommand{\testGreedyFiveWilcoxonP}{$4.7\times 10^{-10}$}
 \newcommand{\testGreedyFiveWorst}{4.8}
@@ -202,9 +246,23 @@
 \newcommand{\testGreedyOneMOne}{9.8}
 \newcommand{\testGreedyOneMOneHi}{10.9}
 \newcommand{\testGreedyOneMOneLo}{8.8}
+\newcommand{\testGreedyOneMOneScore}{0.356}
+\newcommand{\testGreedyOneMOneScoreClip}{0.356}
+\newcommand{\testGreedyOneMOneScoreHi}{0.433}
+\newcommand{\testGreedyOneMOneScoreLo}{0.284}
+\newcommand{\testGreedyOneMOneScoreMax}{0.791}
+\newcommand{\testGreedyOneMOneScoreMin}{0.087}
+\newcommand{\testGreedyOneMOneScoreMinSeed}{26}
 \newcommand{\testGreedyOneMOneSignP}{$2.3\times 10^{-10}$}
 \newcommand{\testGreedyOneMOneWilcoxonP}{$2.3\times 10^{-10}$}
 \newcommand{\testGreedyOneMOneWorst}{5.3}
+\newcommand{\testGreedyOneScore}{0.365}
+\newcommand{\testGreedyOneScoreClip}{0.365}
+\newcommand{\testGreedyOneScoreHi}{0.443}
+\newcommand{\testGreedyOneScoreLo}{0.291}
+\newcommand{\testGreedyOneScoreMax}{0.802}
+\newcommand{\testGreedyOneScoreMin}{0.089}
+\newcommand{\testGreedyOneScoreMinSeed}{26}
 \newcommand{\testGreedyOneSignP}{$2.3\times 10^{-10}$}
 \newcommand{\testGreedyOneWilcoxonP}{$2.3\times 10^{-10}$}
 \newcommand{\testGreedyOneWorst}{5.5}
@@ -212,18 +270,39 @@
 \newcommand{\testNothing}{0.0}
 \newcommand{\testNothingHi}{0.0}
 \newcommand{\testNothingLo}{0.0}
+\newcommand{\testNothingScore}{0.000}
+\newcommand{\testNothingScoreClip}{0.000}
+\newcommand{\testNothingScoreHi}{0.000}
+\newcommand{\testNothingScoreLo}{0.000}
+\newcommand{\testNothingScoreMax}{0.000}
+\newcommand{\testNothingScoreMin}{0.000}
+\newcommand{\testNothingScoreMinSeed}{16}
 \newcommand{\testNothingSignP}{$2.3\times 10^{-10}$}
 \newcommand{\testNothingWilcoxonP}{$2.3\times 10^{-10}$}
 \newcommand{\testNothingWorst}{0.0}
 \newcommand{\testPlanner}{31.1}
 \newcommand{\testPlannerHi}{36.2}
 \newcommand{\testPlannerLo}{26.2}
+\newcommand{\testPlannerScore}{0.870}
+\newcommand{\testPlannerScoreClip}{0.870}
+\newcommand{\testPlannerScoreHi}{0.909}
+\newcommand{\testPlannerScoreLo}{0.825}
+\newcommand{\testPlannerScoreMax}{0.988}
+\newcommand{\testPlannerScoreMin}{0.490}
+\newcommand{\testPlannerScoreMinSeed}{17}
 \newcommand{\testPlannerSignP}{$7.7\times 10^{-9}$}
 \newcommand{\testPlannerWilcoxonP}{$8.6\times 10^{-8}$}
 \newcommand{\testPlannerWorst}{13.2}
 \newcommand{\testRandom}{4.6}
 \newcommand{\testRandomHi}{5.4}
 \newcommand{\testRandomLo}{3.8}
+\newcommand{\testRandomScore}{0.166}
+\newcommand{\testRandomScoreClip}{0.166}
+\newcommand{\testRandomScoreHi}{0.212}
+\newcommand{\testRandomScoreLo}{0.125}
+\newcommand{\testRandomScoreMax}{0.516}
+\newcommand{\testRandomScoreMin}{$-$0.002}
+\newcommand{\testRandomScoreMinSeed}{46}
 \newcommand{\testRandomSignP}{$2.3\times 10^{-10}$}
 \newcommand{\testRandomWilcoxonP}{$2.3\times 10^{-10}$}
 \newcommand{\testRandomWorst}{$-$0.1}
@@ -233,15 +312,36 @@
 \newcommand{\testReactiveMOne}{19.9}
 \newcommand{\testReactiveMOneHi}{24.3}
 \newcommand{\testReactiveMOneLo}{16.0}
+\newcommand{\testReactiveMOneScore}{0.587}
+\newcommand{\testReactiveMOneScoreClip}{0.587}
+\newcommand{\testReactiveMOneScoreHi}{0.667}
+\newcommand{\testReactiveMOneScoreLo}{0.504}
+\newcommand{\testReactiveMOneScoreMax}{0.947}
+\newcommand{\testReactiveMOneScoreMin}{0.155}
+\newcommand{\testReactiveMOneScoreMinSeed}{17}
 \newcommand{\testReactiveMOneSignP}{$2.3\times 10^{-10}$}
 \newcommand{\testReactiveMOneWilcoxonP}{$2.3\times 10^{-10}$}
 \newcommand{\testReactiveMOneWorst}{6.9}
+\newcommand{\testReactiveScore}{0.608}
+\newcommand{\testReactiveScoreClip}{0.608}
+\newcommand{\testReactiveScoreHi}{0.691}
+\newcommand{\testReactiveScoreLo}{0.524}
+\newcommand{\testReactiveScoreMax}{0.973}
+\newcommand{\testReactiveScoreMin}{0.154}
+\newcommand{\testReactiveScoreMinSeed}{17}
 \newcommand{\testReactiveSignP}{$2.3\times 10^{-10}$}
 \newcommand{\testReactiveWilcoxonP}{$2.3\times 10^{-10}$}
 \newcommand{\testReactiveWorst}{7.6}
 \newcommand{\testRl}{34.3}
 \newcommand{\testRlHi}{39.5}
 \newcommand{\testRlLo}{29.2}
+\newcommand{\testRlScore}{0.958}
+\newcommand{\testRlScoreClip}{0.958}
+\newcommand{\testRlScoreHi}{0.977}
+\newcommand{\testRlScoreLo}{0.937}
+\newcommand{\testRlScoreMax}{1.000}
+\newcommand{\testRlScoreMin}{0.787}
+\newcommand{\testRlScoreMinSeed}{33}
 \newcommand{\testRlWinsGreedyFive}{31}
 \newcommand{\testRlWinsGreedyFiveMOne}{32}
 \newcommand{\testRlWinsGreedyOne}{32}
@@ -262,11 +362,21 @@
 \newcommand{\valGreedyFiveMOneLo}{6.7}
 \newcommand{\valGreedyFiveMOneScore}{0.275}
 \newcommand{\valGreedyFiveMOneScoreClip}{0.275}
+\newcommand{\valGreedyFiveMOneScoreHi}{0.370}
+\newcommand{\valGreedyFiveMOneScoreLo}{0.187}
+\newcommand{\valGreedyFiveMOneScoreMax}{0.611}
+\newcommand{\valGreedyFiveMOneScoreMin}{0.028}
+\newcommand{\valGreedyFiveMOneScoreMinSeed}{11}
 \newcommand{\valGreedyFiveMOneSignP}{$1.5\times 10^{-5}$}
 \newcommand{\valGreedyFiveMOneWilcoxonP}{$1.5\times 10^{-5}$}
 \newcommand{\valGreedyFiveMOneWorst}{1.7}
 \newcommand{\valGreedyFiveScore}{0.475}
 \newcommand{\valGreedyFiveScoreClip}{0.475}
+\newcommand{\valGreedyFiveScoreHi}{0.580}
+\newcommand{\valGreedyFiveScoreLo}{0.364}
+\newcommand{\valGreedyFiveScoreMax}{0.775}
+\newcommand{\valGreedyFiveScoreMin}{0.093}
+\newcommand{\valGreedyFiveScoreMinSeed}{11}
 \newcommand{\valGreedyFiveSignP}{$1.5\times 10^{-5}$}
 \newcommand{\valGreedyFiveWilcoxonP}{$1.5\times 10^{-5}$}
 \newcommand{\valGreedyFiveWorst}{5.7}
@@ -278,11 +388,21 @@
 \newcommand{\valGreedyOneMOneLo}{9.2}
 \newcommand{\valGreedyOneMOneScore}{0.348}
 \newcommand{\valGreedyOneMOneScoreClip}{0.348}
+\newcommand{\valGreedyOneMOneScoreHi}{0.457}
+\newcommand{\valGreedyOneMOneScoreLo}{0.248}
+\newcommand{\valGreedyOneMOneScoreMax}{0.694}
+\newcommand{\valGreedyOneMOneScoreMin}{0.106}
+\newcommand{\valGreedyOneMOneScoreMinSeed}{11}
 \newcommand{\valGreedyOneMOneSignP}{$1.5\times 10^{-5}$}
 \newcommand{\valGreedyOneMOneWilcoxonP}{$1.5\times 10^{-5}$}
 \newcommand{\valGreedyOneMOneWorst}{5.8}
 \newcommand{\valGreedyOneScore}{0.352}
 \newcommand{\valGreedyOneScoreClip}{0.352}
+\newcommand{\valGreedyOneScoreHi}{0.462}
+\newcommand{\valGreedyOneScoreLo}{0.252}
+\newcommand{\valGreedyOneScoreMax}{0.697}
+\newcommand{\valGreedyOneScoreMin}{0.109}
+\newcommand{\valGreedyOneScoreMinSeed}{11}
 \newcommand{\valGreedyOneSignP}{$1.5\times 10^{-5}$}
 \newcommand{\valGreedyOneWilcoxonP}{$1.5\times 10^{-5}$}
 \newcommand{\valGreedyOneWorst}{6.0}
@@ -292,6 +412,11 @@
 \newcommand{\valNothingLo}{0.0}
 \newcommand{\valNothingScore}{0.000}
 \newcommand{\valNothingScoreClip}{0.000}
+\newcommand{\valNothingScoreHi}{0.000}
+\newcommand{\valNothingScoreLo}{0.000}
+\newcommand{\valNothingScoreMax}{0.000}
+\newcommand{\valNothingScoreMin}{0.000}
+\newcommand{\valNothingScoreMinSeed}{0}
 \newcommand{\valNothingSignP}{$1.5\times 10^{-5}$}
 \newcommand{\valNothingWilcoxonP}{$1.5\times 10^{-5}$}
 \newcommand{\valNothingWorst}{0.0}
@@ -300,6 +425,11 @@
 \newcommand{\valPlannerLo}{26.3}
 \newcommand{\valPlannerScore}{0.837}
 \newcommand{\valPlannerScoreClip}{0.837}
+\newcommand{\valPlannerScoreHi}{0.886}
+\newcommand{\valPlannerScoreLo}{0.784}
+\newcommand{\valPlannerScoreMax}{0.985}
+\newcommand{\valPlannerScoreMin}{0.633}
+\newcommand{\valPlannerScoreMinSeed}{12}
 \newcommand{\valPlannerSignP}{$1.5\times 10^{-5}$}
 \newcommand{\valPlannerWilcoxonP}{$1.5\times 10^{-5}$}
 \newcommand{\valPlannerWorst}{14.8}
@@ -308,6 +438,11 @@
 \newcommand{\valRandomLo}{2.9}
 \newcommand{\valRandomScore}{0.152}
 \newcommand{\valRandomScoreClip}{0.152}
+\newcommand{\valRandomScoreHi}{0.227}
+\newcommand{\valRandomScoreLo}{0.087}
+\newcommand{\valRandomScoreMax}{0.427}
+\newcommand{\valRandomScoreMin}{0.000}
+\newcommand{\valRandomScoreMinSeed}{11}
 \newcommand{\valRandomSignP}{$1.5\times 10^{-5}$}
 \newcommand{\valRandomWilcoxonP}{$1.5\times 10^{-5}$}
 \newcommand{\valRandomWorst}{0.0}
@@ -319,11 +454,21 @@
 \newcommand{\valReactiveMOneLo}{14.3}
 \newcommand{\valReactiveMOneScore}{0.546}
 \newcommand{\valReactiveMOneScoreClip}{0.546}
+\newcommand{\valReactiveMOneScoreHi}{0.669}
+\newcommand{\valReactiveMOneScoreLo}{0.420}
+\newcommand{\valReactiveMOneScoreMax}{0.962}
+\newcommand{\valReactiveMOneScoreMin}{0.173}
+\newcommand{\valReactiveMOneScoreMinSeed}{8}
 \newcommand{\valReactiveMOneSignP}{$1.5\times 10^{-5}$}
 \newcommand{\valReactiveMOneWilcoxonP}{$1.5\times 10^{-5}$}
 \newcommand{\valReactiveMOneWorst}{8.3}
 \newcommand{\valReactiveScore}{0.555}
 \newcommand{\valReactiveScoreClip}{0.555}
+\newcommand{\valReactiveScoreHi}{0.677}
+\newcommand{\valReactiveScoreLo}{0.428}
+\newcommand{\valReactiveScoreMax}{0.977}
+\newcommand{\valReactiveScoreMin}{0.174}
+\newcommand{\valReactiveScoreMinSeed}{8}
 \newcommand{\valReactiveSignP}{$1.5\times 10^{-5}$}
 \newcommand{\valReactiveWilcoxonP}{$1.5\times 10^{-5}$}
 \newcommand{\valReactiveWorst}{8.3}
@@ -332,6 +477,11 @@
 \newcommand{\valRlLo}{31.1}
 \newcommand{\valRlScore}{0.971}
 \newcommand{\valRlScoreClip}{0.966}
+\newcommand{\valRlScoreHi}{0.991}
+\newcommand{\valRlScoreLo}{0.950}
+\newcommand{\valRlScoreMax}{1.035}
+\newcommand{\valRlScoreMin}{0.875}
+\newcommand{\valRlScoreMinSeed}{5}
 \newcommand{\valRlWinsGreedyFive}{16}
 \newcommand{\valRlWinsGreedyFiveMOne}{16}
 \newcommand{\valRlWinsGreedyOne}{16}

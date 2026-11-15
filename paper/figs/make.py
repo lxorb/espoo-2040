@@ -338,9 +338,13 @@ def test_tables(d):
             m, lo, hi = boot(sf)
             M.update({k: f"{100 * m:.1f}", f"{k}Lo": f"{100 * lo:.1f}", f"{k}Hi": f"{100 * hi:.1f}", f"{k}Worst": neg(100 * min(sf), "{:.1f}")})
             sc = [v[s]["score"] for s in seeds]
-            if None not in sc:
-                M.update({f"{k}Score": f"{np.mean(sc):.3f}", f"{k}ScoreClip": f"{np.mean(np.clip(sc, 0, 1)):.3f}"})
             cells = [NAME.get({"deploy": "rl"}.get(p, p).split(":")[0], p) + (f" ($m{{=}}{p.split(':')[1]}$)" if ":" in p else ""), f"{100 * m:.1f}", f"[{100 * lo:.1f}, {100 * hi:.1f}]", neg(100 * min(sf), "{:.1f}")]
+            if None not in sc:
+                sm, slo, shi = boot(sc)
+                i = int(np.argmin(sc))
+                M.update({f"{k}Score": f"{sm:.3f}", f"{k}ScoreLo": f"{slo:.3f}", f"{k}ScoreHi": f"{shi:.3f}", f"{k}ScoreClip": f"{np.mean(np.clip(sc, 0, 1)):.3f}",
+                          f"{k}ScoreMin": neg(min(sc)), f"{k}ScoreMinSeed": seeds[i], f"{k}ScoreMax": neg(max(sc))})
+                cells.append(f"{sm:.3f}")
             if p == "deploy":
                 cells += ["--"] * 3
             else:
@@ -428,11 +432,38 @@ def exploits(d):
     (HERE / "exploits.tex").write_text("\n".join(rows) + "\n")
 
 
+def grpo_evidence(d):
+    ms, ts = d["methods"], d["tests"]
+    keys = (("runs/grpo/ckpt-0", "Warm", "Gemma after format warm-up"), ("random", "Random", "Random valid plans"),
+            ("runs/grpo/ckpt-90", "Final", "Gemma after GRPO (step 90)"), ("const", "Const", "Constant plan " + ", ".join(f"\\texttt{{{q}}}" for q in d["meta"]["const_plan"]["plan"])))
+    rows = []
+    for k, t, name in keys:
+        v, te = ms[k]["val"]["score"], ms[k]["test"]["frac"]
+        M.update({f"grpo{t}Val": f"{v['mean']:.3f}", f"grpo{t}Test": f"{100 * te['mean']:.1f}"})
+        rows.append(f"{name} & {v['mean']:.3f} [{v['ci'][0]:.3f}, {v['ci'][1]:.3f}] & {100 * te['mean']:.1f} [{100 * te['ci'][0]:.1f}, {100 * te['ci'][1]:.1f}] \\\\")
+    (HERE / "grpo.tex").write_text("\n".join(rows) + "\n")
+    for other, t in (("runs/grpo/ckpt-0", "Warm"), ("random", "Random"), ("const", "Const")):
+        for part, pt in (("val", "Val"), ("test", "Test")):
+            x = ts[f"runs/grpo/ckpt-90 vs {other} {part}"]
+            M.update({f"grpoFinalWins{t}{pt}": f"{x['wins']}/{len(d['meta']['seeds'][part])}", f"grpoFinalSignP{t}{pt}": pf(x["sign_p"])})
+    for k, t in (("runs/grpo/ckpt-0", "Warm"), ("runs/grpo/ckpt-90", "Final")):
+        sv = d["sensitivity"][k]
+        M.update({f"grpoSens{t}Shuffle": f"{sv['shuffle']:.3f}", f"grpoSens{t}Zero": f"{sv['zero']['changed']:.3f}"})
+    M["grpoSameAsConst"] = str(sum(ms["runs/grpo/ckpt-90"]["plans"][s] == ms["const"]["plans"][s] for s in ms["const"]["plans"]))
+
+
+def norms_evidence(d):
+    new = [v for v in d["seeds"].values() if not v.get("frozen")]
+    src = lambda name: str(sum(v["source"] == name for v in new))
+    M.update(normsTestSeeds=str(len(new)), normsCpuHours=f"{d['meta']['cpu_seconds_16_47'] / 3600:.1f}", normsSrcLocal=src("local search"),
+             normsSrcSingle=src("single-value order"), normsSrcLearned=src("learned policy"))
+
+
 def evidence():
     f = EVID / "test.json"
     if f.exists():
         test_tables(load(f))
-    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits)):
+    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits), ("grpo", grpo_evidence), ("norms", norms_evidence)):
         if (EVID / f"{name}.json").exists():
             fn(load(EVID / f"{name}.json"))
     if (EVID / "failures.json").exists():

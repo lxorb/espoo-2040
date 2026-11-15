@@ -100,7 +100,7 @@ def main():
     out = dict(meta=dict(script="rl/eval.py", command="python -m rl.eval " + " ".join(sys.argv[1:]), seeds=a.seeds, version=version(),
                          norms=dict(file="sim/norms.json", seeds=sorted(int(k) for k in norms)), date=time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime()), machine=platform.processor() or platform.machine(),
                          cpu=next((l.split(":")[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name")), ""),
-                         saved_frac="1 - delay / delay of do-nothing on the same seed", ci="95% bootstrap over seeds, 10000 resamples, rng 0",
+                         saved_frac="1 - delay / delay of do-nothing on the same seed", ci="95% bootstrap over seeds, 10000 resamples, rng 0", score_clip="score clipped to [0, 1] per seed",
                          tests="paired vs deploy on saved_frac: one-sided sign test and Wilcoxon signed-rank, deploy better"))
     for part, ss in (("validation", [s for s in seeds if s < 16]), ("test", [s for s in seeds if s >= 16])):
         if not ss:
@@ -113,6 +113,7 @@ def main():
             v = np.array([rows[p][s]["saved_frac"] for s in ss])
             sc = [rows[p][s]["score"] for s in ss]
             st[p] = dict(saved_frac=ci(v, np.random.default_rng(0)), score=ci(np.array(sc), np.random.default_rng(0)) if None not in sc else None,
+                         score_clip=ci(np.clip(sc, 0, 1), np.random.default_rng(0)) if None not in sc else None,
                          delay_m=float(np.mean([rows[p][s]["delay"] for s in ss]) / 1e6))
             if p != "deploy" and "deploy" in pols:
                 d = np.array([rows["deploy"][s]["saved_frac"] for s in ss]) - v

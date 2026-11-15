@@ -65,7 +65,7 @@ def execute(seed, ids, k):
 def play(seed, ids, k):
     c = execute(seed, ids, k)
     r = c.result()
-    return dict(seed=seed, plan=ids, maintain=k, score=c.score(), frac=r["saving"] / r["nothing"], saving=r["saving"] / 1e6,
+    return dict(seed=seed, plan=ids, maintain=k, score=c.score(), frac=r["saving"] / r["nothing"], saving=r["saving"] / 1e6, delay=r["delay"] / 1e6, nothing=r["nothing"] / 1e6,
                 last=c.recs[-1]["delay"] / 1e6, spent=sum(x["spent"] for x in c.recs), built=list(c.s["built"]))
 
 
