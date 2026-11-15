@@ -344,10 +344,63 @@ def test_tables(d):
         (HERE / f"{part}.tex").write_text("\n".join(rows) + "\n")
 
 
+def neg(x, f="{:.3f}"):
+    return ("$-$" if x < 0 else "") + f.format(abs(x))
+
+
+def failures(d):
+    a, r = d["summary"]["agent"], d["summary"]["reference"]
+    runs_ = [x for x in d["runs"] if x["role"] == "agent"]
+    tot5 = lambda w, k: sum(d["summary"][w][k]["per_seed"].values())
+    share = lambda w: d["summary"][w]["rebuild_spend"]["mean"] / d["summary"][w]["total_spend"]["mean"]
+    M.update(failJaccardAgent=f"{d['summary']['jaccard_pairs']['agent']['pairs']['mean']:.2f}", failJaccardRef=f"{d['summary']['jaccard_pairs']['reference']['pairs']['mean']:.2f}",
+             failMentionYear=str(int(np.median([b["first_mention_msg"] for x in runs_ for b in x["sees_acts"]]))),
+             failBoomNeverActed=str(a["never_upgraded_mentioned"]), failBoomTotal=str(a["boom_total"]), failLagYears=f"{a['lag']['mean']:.1f}",
+             failBoomAgent=f"{tot5('agent', 'boom_upgraded'):.0f}", failBoomRef=f"{tot5('reference', 'boom_upgraded'):.0f}",
+             failBoomEarlyAgent=f"{tot5('agent', 'boom_upgraded_by_2031'):.0f}", failBoomEarlyRef=f"{tot5('reference', 'boom_upgraded_by_2031'):.0f}",
+             failBlockedAgent=f"{a['boom_access_blocked_years']['mean']:.1f}", failBlockedRef=f"{r['boom_access_blocked_years']['mean']:.1f}",
+             failMaintTwoShare=f"{100 * a['maint2_share']['mean']:.1f}\\%", failRebuildShareAgent=f"{100 * share('agent'):.0f}\\%", failRebuildShareRef=f"{100 * share('reference'):.0f}\\%",
+             failForecastAccess=f"{a['forecasts_with_access']['mean']:.1f}", failForecastAccessUnbuilt=f"{a['forecasts_access_never_started']['mean']:.1f}",
+             failCallsGetState=f"{a['calls']['get_state']['mean']:.1f}", failCallsForecast=f"{a['calls']['forecast']['mean']:.1f}")
+    rows = [("Score", "score", "{:.2f}"), ("Plan overlap with other seeds (Jaccard)", "jaccard_other_seeds", "{:.2f}"),
+            ("Growing areas upgraded (of 3)", "boom_upgraded", "{:.1f}"), ("of them by 2031", "boom_upgraded_by_2031", "{:.1f}"),
+            ("Years a growing-area upgrade was not affordable", "boom_access_blocked_years", "{:.1f}"), ("Spend on maintenance level 2 (share)", "maint2_share", "{:.3f}"),
+            ("Cash at the end (MEUR)", "cash_end", "{:.0f}")]
+    cell = lambda w, k, f: f"{neg(d['summary'][w][k]['mean'], f)} [{neg(d['summary'][w][k]['lo'], f)}, {neg(d['summary'][w][k]['hi'], f)}]"
+    (HERE / "failures.tex").write_text("".join(f"{n} & {cell('agent', k, f)} & {cell('reference', k, f)} \\\\\n" for n, k, f in rows))
+
+
+def gshare(a):
+    return neg(a["gap_share_pooled"], "{:.2f}" if abs(a["gap_share_pooled"]) >= 0.1 else "{:.3f}")
+
+
+def counterfactual(d):
+    s_ = d["summary"]
+    g = s_["gap"]
+    M.update(gapIntelMean=f"{g['mean']:.3f}", gapIntelLo=f"{g['lo']:.3f}", gapIntelHi=f"{g['hi']:.3f}")
+    for arm, t in (("a_access", "Access"), ("b_maint1", "MaintOne"), ("c_both", "Both"), ("d_ref_maint2", "RefMaintTwo")):
+        a = s_[arm]
+        M.update({f"cf{t}Diff": neg(a["diff"]["mean"]), f"cf{t}GapShare": gshare(a)})
+    acc = [r for r in d["rows"] if r["arm"] == "a_access"]
+    M["cfAccessAccepted"] = f"{sum(r['added'] is not None for r in acc)}/{len(acc)}"
+    rows = []
+    names = dict(a_access="Agent plus an early upgrade of the fastest area", b_maint1="Agent with maintenance 1", c_both="Agent with both changes", d_ref_maint2="Reference with maintenance 2")
+    for arm, a in ((k, s_[k]) for k in names):
+        t = a["test"]
+        rows.append(f"{names[arm]} & {neg(a['diff']['mean'])} [{neg(a['diff']['lo'])}, {neg(a['diff']['hi'])}] & {gshare(a)} & {t['wins']}/{t['n']} & {t['sign_p']:.2g} \\\\")
+    (HERE / "counterfactual.tex").write_text("\n".join(rows) + "\n")
+
+
 def evidence():
     f = EVID / "test.json"
     if f.exists():
         test_tables(load(f))
+    for name, fn in (("failures", failures), ("counterfactual", counterfactual)):
+        if (EVID / f"{name}.json").exists():
+            fn(load(EVID / f"{name}.json"))
+    if (EVID / "failures.json").exists():
+        t = load(EVID / "failures.json")["summary"]["reference_vs_agent_score"]
+        M.update(gapIntelWins=f"{t['wins']}/{t['n']}", gapIntelSignP=f"{t['sign_p']:.3f}")
     for name in ("test", "exploits", "failures", "counterfactual", "grpo", "norms"):
         if not (EVID / f"{name}.json").exists():
             print("missing", f"evidence/{name}.json")
