@@ -30,20 +30,7 @@ export function present(v) {
     () => v.set({ mode: 'flow' }),
     () => { v.go(0); v.set({ mode: 'heat', split: true, pair: ['rl', 'gpt-6.1'], cut: 0.2635 }); },
     () => { v.go(1); v.slide(0.7955); },
-    () => {
-      const col = el('div', {}, ...Array.from({ length: pages }, (_, k) => el('img', { src: `assets/paper/${k + 1}.jpg` }))), box = show('pp', col), t0 = performance.now() + 1000;
-      let y = 0, speed = 0, last = t0;
-      const step = now => {
-        if (!box.isConnected) return;
-        const top = 0.97 * innerHeight / v.paper(), end = col.offsetHeight - innerHeight, dt = Math.min(Math.max(now - last, 0), 50) / 1000;
-        last = Math.max(now, t0);
-        speed = Math.min(speed + top * dt / 0.8, top);
-        y = Math.min(y + speed * dt, end);
-        col.style.transform = `translateY(${-y}px)`;
-        if (y < end) requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    },
+    () => show('pp', el('div', {}, el('img', { src: 'assets/paper/1.jpg' }))),
     () => { hide('pp'); v.go('far'); g.show(); setTimeout(() => n > 0 && v.hold(true), 950); }
   ];
   let n = -1, taps = [], g, ready = false, skip = false, pages = 1;
