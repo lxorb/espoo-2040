@@ -2,7 +2,7 @@
 
 Open city traffic data breaks today's frontier models, then trains them to grow stronger.
 
-We took public data about Espoo, Finland (roads, people, jobs, traffic counts) and built a traffic simulator from it. An agent is the city's transport planner for 15 years. Each year it picks road projects and a maintenance level, with 40 MEUR of income. Two or three areas of the city grow fast, and the agent has to notice which ones.
+We took public data about Espoo, Finland (roads, people, jobs, traffic counts) and built a traffic simulator from it. An agent is the city's transport planner for 15 years. Each year it picks road projects and a maintenance level, with 40 MEUR of income. Two or three areas of the city grow fast. The agent is not told which ones, but it sees the growth of every area in `get_state` each year, and the rules are in the task text. Nothing it needs is hidden; the hard part is the decision.
 
 A frontier model (`gpt-6.1-sol`) plays this badly. A small network (83k parameters) trained in the same simulator plays it well. Gemma 3 4B, trained with GRPO for one weekend, gets better than random plans.
 
@@ -12,7 +12,7 @@ A frontier model (`gpt-6.1-sol`) plays this badly. A small network (83k paramete
 
 ## Run it (for judges)
 
-You need Docker and Harbor 0.25. The first build compiles the traffic model, so it can take about 5 minutes. After that a run takes 1 to 2 minutes.
+You need Docker and Harbor 0.25 (`uv tool install harbor==0.25.0`). The first build compiles the traffic model, so it can take about 5 minutes. After that a run takes 1 to 2 minutes.
 
 ```bash
 SEED=0 harbor run -y -p task -a oracle
@@ -29,10 +29,11 @@ SEED=0 harbor run -y -p task -a opencode -m openai/gpt-6.1-sol
 ```
 Needs `OPENAI_API_KEY`. One run costs about 0.4 USD.
 
+**One command for the whole judge harness:**
 ```bash
 SEED=0 MODEL=openai/gpt-6.1-sol ./eval.sh
 ```
-Runs the reference, the agent (`N=3` runs them in parallel, about 6 GB each), do nothing and an early stop, then prints a table.
+It runs the reference, 3 agent runs, do nothing and stop-early (`MODE=early`), then prints one line per run with its reward. Expected on seed 0: reference about 1.0, do nothing 0.0, stop-early well below the reference, agent below the reference (our run scored 0.52). Agent runs vary; see Results for all 16 seeds. `N=3` runs the 3 agent runs in parallel (about 6 GB each).
 
 ```bash
 uv run --group dev --with mcp==1.30.0 pytest -q tests
@@ -94,6 +95,13 @@ GRPO on Gemma 3 4B (details in the paper, section 7):
 - It names the growing areas by year 3, but leaves most of them without an upgrade.
 - The budget allows about three big starts. The agent often spends them on cheap links and widenings first, and then the money is gone.
 - It trusts the 3-year forecast. A 120 MEUR upgrade looks bad in 3 years (two years of road works) and good over 15. Our learned policy gets worse too if we make it check that forecast (0.97 drops to 0.40).
+
+## Compute (Verda) and Gemma
+
+- The 4B GRPO runs ran on one Verda GPU (NVIDIA RTX PRO 6000, 96 GB) in about 2.7 machine hours, with vLLM for rollouts and the simulator as reward. A laptop GPU cannot hold this. Details, software versions and throughput: `paper/figs/VERDA.md`.
+- Commands: `grpo/phase3.sh` and `grpo/phase4.sh` (4B training and test evaluation), `grpo/reason_eval.py` (baselines and the untrained model).
+- Gemma before and after training is in the Results section above and in Table 11 of the paper.
+- Path to scale: every city built with the same recipe is a new training environment, so more GPUs mean more cities and more varied training data.
 
 ## Why the reward is hard to cheat
 
