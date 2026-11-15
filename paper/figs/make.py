@@ -428,11 +428,31 @@ def exploits(d):
     (HERE / "exploits.tex").write_text("\n".join(rows) + "\n")
 
 
+def grpo_evidence(d):
+    ms, ts = d["methods"], d["tests"]
+    keys = (("runs/grpo/ckpt-0", "Warm", "Gemma after format warm-up"), ("random", "Random", "Random valid plans"),
+            ("runs/grpo/ckpt-90", "Final", "Gemma after GRPO (step 90)"), ("const", "Const", "Constant plan " + ", ".join(f"\\texttt{{{q}}}" for q in d["meta"]["const_plan"]["plan"])))
+    rows = []
+    for k, t, name in keys:
+        v, te = ms[k]["val"]["score"], ms[k]["test"]["frac"]
+        M.update({f"grpo{t}Val": f"{v['mean']:.3f}", f"grpo{t}Test": f"{100 * te['mean']:.1f}"})
+        rows.append(f"{name} & {v['mean']:.3f} [{v['ci'][0]:.3f}, {v['ci'][1]:.3f}] & {100 * te['mean']:.1f} [{100 * te['ci'][0]:.1f}, {100 * te['ci'][1]:.1f}] \\\\")
+    (HERE / "grpo.tex").write_text("\n".join(rows) + "\n")
+    for other, t in (("runs/grpo/ckpt-0", "Warm"), ("random", "Random"), ("const", "Const")):
+        for part, pt in (("val", "Val"), ("test", "Test")):
+            x = ts[f"runs/grpo/ckpt-90 vs {other} {part}"]
+            M.update({f"grpoFinalWins{t}{pt}": f"{x['wins']}/{len(d['meta']['seeds'][part])}", f"grpoFinalSignP{t}{pt}": pf(x["sign_p"])})
+    for k, t in (("runs/grpo/ckpt-0", "Warm"), ("runs/grpo/ckpt-90", "Final")):
+        sv = d["sensitivity"][k]
+        M.update({f"grpoSens{t}Shuffle": f"{sv['shuffle']:.3f}", f"grpoSens{t}Zero": f"{sv['zero']['changed']:.3f}"})
+    M["grpoSameAsConst"] = str(sum(ms["runs/grpo/ckpt-90"]["plans"][s] == ms["const"]["plans"][s] for s in ms["const"]["plans"]))
+
+
 def evidence():
     f = EVID / "test.json"
     if f.exists():
         test_tables(load(f))
-    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits)):
+    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits), ("grpo", grpo_evidence)):
         if (EVID / f"{name}.json").exists():
             fn(load(EVID / f"{name}.json"))
     if (EVID / "failures.json").exists():
