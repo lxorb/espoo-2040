@@ -39,6 +39,8 @@ uv run --group dev --with mcp==1.30.0 pytest -q tests
 ```
 Unit tests for the reward, replays and task copies.
 
+This repo is public, so an agent with internet could download our oracle (`task/solution/`). To block that, run `python tools/variants.py sealed` and use `-p task-sealed`: the agent can then reach only the MCP server and the model API. If you use a gateway or another model provider, add `--allow-agent-host <host>`.
+
 `SEED` can be 0 to 47. Seeds 0 to 15 are for validation and 16 to 47 are the test split; training used seeds from 1000 up. For other seeds the verifier falls back to "share of delay saved" and prints a warning.
 
 ## The task
