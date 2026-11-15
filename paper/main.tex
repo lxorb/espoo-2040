@@ -231,7 +231,20 @@ Reward & $r_t=(D^{\varnothing}_t-D_t)/(D^{\varnothing}-D^{*})$; the score is the
 
 \textbf{Why the task is hard.} The hard part is not to see the growth. It is to act on it early. An access upgrade costs 120\,MEUR, three years of income. It closes roads for two years before it helps. A 3-year forecast shows mostly the road works, and the benefit comes later. A good agent must commit to such projects before the traffic gets bad.
 
-\textbf{Why the reward is hard to game.} (1) Doing nothing scores 0; measured do-nothing scores stay below \nothingAbsMax{} on 16 seeds. (2) The agent never reports a score. The server saves each year, and the verifier replays the plan from the start in a separate container. (3) Stopping early does not help: the rest of the years run with no new projects and default maintenance. If the reference plays only the first 3 years and stops, it scores 0.05 on seed 0 (0.05 to 0.38 on seeds 0 to 4). (4) A rejected action does nothing and costs nothing, so testing the rules gives no gain. (5) Only 4 forecasts per year, 3 years ahead, so the agent cannot search all plans through the tools. (6) The task text states the same rules as the simulator. (7) On machines with the same CPU, a replay gives exactly the same delays. Across CPU types, rounding changes the total delay by at most 0.24\% and the score by at most 0.008, far below the gap between methods.
+\textbf{Why the reward is hard to game.} (1) Doing nothing scores 0; measured do-nothing scores stay below \nothingAbsMax{} on 16 seeds. (2) The agent never reports a score. The server saves each year, and the verifier replays the plan from the start in a separate container. (3) Stopping early does not help: the rest of the years run with no new projects and default maintenance. The reference stopped after 1 to 3 years scores \ExploitStopThree{} on average, after 4 to 6 years \ExploitStopFive{}. (4) A rejected action does nothing and costs nothing, so testing the rules gives no gain. (5) Only 4 forecasts per year, 3 years ahead, so the agent cannot search all plans through the tools. (6) The task text states the same rules as the simulator. (7) On machines with the same CPU, a replay gives exactly the same delays. Across CPU types, rounding changes the total delay by at most 0.24\% and the score by at most 0.008, far below the gap between methods. (8) We tested 20 exploit strategies on 16 seeds against the MCP server and the verifier (Table~\ref{tab:exploits}). Strategies that do not replay the reference's or the agent's plan score at most \ExploitBestNonRef{}, and no malformed input was accepted (\ExploitAcceptedBad{} of 28).
+
+\begin{table}[t]
+\caption{Exploit strategies on seeds 0 to 15: mean and best score, and the rule that stops each one.}
+\label{tab:exploits}
+\centering\footnotesize
+\begin{tabular}{@{}lrrl@{}}
+\toprule
+Strategy & Mean & Best & Stopped by \\
+\midrule
+\csname @@input\endcsname figs/exploits.tex
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Learners}\label{sec:learn}
 
@@ -280,7 +293,7 @@ Method & 16 seeds & agent's & M p-h & M p-h & \% & M p-h/yr & MEUR \\
   \label{fig:bars}
 \end{figure}
 
-\textbf{Main result.} Table~\ref{tab:main} and Figure~\ref{fig:bars} show the results. Doing nothing is the worst plan. Random plans help a little. Greedy plans help in some scenarios and fail in others, because they judge each project alone and over a short time. The frontier agent scores \agentScoreMean{}. The simple rule planner scores 0.84, and the learned policy scores \rlScore{}, both without forecasts. Through Harbor, the learned policy gives the same delays as our own simulator. On \hoN{} unseen scenarios the learned policy saves \hoRl{}\% of the do-nothing delay (\hoRlEval{}\% on seeds 0 to 15), and it beats the rule planner in \hoWinPlanner{} of \hoN{} scenarios (Table~\ref{tab:heldout} in the appendix).
+\textbf{Main result.} Table~\ref{tab:main} and Figure~\ref{fig:bars} show the results. Doing nothing is the worst plan. Random plans help a little. Greedy plans help in some scenarios and fail in others, because they judge each project alone and over a short time. The frontier agent scores \agentScoreMean{}. The simple rule planner scores 0.84, and the learned policy scores \rlScore{}, both without forecasts. Through Harbor, the learned policy gives the same delays as our own simulator. On the 32 test scenarios (seeds 16 to 47, never used for training or checkpoint choice), the learned policy saves \testRl{}\% of the do-nothing delay (95\% CI [\testRlLo{}, \testRlHi{}]; \valRl{}\% on the validation seeds). It beats the rule planner in \testRlWinsPlanner{} of 32 scenarios (sign test $p$ = \testPlannerSignP{}) and every other baseline in at least \testRlWinsGreedyFive{} (Table~\ref{tab:test} in the appendix).
 
 
 
@@ -381,7 +394,7 @@ If the hypothesis holds, a small open model trained on many cities would have to
 
 \textbf{The experiments.} The frontier agent ran once on each of \agentN{} seeds, so its mean is uncertain. Its runs were made before we froze $D^{*}$ in \texttt{sim/norms.json}; we rescored their delays with the frozen values. We chose the policy checkpoint on the validation seeds 0 to 15; on the unseen test scenarios it saves \hoGap{} points less. Most table numbers were computed on an AMD machine; on Intel, scores differ by at most 0.008. GRPO used one small model, one setting and a CPU.
 
-\textbf{Open reward issues.} A first exploit test on seed 0 found three points we have not yet resolved: cash can go negative without limit, because emergency rebuilds are always paid; the reference stopped after ten years keeps the same score; and the reference with maintenance 0 scores 0.013 higher than with its own choice. None of these lets a plan beat the reference by much, but they show that the rules can still be tightened. Tests on all 16 seeds are in progress.
+\textbf{Open reward issues.} The exploit suite (Table~\ref{tab:exploits}) found three things we have not resolved. (i) Debt has no floor: emergency rebuilds are always paid, so cash ends at \ExploitRefDebt{}\,MEUR for the reference and \ExploitNothingDebt{}\,MEUR for doing nothing. (ii) The reference has started all its projects by year \ExploitPlanDoneYear{}, and from then on its cash is negative and no new start is possible; so stopping after 7 or more years gives exactly its full score. This is not a free gain, since the plan is already played, but it shows that late years carry few decisions. (iii) The reference with maintenance 0 beats its own choice on \ExploitMaintZeroWins{} of \ExploitMaintZeroN{} seeds ($p=\ExploitMaintZeroP{}$) but is lower on average (\ExploitMaintZeroGap{}), so the maintenance rule could be tightened. None of these lets any strategy come close to the reference.
 
 \section{Future work: learned growth and Monte Carlo scenarios}\label{sec:future}
 
@@ -613,16 +626,27 @@ Folder & What it does \\
 \end{figure}
 
 \begin{table}[h]
-\caption{Share of the do-nothing delay saved (\%), on \hoN{} unseen scenarios and on seeds 0 to 15.}
-\label{tab:heldout}
-\centering\small
-\begin{tabular}{@{}lrrr@{}}
+\caption{Share of the do-nothing delay saved (\%) on the 32 test scenarios (seeds 16 to 47): mean, 95\% bootstrap CI, worst scenario, scenarios where the learned policy is better, and one-sided sign and Wilcoxon tests against the learned policy.}
+\label{tab:test}
+\centering\footnotesize
+\begin{tabular}{@{}lrrrrrr@{}}
 \toprule
- & \multicolumn{2}{c}{Unseen scenarios} & Seeds 0 to 15 \\
-\cmidrule(lr){2-3}
-Method & mean & worst & mean \\
+Method & Mean & 95\% CI & Worst & Wins & Sign $p$ & Wilcoxon $p$ \\
 \midrule
-\csname @@input\endcsname figs/heldout.tex
+\csname @@input\endcsname figs/test.tex
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\caption{The same on the 16 validation scenarios (seeds 0 to 15), where the checkpoint was chosen.}
+\label{tab:validation}
+\centering\footnotesize
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Method & Mean & 95\% CI & Worst & Wins & Sign $p$ & Wilcoxon $p$ \\
+\midrule
+\csname @@input\endcsname figs/validation.tex
 \bottomrule
 \end{tabular}
 \end{table}
