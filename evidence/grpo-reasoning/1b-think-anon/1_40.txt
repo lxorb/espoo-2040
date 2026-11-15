@@ -1,0 +1,9 @@
+run 1b-think-anon, step 40, validation seed 1 (greedy)
+plan executed: ['keha2-north', 'espoonvayla-mid', 'mankkaa-link'] maintain 2
+score 0.015, saved share 0.0061, boom-hit 0.00
+
+<think>
+Otaniemi and Keilaniemi are experiencing the strongest growth, attracting more residents and businesses, particularly those focused on leisure and digital services. Kera continues to expand its appeal with increased job opportunities and a growing focus on technology. Kiviruukki is seeing increased activity due to the expansion of Finnoo and Vermo. Hista remains relatively stable, serving a smaller, more localized segment. Espoonlahti continues to attract visitors and businesses, boosted by the increased pop and jobs. Leppävaara and Vermo are seeing modest growth, primarily driven by increased foot traffic and local events. Otaniemi and Keilaniemi are serving a broader range of users, including tourists and conference attendees. Kera is primarily serving the tech sector and digital businesses. Kiviruukki is serving the Finnoo and Vermo sectors. Hista is serving a smaller, more local audience. Espoon keskus is serving a mix of visitors and local residents.
+</think>
+plan: P16, P18, P19; maintain: 2
+

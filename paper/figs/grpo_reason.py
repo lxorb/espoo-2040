@@ -35,14 +35,36 @@ def slim(e):
     return dict({k: e.get(k) for k in KEEP}, step=e.get("step"), seeds=[{k: s.get(k) for k in SEEDKEEP} for s in e["seeds"]])
 
 
+def swap_direction(e, infos, think):
+    """Placebo-controlled swap test: does the plan for the swapped prompt upgrade areas that now LOOK growing (new)
+    more often than areas that stopped looking growing (old)? Uses grpo.reason.parse/edit/shown."""
+    sys.path.insert(0, str(ROOT))
+    from grpo.reason import ACC, edit, parse, shown
+    new = old = n = 0
+    for s in e["seeds"]:
+        if "swap_text" not in s:
+            return None
+        i = infos[str(s["seed"])]
+        j = edit(i, "swap")
+        ids = parse(s["swap_text"], j, think)[0]
+        up = {ACC[q] for q in ids if q in ACC}
+        new += bool(up & (shown(j) - shown(i)))
+        old += bool(up & (shown(i) - shown(j)))
+        n += 1
+    return dict(swap_new=new / n, swap_old=old / n)
+
+
 def collect():
     out = dict(runs={}, refs={}, zero={}, test={})
+    INF = {a: json.loads((RUNS / f"infos-{a}.json").read_text()) for a in ("anon", "named") if (RUNS / f"infos-{a}.json").exists()}
     for name, _, _ in RUNS_ORDER:
         f = RUNS / name / "log.json"
         if not f.exists():
             continue
         log = json.loads(f.read_text())
-        out["runs"][name] = dict(args=log["args"], steps=log["steps"], evals=[slim(e) for e in log["evals"]], gpu_s=log.get("gpu_s"), wall_s=log.get("wall_s"))
+        inf = INF["anon" if log["args"]["anon"] else "named"]
+        out["runs"][name] = dict(args=log["args"], steps=log["steps"], evals=[dict(slim(e), **(swap_direction(e, inf, log["args"]["think"]) or {})) for e in log["evals"]],
+                                 gpu_s=log.get("gpu_s"), wall_s=log.get("wall_s"))
         ev = log["evals"]
         picks = sorted({ev[0]["step"], ev[len(ev) // 2]["step"], ev[-1]["step"]})
         d = ROOT / "evidence" / "grpo-reasoning" / name
@@ -58,7 +80,7 @@ def collect():
     for k in ("refs", "zero", "test"):
         if (ev / f"{k}.json").exists():
             d = json.loads((ev / f"{k}.json").read_text())
-            out[k] = d if k == "refs" else {kk: slim(v) for kk, v in d.items()}
+            out[k] = d if k == "refs" else {kk: dict(slim(v), **(swap_direction(v, INF["anon" if "anon" in kk.split("|")[0] else "named"], "nothink" not in kk) or {})) for kk, v in d.items()}
     DATA.write_text(json.dumps(out))
 
 
@@ -101,6 +123,16 @@ def build(M):
                       f"grpo{t}ThinkPrecision": fmt(z.get("precision")), f"grpo{t}ThinkLen": f"{z['ntok']:.0f}", f"grpo{t}ThinkLenZero": f"{e0['ntok']:.0f}",
                       f"grpo{t}Arith": fmt(z.get("arith_share")), f"grpo{t}Consist": fmt(z.get("think_in_plan"))})
         hours_total += (r.get("gpu_s") or 0) / 3600
+        if z.get("swap_new") is not None:
+            M.update({f"grpo{t}SwapNew": fmt(z["swap_new"]), f"grpo{t}SwapOld": fmt(z["swap_old"]),
+                      f"grpo{t}SwapNewZero": fmt(e0.get("swap_new")), f"grpo{t}SwapOldZero": fmt(e0.get("swap_old"))})
+        ref = D["refs"].get("random-" + ("anon" if r["args"]["anon"] else "named"))
+        te = D["test"].get(f"{n}|final|{z['step']}")
+        if ref and te:
+            from scipy.stats import binomtest
+            d_ = np.array([s["frac"] - ref[str(s["seed"])]["frac"] for s in te["seeds"]])
+            w, l = int((d_ > 0).sum()), int((d_ < 0).sum())
+            M.update({f"grpo{t}WinsRandomTest": f"{w}/{len(d_)}", f"grpo{t}SignPRandomTest": f"{binomtest(w, w + l, alternative='greater').pvalue:.2g}" if w + l else "1"})
         for k, e in (("Final", z), ("Best", b)):
             te = D["test"].get(f"{n}|{k.lower()}|{e['step']}")
             if te:

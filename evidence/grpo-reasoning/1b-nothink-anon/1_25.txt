@@ -1,0 +1,5 @@
+run 1b-nothink-anon, step 25, validation seed 1 (greedy)
+plan executed: ['espoonvayla-2x2', 'finnoo-access', 'turunvayla-east-lanes'] maintain 2
+score 0.104, saved share 0.0419, boom-hit 0.00
+
+plan:P07,P08,P09;maintain:2
