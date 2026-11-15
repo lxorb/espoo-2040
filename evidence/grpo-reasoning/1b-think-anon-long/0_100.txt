@@ -1,0 +1,9 @@
+run 1b-think-anon-long, step 100, validation seed 0 (greedy)
+plan executed: ['leppavaara-access', 'kauklahti-access', 'otaniemi-access'] maintain 2
+score 0.110, saved share 0.0575, boom-hit 0.33
+
+<think>
+Kiviruukki is experiencing the fastest growth, primarily serving the Kauklahti and Hista. It can afford $40 MEU per year and has a savings carry over of $112 MEU. It will start at 123M in 2 years, and will be maintained at 2 for the next 2 years. It’s decaying slightly, as it’s a smaller project.
+</think>
+plan: P01, P02, P04; maintain: 2
+

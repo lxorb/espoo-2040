@@ -1,0 +1,5 @@
+run 1b-nothink-anon, step 0, validation seed 0 (greedy)
+plan executed: ['leppavaara-access', 'kauklahti-access', 'turunvayla-east-lanes', 'otaniemi-access', 'espoon-access', 'keha3-north-2x2', 'finnoo-access', 'olari-link'] maintain 1
+score 0.120, saved share 0.0630, boom-hit 0.33
+
+plan: P01, P02, P03, P04, P05, P06, P07, P08, P09, P10, P11, P12, P13, P14, P15, P16, P17, P18, P19, P20, P21, P22

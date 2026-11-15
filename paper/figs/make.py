@@ -617,6 +617,8 @@ def main():
     facts()
     cats()
     evidence()
+    from grpo_reason import build as grpo_reason
+    grpo_reason(M)
     (HERE / "numbers.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(M.items())))
 
 

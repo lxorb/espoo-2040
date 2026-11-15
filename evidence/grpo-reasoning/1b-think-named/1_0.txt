@@ -1,0 +1,8 @@
+run 1b-think-named, step 0, validation seed 1 (greedy)
+plan executed: [] maintain 1
+score 0.000, saved share 0.0000, boom-hit 0.00
+
+Here’s a plan considering the provided data and goals, aiming for least total traffic delay until 2045 with a budget of 112 MEUR and savings carryover:
+
+keha2-north 114M 4y Hista; Kera 13M 2y; Kauklahti 120M 2y; Espoon keskus 0.2% 2y; Espoonlahti 0.2% 2y; Leppavaara 0.2% 2y; Otaniemi and Keilaniemi 0.2% 2y; Kauklahti 120M 2y; Hista 120M 2y; Espoon keskus 0.2% 2y; Kera 120M 2y; Finnoo 120M 2y; Vermo 120M 2y; Kiviruukki 120M 2y; Vermo 120M 2y; Kera 120M 2y; Espoon keskus 0.2% 2y; Kauklahti 120M 2y; Hista 120M 2y;
+maintain: k

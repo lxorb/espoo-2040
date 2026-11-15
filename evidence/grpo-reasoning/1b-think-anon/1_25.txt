@@ -1,0 +1,6 @@
+run 1b-think-anon, step 25, validation seed 1 (greedy)
+plan executed: ['hista-access', 'kauklahti-access', 'keha3-north-2x2'] maintain 2
+score 0.054, saved share 0.0217, boom-hit 0.00
+
+<think>Otaniemi and Keilaniemi are experiencing significant growth, attracting more residents and businesses. Kera and Kiviruukki are seeing increased population and job growth, with Kera particularly benefiting from the recent expansion. Finnoo is expanding its reach, and Vermo is supporting local businesses. Espoonlahti is benefiting from increased foot traffic and a growing population. Leppävaara and Hista are seeing modest growth. Otaniemi and Keilaniemi are the primary drivers of growth, with Kera and Kiviruukki being the most impactful. </think>
+plan: P01, P02, P04; maintain: 2

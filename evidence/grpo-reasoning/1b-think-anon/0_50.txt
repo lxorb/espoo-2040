@@ -1,0 +1,9 @@
+run 1b-think-anon, step 50, validation seed 0 (greedy)
+plan executed: ['kiviruukki-access', 'keilaniemi-junction', 'vihdintie-2x2'] maintain 2
+score 0.614, saved share 0.3214, boom-hit 0.33
+
+<think>
+Kiviruukki is growing rapidly, serving Leppävaara and Hista with increased security and surveillance. It’s affordable (18MEUR) and can be maintained at 2 for the next 4 years, as it’s a relatively small project with a low maintenance cost.
+</think>
+plan: P18, P16, P17; maintain: 2
+

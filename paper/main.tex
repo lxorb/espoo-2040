@@ -37,7 +37,7 @@
 {\renewcommand{\thefootnote}{\fnsymbol{footnote}}\footnotetext[2]{Equal contribution.}}
 
 \begin{abstract}
-Cities must decide which roads to build and when. This is hard: new roads bring new traffic, and road works close roads for years. We propose a \emph{recipe} that turns public data about a city into a test for AI agents: a road graph, a trip matrix fitted to traffic counts, a list of projects, a yearly traffic model, four tools, and a reward that a separate program replays. We define the recipe formally: its inputs, its steps, a check that the model fits the real traffic, and the decision problem it produces. As a proof of concept we build one instance, \repo{}, for Espoo, Finland. An agent plans the roads for 15 years with a fixed budget, while two or three hidden areas grow fast. The score is the time that all travellers lose in traffic over 20 years: 0 is ``do nothing'' and 1 is the best plan we know. A frontier model (\texttt{gpt-6.1-sol}) scores \agentScoreMean{} on five scenarios. Its plans hardly depend on the scenario: it sees which areas grow, but spends its few affordable starts on cheaper road projects first, and our replays show that no single change repairs its plan. A small network trained in the environment scores \testRlScore{} on 32 scenarios it never saw (\rlScore{} on the validation scenarios). A small language model (Gemma 3, 270M) trained with GRPO goes from \grpoZero{} (\grpoWarm{} after a format warm-up) to \grpoFinal{}: it learns from the reward. But in two of three training runs it ends on one fixed plan, written with Espoo's project names, for every scenario; the third reacts to one area only. Such a list of names can only work while all training scenarios share one map. Training on many cities built by the same recipe should remove this particular shortcut; we state this as a hypothesis for future work.
+Cities must decide which roads to build and when. This is hard: new roads bring new traffic, and road works close roads for years. We propose a \emph{recipe} that turns public data about a city into a test for AI agents: a road graph, a trip matrix fitted to traffic counts, a list of projects, a yearly traffic model, four tools, and a reward that a separate program replays. We define the recipe formally: its inputs, its steps, a check that the model fits the real traffic, and the decision problem it produces. As a proof of concept we build one instance, \repo{}, for Espoo, Finland. An agent plans the roads for 15 years with a fixed budget, while two or three hidden areas grow fast. The score is the time that all travellers lose in traffic over 20 years: 0 is ``do nothing'' and 1 is the best plan we know. A frontier model (\texttt{gpt-6.1-sol}) scores \agentScoreMean{} on five scenarios. Its plans hardly depend on the scenario: it sees which areas grow, but spends its few affordable starts on cheaper road projects first, and our replays show that no single change repairs its plan. A small network trained in the environment scores \testRlScore{} on 32 scenarios it never saw (\rlScore{} on the validation scenarios). A small language model (Gemma 3, 270M) trained with GRPO goes from \grpoZero{} (\grpoWarm{} after a format warm-up) to \grpoFinal{}: it learns from the reward. But in two of three training runs it ends on one fixed plan, written with Espoo's project names, for every scenario; the third reacts to one area only. Such a list of names can only work while all training scenarios share one map. When we give the model room to reason and hide the project names, a 1B model starts to react to the growth but does not plan better; a 4B model improves significantly over random plans on unseen scenarios (pre-registered test), though it stays below a good fixed plan. Training on many cities built by the same recipe should remove the name-list shortcut; we state this as a hypothesis for future work.
 \end{abstract}
 
 \section{Introduction}
@@ -55,7 +55,7 @@ We answer with a \emph{recipe} (Figure~\ref{fig:repo}) and one instance of it. W
 \item \textbf{A recipe.} We define how to turn public city data into a planning environment: the inputs it needs, its steps, a check that the model fits real traffic, and the POMDP it produces (Section~\ref{sec:recipe}).
 \item \textbf{A first instance.} \repo{} applies the recipe to Espoo, Finland, as an open repository with one command to run the full test (Sections~\ref{sec:repo} and~\ref{sec:model}).
 \item \textbf{A proof of concept.} A frontier agent fails in a measurable way: its plan hardly depends on the scenario, it spends its few starts on the wrong mix of projects, and replays show that the gap cannot be traced to one choice. A small trained policy does much better, also on unseen scenarios (Section~\ref{sec:poc}).
-\item \textbf{GRPO learns from the reward, and finds a city-specific shortcut.} A 270M language model improves a lot, but two of three runs end on one fixed plan of Espoo's project names, and the third reads the growth of only one area. We discuss why many cities from the same recipe should remove the name-list shortcut (Sections~\ref{sec:grpo} and~\ref{sec:scale}).
+\item \textbf{GRPO learns from the reward, and finds a city-specific shortcut.} A 270M language model improves a lot, but two of three runs end on one fixed plan of Espoo's project names, and the third reads the growth of only one area. With room to reason and anonymised projects, a 4B model improves significantly over random plans. We discuss why many cities from the same recipe should remove the name-list shortcut (Sections~\ref{sec:grpo} and~\ref{sec:scale}).
 \end{enumerate}
 
 \section{Related work}\label{sec:related}
@@ -433,6 +433,25 @@ Priority list & Score \\
 
 \textbf{Why learning stops.} At step \grpoOneAt{}, the 8 answers for a scenario become almost the same plan. From step \grpoFlatAt{}, all answers in a group get the same reward. Then every advantage $\hat A_i$ in Equation~\ref{eq:grpoadv} is zero, and by Equation~\ref{eq:ourgrpo} the gradient is zero. The model cannot find a better plan, because it no longer tries other plans. The score stays at \grpoScoreEnd{} until the end.
 
+\textbf{Room to reason, and no names to memorise.} We then gave the model space to think and removed the shortcut. The prompt asks for a short \texttt{<think>} block before the plan, and the menu is anonymised per scenario: projects get random labels (P01 to P22) in random order, and costs and build times are perturbed by up to 20\%, in the prompt and in the simulator. Memorising names is then useless. The reward is unchanged and never looks at the reasoning. These runs used a 96\,GB GPU on Verda (\grpoReasonGpuHours{} GPU hours in total); details are in Appendix~\ref{app:more}.
+
+\emph{Gemma 3 1B: the behaviour changes, the score does not.} In a $2\times2$ design (with or without \texttt{<think>}, real or anonymised names; one seed and 50 steps each, Table~\ref{tab:factorial}), both cells with real names collapse to one plan for all 16 seeds, as run A did. Only ``think + anonymised'' reads the growth: shuffling the growth lines changes its plan on \grpoThinkAnonSens{} of the seeds, and when we swap which areas look like they grow, it switches to a newly growing-looking area on \grpoThinkAnonSwapNew{} of the seeds against \grpoThinkAnonSwapOld{} for the placebo. But its score stays low (\grpoThinkAnonScoreZero{} $\to$ \grpoThinkAnonScore{}), and on the test seeds it is no better than random valid lists (\grpoThinkAnonWinsRandomTest{} wins, $p$ = \grpoThinkAnonSignPRandomTest{}). At this size, GRPO changes what the model looks at, but not how well it plans.
+
+\emph{Gemma 3 4B: a significant gain over random plans.} With the same setup, two training seeds and 50 steps each, the 4B model goes from a validation score of \grpoFourThinkAnonScoreZero{} (untrained) to \grpoFourValBestMean{} $\pm$ \grpoFourValBestStd{}. Before seeing any 4B test result, we fixed one criterion: the checkpoint chosen on validation must beat random valid lists on the 32 test seeds (one-sided sign test, $p<0.05$). It passes for \grpoFourCriterionPass{} seeds (\grpoFourThinkAnonWinsRandomTestBest{} wins, $p$ = \grpoFourThinkAnonSignPRandomTestBest{}; \grpoFourThinkAnonSeedOneWinsRandomTestBest{}, $p$ = \grpoFourThinkAnonSeedOneSignPRandomTestBest{}). On test it saves \grpoFourTestBestMean{} $\pm$ \grpoFourTestBestStd{}\% of the do-nothing delay, against \grpoZeroFourThinkAnonTestFrac{}\% untrained and \grpoRefRandomAnonTest{}\% for random lists. Three honest limits: (1) it is still below a good fixed list (run A's plan saves \grpoRefConstAnonTest{}\% on the same anonymised menus); (2) part of the higher boom-hit comes from building more access upgrades in total, and the swap test shows a clear direction for one seed only (\grpoFourThinkAnonSeedOneSwapNew{} vs \grpoFourThinkAnonSeedOneSwapOld{}; the other \grpoFourThinkAnonSwapNew{} vs \grpoFourThinkAnonSwapOld{}); (3) the reasoning is mostly a growth summary: no trace computes the budget, some invent facts, and one seed writes answers so long that they are cut before the maintenance level, which the small format penalty does not stop. Greedy decoding of long answers is also not exactly repeatable, so single evaluations differ by a few points.
+
+\begin{table}[t]
+\caption{Gemma 3 1B with GRPO: four cells, start $\to$ end of training (50 steps, one seed each, validation seeds 0 to 15). Score; boom-hit (share of truly growing areas whose access upgrade is in the plan); sensitivity (plan changes when the growth lines are shuffled); distinct plans over 16 seeds; faithful swap response.}
+\label{tab:factorial}
+\centering\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Cell & Score & Boom-hit & Sensitivity & Distinct & Swap \\
+\midrule
+\csname @@input\endcsname figs/grpo_factorial.tex
+\bottomrule
+\end{tabular}
+\end{table}
+
 \textbf{The same order for every learner.} The policy network trained from scratch with PPO shows a similar pattern (Figure~\ref{fig:curves}a): it first finds the maintenance level and cheap roads, and adds access upgrades only after about \evoColdNoAccUntil{} episodes. Only the policy that starts from expert plans picks the growing areas early.
 
 \section{Discussion: many cities from one recipe}\label{sec:scale}
@@ -482,7 +501,7 @@ The same samples also give the spread of outcomes, so a planner can be judged on
 
 \section{Conclusion}
 
-We proposed a recipe that turns the public data of a city into a planning test for AI agents, with a formal definition, a check against real traffic counts, and a reward that a separate program replays. Its first instance, \repo{}, is an open repository for Espoo with one command to run everything. In this proof of concept, a frontier agent plays a nearly fixed plan that spends its few starts on the wrong mix of projects, while a small trained policy does much better, also on unseen scenarios. A 270M language model trained with GRPO learns from the reward, but it mostly finds a shortcut: one list of Espoo project names for every scenario, or at best a rule for one area. A training set with many cities, built by the same recipe, should remove the name-list shortcut; testing this is the next step. We believe this is the way to train small models that really read the city before they build.
+We proposed a recipe that turns the public data of a city into a planning test for AI agents, with a formal definition, a check against real traffic counts, and a reward that a separate program replays. Its first instance, \repo{}, is an open repository for Espoo with one command to run everything. In this proof of concept, a frontier agent plays a nearly fixed plan that spends its few starts on the wrong mix of projects, while a small trained policy does much better, also on unseen scenarios. A 270M language model trained with GRPO learns from the reward, but it mostly finds a shortcut: one list of Espoo project names for every scenario. With room to reason and anonymised projects, a 4B model beats random plans on unseen scenarios, though not yet a good fixed plan. A training set with many cities, built by the same recipe, should remove the name-list shortcut; testing this is the next step. We believe this is the way to train small models that really read the city before they build.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}
@@ -663,6 +682,19 @@ Data & train seeds 1000 to 1399; evaluation by greedy decoding on seeds 0 to 15 
 \end{table}
 
 \section{More results and the repository}\label{app:more}
+
+\begin{table}[h]
+\caption{All reasoning runs (Gemma 3 1B and 4B, Verda GPU) and reference lists under the same single-turn protocol: validation score (95\% CI), validation saved share (\%), test saved share (\%, 95\% CI), share of format-valid answers, boom-hit.}
+\label{tab:grporuns}
+\centering\scriptsize
+\begin{tabular}{@{}p{0.36\linewidth}rrrrr@{}}
+\toprule
+Run & Val score & Val saved & Test saved & Valid & Boom-hit \\
+\midrule
+\csname @@input\endcsname figs/grpo_runs.tex
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[t]
   \centering
