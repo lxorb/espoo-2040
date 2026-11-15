@@ -1,0 +1,7 @@
+run 1b-think-named, step 25, validation seed 1 (greedy)
+plan executed: ['keha2-north', 'espoonvayla-mid', 'kivenlahti-bridge'] maintain 1
+score 0.011, saved share 0.0046, boom-hit 0.00
+
+<think>
+Espoon keskus and Kera will likely see the most significant growth due to the largest pop increase. Espoon lahti and Leppävaara will also see substantial growth, driven by increased population and jobs. Kera and Finnoo will likely be prioritized due to their relatively lower initial costs and potential for higher returns. Espoo keskus will likely be the most affordable option initially. </think>
+plan: keha2-north, espoonvayla-mid, kivenlahti-bridge; maintain: k

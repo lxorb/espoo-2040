@@ -1,0 +1,5 @@
+run 1b-nothink-named, step 0, validation seed 0 (greedy)
+plan executed: ['keha2-north', 'espoonvayla-mid', 'kivenlahti-bridge'] maintain 1
+score 0.028, saved share 0.0149, boom-hit 0.00
+
+plan: keha2-north, espoonvayla-mid, kivenlahti-bridge; maintain: 1

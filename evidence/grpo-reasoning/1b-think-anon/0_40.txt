@@ -1,0 +1,8 @@
+run 1b-think-anon, step 40, validation seed 0 (greedy)
+plan executed: ['kiviruukki-access', 'keilaniemi-junction', 'vihdintie-2x2'] maintain 2
+score 0.614, saved share 0.3214, boom-hit 0.33
+
+<think>
+Kiviruukki is experiencing significant growth, primarily serving the Kauklahti area, attracting more visitors and boosting local businesses. It’s a key driver for the Kauklahti area, offering increased foot traffic and potential for increased revenue. Kera is also growing, focusing on attracting more visitors to Espoonlahti and Keilaniemi, leveraging the increased foot traffic. Vermo is seeing modest growth, primarily serving the Hista area, supporting local businesses and providing a consistent, albeit smaller, flow. Finnoo is expanding its reach, particularly in Hista and Otaniemi, aiming to capture more customers and maintain its presence in the region. Otaniemi and Keilaniemi are benefiting from the increased foot traffic, attracting more visitors and supporting local businesses. Espoonlahti is seeing continued growth, driven by the increased foot traffic and the appeal of the new amenities. Kauklahti is seeing a continued increase in visitors, driven by the growth of the surrounding areas. Hista is seeing a steady increase in visitors, supporting local businesses. </think>
+plan: P18, P16, P17; maintain: 2
+

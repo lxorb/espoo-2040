@@ -14,31 +14,157 @@
 \usepackage{microtype}
 \usepackage{graphicx}
 \usepackage{subcaption}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
 
 \input{figs/numbers.tex}
+\input{figs/review_numbers.tex}
 \newcommand{\shot}[1]{\includegraphics[width=\linewidth]{figs/shot_#1.jpg}}
+\newcommand{\repo}{\texttt{espoo-2040}}
 
-\title{Espoo 2040: A City Road-Planning Environment\\Where Frontier Agents Fail in Measurable Ways}
+\title{From Public Data to Planning Tests:\\A Recipe for Real-City Environments,\\with Espoo 2040 as First Instance}
 
-\author{Emil Alexander Vinu \And Alessandro Tesi}
+\author{
+  Emil Alexander Vinu\textsuperscript{\dag} \\ ETH Zurich \And
+  Nina Gassner\textsuperscript{\dag} \\ ETH Zurich \And
+  Alessandro Tesi\textsuperscript{\dag} \\ University of Pisa \And
+  Marco Mosconi\textsuperscript{\dag} \\ Uppsala University
+}
 
 \begin{document}
 
 \maketitle
+{\renewcommand{\thefootnote}{\fnsymbol{footnote}}\footnotetext[2]{Equal contribution.}}
 
 \begin{abstract}
-Cities often build roads by intuition. New roads attract new traffic, and road works block roads for years, so a good-looking plan can make delays worse. We present \emph{Espoo 2040}, a reinforcement learning (RL) environment on the real road network and travel demand of Espoo, Finland. An agent plans the city's roads for 15 years: each year it may start up to two of 22 projects and choose a maintenance level, with a fixed budget. Two or three hidden areas grow very fast. The score is the total delay of all travellers over 20 years, scaled so that doing nothing scores 0 and the best known plan scores 1; a separate verifier replays the plan. The hard part is to build early, although short forecasts show only the pain of construction. A frontier LLM agent scores \agentScoreMean{} on \agentN{} cities. A learned policy with 83k parameters and no forecasts scores \rlScore{} on 16 cities, and GRPO lifts a 270M Gemma model from \grpoZero{} to \grpoFinal{}.
+Cities must decide which roads to build and when. This is hard: new roads bring new traffic, and road works close roads for years. We propose a \emph{recipe} that turns public data about a city into a test for AI agents: a road graph, a trip matrix fitted to traffic counts, a list of projects, a yearly traffic model, four tools, and a reward that a separate program replays. We define the recipe formally: its inputs, its steps, a check that the model fits the real traffic, and the decision problem it produces. As a proof of concept we build one instance, \repo{}, for Espoo, Finland. An agent plans the roads for 15 years with a fixed budget, while two or three hidden areas grow fast. The score is the time that all travellers lose in traffic over 20 years: 0 is ``do nothing'' and 1 is the best plan we know. A frontier model (\texttt{gpt-6.1-sol}) scores \agentMeanAll{} on 16 scenarios (one run each). Its plans hardly depend on the scenario: it sees which areas grow, but spends its few affordable starts on cheaper road projects first, and our replays show that no single change fully repairs its plan. A small network trained in the environment scores \testRlScore{} on 32 scenarios it never saw (\rlScore{} on the validation scenarios). Gemma 3 4B, trained with GRPO on anonymised menus for about one GPU hour, beats random plans on 32 unseen scenarios for both training seeds (a test criterion we fixed and committed before seeing the test results). Its reasoning is not yet mathematical: it never computes the budget, and it stays below a good fixed plan. We expect larger models to close this gap. Training on many cities built by the same recipe should make this learning more general; we state this as a hypothesis for future work.
 \end{abstract}
 
 \section{Introduction}
 
-More road space does not reliably remove congestion: in US cities, vehicle kilometres grow in proportion to new interstate lane kilometres~\cite{duranton2011}, induced traffic is well documented~\cite{goodwin1996}, and a new road can even slow every driver down~\cite{braess1968}. Road works also cut capacity for years before any benefit arrives. Choosing which roads to build, and when, is the network design problem, which is hard even in its static form~\cite{johnson1978,farahani2013}. This makes road planning a good test for AI agents: good plans need foresight about growth, budget and construction time.
+Every city plans roads. The plans cost a lot of money, and their effects are hard to see. More road space often brings more traffic~\cite{duranton2011,goodwin1996}. A new road can even make every trip slower~\cite{braess1968}. Road works also close lanes for years before any benefit comes. Choosing which roads to build, and when, is called the \emph{network design problem}, and it is hard to solve~\cite{johnson1978,farahani2013}.
 
-RL in transport mostly controls traffic signals~\cite{wei2018,wei2021}, with first steps in urban planning~\cite{zheng2023}. LLM agent benchmarks mostly test web, code, terminal and tool tasks~\cite{zhou2024,jimenez2024,merrill2026,yao2025}. Few test long-horizon investment in a real simulator. We built Espoo 2040 for the hackathon challenge ``Break the Agent'': the environment must make a frontier agent fail in a measurable way, and its reward must be hard to game~\cite{skalse2022}. We contribute (1) a planning environment on real data with a replayed reward, (2) a 3D viewer (Figures~\ref{fig:viewer} and~\ref{fig:fail}), and (3) results for a frontier agent, baselines, a small learned policy and a GRPO-tuned LLM, with a failure analysis.
+Large language models (LLMs) now act as \emph{agents}: they call tools, read the results and decide what to do next. Most agent tests are about the web, code or the terminal~\cite{zhou2024,jimenez2024,merrill2026,yao2025}. Even in simple domains, LLM plans are often weak~\cite{valmeekam2023}. Few tests ask an agent to make long-term investment decisions in a real simulator.
 
-\section{The Espoo 2040 environment}\label{sec:env}
+Good tests for agents are expensive to build. Hand-made simulators are small, and real systems cannot be used for training. Many cities, however, publish their roads, people, jobs, timetables and traffic counts. We ask: can we turn this public data into planning tests in a fixed, repeatable way?
 
-\textbf{Data.} The network has 10{,}706 directed links from OpenStreetMap~\cite{haklay2008} in Espoo and Kauniainen. Demand is a morning peak-hour matrix of 69{,}000 person trips between 117 zones, built from regional population, job and transit data and fitted to traffic counts~\cite{hsy2026a,hsl2026,fintraffic2026}.\footnote{On 75 count stations, 75\% have GEH below 10~\cite{dft2026} (GEH $=\sqrt{2(m-c)^2/(m+c)}$ for model flow $m$ and count $c$), with a model-to-count ratio of 1.02.} Twelve projects are real Espoo road plans; ten are access upgrades, one for each development area (Table~\ref{tab:cats}). Each project has a cost paid in equal yearly instalments, a build time, a yearly operating cost, the roads it changes when it opens, and the roads whose capacity it cuts while it is built.
+We answer with a \emph{recipe} (Figure~\ref{fig:repo}) and one instance of it. We built the instance, \repo{}, for the challenge ``Break the Agent''. The goal of the challenge is an environment where a frontier agent fails in a way that we can measure and explain, with a reward that is hard to game~\cite{skalse2022,amodei2016}. Espoo is our proof of concept, not the limit of the method.
+
+\textbf{Contributions.}
+\begin{enumerate}
+\item \textbf{A recipe.} We define how to turn public city data into a planning environment: the inputs it needs, its steps, a check that the model fits real traffic, and the POMDP it produces (Section~\ref{sec:recipe}).
+\item \textbf{A first instance.} \repo{} applies the recipe to Espoo, Finland, as an open repository with one command to run the full test (Sections~\ref{sec:repo} and~\ref{sec:model}).
+\item \textbf{A proof of concept.} A frontier agent fails in a measurable way: its plan hardly depends on the scenario, it spends its few starts on the wrong mix of projects, and replays show that the gap cannot be traced to one choice. A small trained policy does much better, also on unseen scenarios (Section~\ref{sec:poc}).
+\item \textbf{A 4B language model learns from the environment.} With GRPO and anonymised menus, Gemma 3 4B beats random plans on unseen scenarios with statistical significance, on both training seeds. Its reasoning summarises growth but does no budget arithmetic, which we expect from larger models (Sections~\ref{sec:grpo} and~\ref{sec:scale}).
+\end{enumerate}
+
+\section{Related work}\label{sec:related}
+
+\textbf{Traffic models.} We use the classic four-step view of transport~\cite{ortuzar2011}. Trips go between zones, and drivers choose the fastest route. At \emph{user equilibrium} no driver can save time by changing route alone~\cite{wardrop1952,beckmann1956,sheffi1985}. Travel time grows with flow by the BPR function~\cite{bpr1964}. We solve the equilibrium with a path-based method~\cite{jayakrishnan1994}, and we fit the trip matrix to traffic counts~\cite{vanzuylen1980}.
+
+\textbf{RL in transport and policy design.} Reinforcement learning (RL) in transport mostly controls traffic lights~\cite{wei2018,wei2021}. First works use it for urban planning~\cite{zheng2023} and for economic policy in simulated worlds~\cite{zheng2022}. Planning under deep uncertainty, where one must act early and adapt, is studied in water and infrastructure policy~\cite{haasnoot2013}. We use RL for long-term road investment.
+
+\textbf{Agent tests.} Tests for LLM agents measure web, code and tool use~\cite{liu2024,zhou2024,jimenez2024,yao2025,merrill2026}, travel planning~\cite{xie2024}, games~\cite{paglieri2025} and long-running business tasks~\cite{backlund2025}. Recent work lists what makes such tests rigorous, such as checks that a task cannot be passed without solving it~\cite{zhu2025}. Our test needs planning over many years with a budget, in a simulator that is close to a real city.
+
+\textbf{RL for language models and overfitting.} GRPO trains a language model from a reward without a value network~\cite{shao2024,guo2025}. Deep RL agents often overfit to their training levels~\cite{zhang2018,cobbe2019,kirk2023}, and more varied training levels reduce this~\cite{cobbe2019,cobbe2020}. Networks also like to learn \emph{shortcuts}: simple rules that work on average but ignore the real signal~\cite{geirhos2020}. In multi-turn agent RL, GRPO-style training can collapse to repeated answers~\cite{wang2025ragen}, and its normalisation choices matter~\cite{liu2025}. Domain randomisation trains on many random versions of a simulator so that the policy works in the real one~\cite{tobin2017}. Our recipe gives a different kind of variety: many \emph{real} cities instead of random ones.
+
+\section{The recipe}\label{sec:recipe}
+
+The recipe has one job: to turn the public data of a city into a fair planning test. It has fixed inputs, fixed steps and a check. The aim is that the same code runs for every city and only the data changes. Today some parts of our code are still written for Espoo, such as the download addresses and the list of development areas.
+
+\textbf{Inputs.} For a city $c$, the recipe needs six kinds of data:
+\begin{equation}
+\mathcal{D}_c=\left(R_c,\;P_c,\;W_c,\;\Pi_c,\;Y_c,\;K_c\right),
+\end{equation}
+where $R_c$ is the road map, $P_c$ a population grid, $W_c$ a job grid, $\Pi_c$ the public transport timetables, $Y_c$ the traffic counts, and $K_c$ a list of real road projects. Table~\ref{tab:inputs} shows where Espoo gets each input and where other cities can find it.
+
+\begin{table}[t]
+\caption{The inputs of the recipe. Roads and timetables exist for many cities in the same format. Counts, jobs and projects depend more on the country.}
+\label{tab:inputs}
+\centering\small
+\begin{tabular}{@{}lp{0.33\linewidth}p{0.42\linewidth}@{}}
+\toprule
+Input & Espoo & Other cities \\
+\midrule
+Roads $R_c$ & OpenStreetMap~\cite{haklay2008} & OpenStreetMap (worldwide) \\
+People $P_c$ & HSY population grid~\cite{hsy2026a} & national grids, or WorldPop~\cite{tatem2017} \\
+Jobs $W_c$ & HSY job grid~\cite{hsy2026b}, postal data~\cite{statfi2026} & national statistics (varies) \\
+Transit $\Pi_c$ & HSL timetables (GTFS)~\cite{hsl2026} & GTFS from the local transport agency \\
+Counts $Y_c$ & Fintraffic stations~\cite{fintraffic2026} & national or city road agency (varies) \\
+Projects $K_c$ & city and state road plans & city plans (by hand), plus generated access upgrades \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Steps.} The recipe runs six steps:
+\begin{enumerate}
+\item \textbf{Graph.} Build a directed road graph $G_c=(N_c,E_c)$ from $R_c$. Lanes and speed come from tags or class defaults.
+\item \textbf{Zones.} Split the grid cells of $P_c$ and $W_c$ into zones $Z_c$ of similar activity and link each to the graph. Exits become gate zones.
+\item \textbf{Trips.} Build a peak-hour matrix $Q_c$ with a gravity model and a logit car--transit split from $\Pi_c$~\cite{ortuzar2011}. Grid-search $\theta$ against the counts, then scale the matrix towards them, in the spirit of~\cite{vanzuylen1980}:
+\begin{equation}
+Q_c=\operatorname{fit}\left(\operatorname{gravity}_\theta(Z_c,\Pi_c),\;Y_c\right).
+\end{equation}
+\item \textbf{Check.} Load $Q_c$ on shortest paths in $G_c$ and compare the flow $m_i$ with the count $y_i$ at each station $i$, using the GEH value~\cite{dft2026}:
+\begin{equation}
+\text{GEH}_i=\sqrt{\frac{2\,(m_i-y_i)^2}{m_i+y_i}}.
+\end{equation}
+We propose to accept a city if a share $\alpha$ of stations have $\text{GEH}_i<10$ and the total flow is within $1\pm\beta$ of the counts. Our code reports these numbers but does not enforce a threshold.
+\item \textbf{Projects.} Take the real projects $K_c$ and add one access upgrade per development area $a\in A_c$, defined by hand.
+\item \textbf{Environment.} Wrap the result as a POMDP $\mathcal{M}_c$ (Section~\ref{sec:model}) behind four tools, with a verifier that replays every plan.
+\end{enumerate}
+
+\textbf{Many tasks from one recipe.} A seed $s$ fixes the hidden parts of a task: which areas grow fast, and how fast. We call one pair $(c,s)$ a \emph{scenario}. A training set is then a set of scenarios. In this paper the city is always Espoo, so our scenarios differ only by seed (the repository README calls them cities). With one city, all tasks share the same graph, the same zones and the same project list $K_c$; only the growth changes. With many cities, the graph, the zones and the projects change too. This matters for learning (Section~\ref{sec:scale}).
+
+\section{Espoo 2040: the first instance}\label{sec:repo}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=2pt, align=center, font=\scriptsize, minimum height=0.9cm, text width=2.3cm, fill=black!3},
+  src/.style={box, fill=blue!6},
+  res/.style={box, fill=green!8},
+  arr/.style={-{Stealth[length=2mm]}, thick},
+  node distance=0.35cm and 0.45cm]
+\node[src] (osm) {OpenStreetMap\\roads};
+\node[src, below=of osm] (hsy) {Population and\\job grids};
+\node[src, below=of hsy] (tms) {Traffic counts,\\transit timetables};
+\node[box, right=of osm] (net) {\texttt{data/net.py}\\road graph};
+\node[box, right=of hsy] (dem) {\texttt{data/demand.py}\\zones and trips};
+\node[box, right=of tms] (cat) {\texttt{catalogue.json}\\22 projects};
+\node[box, right=of dem] (sim) {\texttt{sim/}\\yearly traffic model};
+\node[box, right=of sim] (task) {\texttt{task/}\\MCP tools, verifier};
+\node[res, above=of task] (agent) {Agents\\(\texttt{eval.sh})};
+\node[res, below=of task] (learn) {Learners\\(\texttt{rl/}, \texttt{grpo/})};
+\node[res, below=of sim] (viz) {\texttt{viz/}\\3D viewer};
+\draw[arr] (osm) -- (net);
+\draw[arr] (hsy) -- (dem);
+\draw[arr] (tms) -- (dem);
+\draw[arr] (net) -- (dem);
+\draw[arr] (net.east) -- (sim);
+\draw[arr] (dem) -- (sim);
+\draw[arr] (cat.east) -- (sim);
+\draw[arr] (sim) -- (task);
+\draw[arr] (task) -- (agent);
+\draw[arr] (task) -- (learn);
+\draw[arr] (sim) -- (viz);
+\end{tikzpicture}
+\caption{The recipe as code, in the \repo{} repository. Public data (blue) becomes a road graph, a trip matrix and a list of projects. The simulator runs one year at a time. The task folder puts it behind four MCP tools and a verifier. Agents, learners and the 3D viewer (green) all use the same simulator. For a new city, the blue boxes change.}
+\label{fig:repo}
+\end{figure}
+
+\repo{} is the recipe applied to Espoo and Kauniainen. It is an open repository, and every step of the recipe is a short Python script. Table~\ref{tab:repo} in Appendix~\ref{app:more} lists the folders. Below we give the Espoo choices for each step.
+
+\textbf{Graph.} We read OpenStreetMap~\cite{haklay2008} for Espoo and Kauniainen, plus a 2.5\,km border. We keep the main road types (motorway to tertiary) and their ramps. When a road has no tag for lanes or speed, we use a default for its type. We keep only the largest part of the graph where every node can reach every other node. Roads that leave the area become \emph{gates}. The result has 10{,}706 one-way links.
+
+\textbf{Zones.} We take the population grid~\cite{hsy2026a} and the job grid~\cite{hsy2026b} of the Helsinki region. Postal code data~\cite{statfi2026} gives the share of jobs that move goods. We split grid cells into zones of similar activity. Each zone links to the nearest road node. With the gates there are 117 zones.
+
+\textbf{Trips.} We build a morning peak-hour trip matrix with a gravity model: more trips go between big zones that are close~\cite{ortuzar2011}. Public transport timetables~\cite{hsl2026} give transit times, and a logit model splits trips between car and transit. Traffic counts from 75 stations~\cite{fintraffic2026} give the flow at the gates and fix the free parameters. Then we adjust the matrix to the counts~\cite{vanzuylen1980}. Trucks get their own matrix from goods jobs.
+
+\textbf{Check.} 75\% of the 75 stations have a GEH value below 10, and the model gives 1.02 times the counted flow. The code reports these numbers but sets no threshold. The usual target in practice is GEH below 5, so this fit is only moderate.
+
+\textbf{Projects.} Twelve projects are real road plans of Espoo and the state, with cost and build time from public documents. Ten more are \emph{access upgrades}, one for each development area. These ten are defined by hand and all cost the same (Table~\ref{tab:cats}).
+
+\textbf{Environment.} The simulator (\texttt{sim/}) runs one year per step. The MCP server (\texttt{task/}) gives the agent four tools and saves every year it commits. The task runs in Harbor~\cite{harbor2026}, and the agent connects with the Model Context Protocol~\cite{anthropic2024}. A verifier in a separate container replays the saved plan and computes the reward. One command, \texttt{SEED=0 ./eval.sh}, runs the full test: the reference, agent runs (three by default), do nothing and an early stop. It needs Docker and Harbor 0.25; the README gives the steps. A web viewer replays the runs at \url{https://espoo.evinu.de}.
 
 \begin{table}[t]
 \caption{The 22 projects by type. Costs in MEUR.}
@@ -53,67 +179,101 @@ Type & Count & Cost & Build years \\
 \end{tabular}
 \end{table}
 
+\section{The decision problem}\label{sec:model}
+
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{figs/problem.pdf}
-  \caption{The problem. (a) Two or three of ten areas grow fast; which ones is hidden but shows in yearly data. (b) Projects cost 9 to 120 MEUR and take 2 to 4 years; income is 40 MEUR a year. (c) If nothing is built, yearly delay grows \nothingRatioMin{} to \nothingRatioMax{} times by 2045.}
+  \caption{The problem. (a) Two or three of ten areas grow fast; which ones is hidden, but it shows in the yearly data. (b) Projects cost 9 to 120 MEUR and take 2 to 4 years; income is 40 MEUR a year. (c) If nothing is built, the yearly delay grows \nothingRatioMin{} to \nothingRatioMax{} times by 2045.}
   \label{fig:problem}
 \end{figure}
 
-\textbf{Formal model.} The task is a POMDP with one step per year (Table~\ref{tab:pomdp}). Traffic is assigned to Wardrop user equilibrium~\cite{wardrop1952} with the BPR delay function~\cite{bpr1964} and a path-based solver~\cite{jayakrishnan1994},
+This section describes the POMDP $\mathcal{M}_c$ that step 6 of the recipe produces. The definitions hold for any city; the numbers are those of Espoo. We drop the index $c$ to keep the notation short.
+
+\textbf{The city.} The road network is a directed graph $G=(N,E)$. Each link $l\in E$ has a length $L_l$, a free speed $v_l$, a capacity $C_l$ and a condition $c_l\in[0,1]$. Trips go between zones. Let $q^{t}_{od}$ be the number of car trips from zone $o$ to zone $d$ in year $t$, and let $x_l$ be the flow on link $l$. The travel time on a link is the BPR function~\cite{bpr1964}:
 \begin{equation}
-t_l(x_l)=t^0_l\left(1+0.2\,(x_l/C_l)^4\right),\qquad t^0_l=\frac{L_l/v_l}{1-0.3\,(1-c_l)},
+t_l(x_l)=t^0_l\left(1+0.2\left(\frac{x_l}{C_l}\right)^4\right),\qquad t^0_l=\frac{L_l/v_l}{1-0.3\,(1-c_l)}.
 \end{equation}
-where $x_l$ is the flow, $C_l$ the capacity and $c_l\in[0,1]$ the condition of link $l$. Let $D=\sum_t D_t$ be the \emph{net person-hours lost} of a run, $D^{\varnothing}$ that of doing nothing and $D^{*}$ the lowest known for the same seed. The reward is
+Bad roads are slower: a road in condition 0 has 30\% less free speed. Each year, the flows are at user equilibrium~\cite{wardrop1952}: no driver can save time by changing route alone (Appendix~\ref{app:formal}).
+
+\textbf{The loss.} The delay in year $t$ is the time lost by all people in cars and trucks, compared with empty roads in perfect condition:
 \begin{equation}
-\text{score}=\operatorname{clip}_{[0,1]}\frac{D^{\varnothing}-D}{D^{\varnothing}-D^{*}},\qquad r_t=\frac{D^{\varnothing}_t-D_t}{D^{\varnothing}-D^{*}}.
+D_t=750\sum_{l\in E}\left(1.15\,x^{\text{car}}_l+x^{\text{truck}}_l\right)\left(t_l-\frac{L_l}{v_l}\right)\Big/60 \quad\text{person-hours per year}.
 \end{equation}
-$D^{*}$ saves \bestPctMin{}\% to \bestPctMax{}\% of $D^{\varnothing}$ on seeds 0 to 15. The growth rates are hidden, but area totals reveal them from the second year on. So the hard part is not to see the signal; it is to act on it early.
+Here 1.15 is the number of people per car, and 750 turns one peak hour into one year. Times are in minutes, and in the BPR function a truck counts as 2.5 cars.
+
+\textbf{Hidden growth.} There are ten development areas. A hidden set $B$ of two or three areas grows fast, at a rate $g_a$ between 3.2\% and 5.4\% a year. All other zones grow at 0.2\%. The agent does not see $B$, but it sees the population and jobs of every area each year. So $B$ can be found from the data.
+
+\textbf{Money.} The agent starts with cash $k_0$ and gets an income $I=40$\,MEUR each year. A project with cost $K$ and $n$ build years costs $K/n$ per year. A start is allowed only if the cash stays at or above zero in every year of its payments. Maintenance at level $m\in\{0,1,2\}$ spends up to 0, 4 or 10\,MEUR a year, but never more than the cash that is left, so it does nothing while cash is negative. Roads that fall below condition 0.1 without repair get an emergency rebuild: it costs four times the resurfacing cost, is always paid (cash may go negative), resets the road to condition 1, and cuts its capacity to 0.8 for that year.
+
+\textbf{The POMDP.} Together, this is a POMDP $\mathcal{M}=(\mathcal{S},\mathcal{A},\mathcal{O},T,R,H)$ (Table~\ref{tab:pomdp}). The horizon is $H=20$ years (2026 to 2045). The agent acts in the first 15 years. In the last 5 years (the \emph{runout}) it cannot act, but the years still count. So a plan must also work after the agent stops. Once the seed is fixed, every transition is deterministic: the only hidden part is the growth set $B$ and its rates, which the observations reveal from the second year. So the task is a latent-parameter MDP.
+
+\textbf{The score.} Let $D=\sum_{t}D_t$ be the total delay of a run, $D^{\varnothing}$ the total delay if the agent does nothing, and $D^{*}$ the lowest total delay we know for the same scenario. The score is
+\begin{equation}
+\text{score}=\operatorname{clip}_{[0,1]}\frac{D^{\varnothing}-D}{D^{\varnothing}-D^{*}}.
+\end{equation}
+Doing nothing scores 0, and the best known plan scores 1. On seeds 0 to 15, the best known plan saves \bestPctMin{}\% to \bestPctMax{}\% of $D^{\varnothing}$. Two caveats: $D^{*}$ came from a pool of plans that included earlier versions of our own reference, and the reference exceeds it on \ExploitRefOverOne{} validation seeds (up to \valRlScoreMax{} before clipping). The saved share $1-D/D^{\varnothing}$ does not depend on $D^{*}$, so we report it next to the score.
 
 \begin{table}[t]
-\caption{The POMDP. Observations come from four MCP tools.}
+\caption{The POMDP. The agent observes the world through four MCP tools.}
 \label{tab:pomdp}
 \centering\small
 \begin{tabular}{@{}p{0.14\linewidth}p{0.82\linewidth}@{}}
 \toprule
-Horizon & 20 yearly steps (2026 to 2045); actions in the first 15, then a 5-year \emph{runout} that still counts \\
-State & link lanes, speed, capacity and condition; project status; cash and committed instalments; population and jobs per zone; hidden growth rates: 2 or 3 of 10 areas grow 3.2\% to 5.4\% a year, the rest 0.2\% \\
-Action & up to 2 affordable projects from 22, and maintenance $m\in\{0,1,2\}$ (0, 4 or 10 MEUR); at most 762 joint actions; infeasible actions are rejected at no cost \\
-Observation & \texttt{get\_state}: year, cash, income, commitments, last delay, car share, road condition, population and jobs per area (now and 2026), startable projects, 15 most delayed roads; \texttt{list\_projects}: cost, build years, opex, status, and \texttt{jam} (share of last year's delay on the project's roads); \texttt{forecast}: up to 4 plans per year, 3 years ahead, with blended growth; \texttt{commit\_year} \\
-Transition & growth and a biproportional demand update; instalments (income 40 MEUR/yr); road works cut capacity (often to 50\%) until opening; condition decays, maintenance resurfaces the worst roads, roads below 0.1 get costly emergency rebuilds; fixed car share (74\%); equilibrium solved to a relative gap of $10^{-4}$ \\
-Reward & $D_t=750\sum_l(1.15\,x^{\text{car}}_l+x^{\text{truck}}_l)(t_l-L_l/v_l)/60$ person-hours per year; score as in Eq.~2 \\
+Horizon & 20 yearly steps (2026 to 2045); actions only in the first 15 \\
+State & lanes, speed, capacity and condition of each link; status of each project; cash and future payments; population and jobs per zone; the hidden set $B$ and rates $g_a$ \\
+Action & up to 2 projects from 22, and a maintenance level $m\in\{0,1,2\}$; at most 762 joint actions; actions that do not fit the budget are rejected at no cost \\
+Observation & \texttt{get\_state}: year, cash, payments, last delay, road condition, population and jobs per area (now and in 2026), startable projects, most delayed roads; \texttt{list\_projects}: cost, build years, running cost, status, \texttt{jam} (share of last year's delay on the project's roads); \texttt{forecast}: 4 plans per year, 3 years ahead; \texttt{commit\_year} \\
+Transition & growth of people and jobs; payments; road works cut capacity until the project opens; condition falls, maintenance repairs the worst roads; new traffic equilibrium \\
+Reward & $r_t=(D^{\varnothing}_t-D_t)/(D^{\varnothing}-D^{*})$; the score is the clipped sum \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Robust reward.} We designed the reward so that an agent can only score by planning well. (1) Doing nothing scores 0; measured do-nothing scores stay below \nothingAbsMax{} on 16 seeds (the gap comes from the equilibrium tolerance). (2) The agent never reports a score. The MCP server stores each committed year, and a verifier in a separate container replays the plan from scratch; for the learned policy the replayed delays match our own runs exactly. (3) Stopping early does not help: the remaining years run with no new projects and default maintenance. (4) Rejected actions have no effect and cost nothing, so probing the rules gains nothing. (5) Forecasts are limited to 4 per year and 3 years ahead, so the agent cannot search the plan space through the tools. (6) The task text states the same rules as the simulator: fixed car share, delay as the loss, and the meaning of each tool field. (7) On machines with the same CPU, a replay gives bit-identical delays. Across CPU types, rounding in vectorized math changes the total delay by at most 0.24\% and the score by at most 0.008 (learned policy, seeds 0 to 4), far below its smallest lead over the agent (0.032).
+\textbf{Why the task is hard, and how many decisions it has.} The hard part is not to see the growth; it is to choose few, expensive projects well. An access upgrade costs 120\,MEUR, three years of income, and closes roads for two years before it helps; a 3-year forecast shows mostly the road works. In practice the budget allows about three starts. On the five agent seeds the reference starts exactly three projects, in 2026, 2029 and 2032; from year \ExploitFirstNegative{} its cash is negative, and emergency rebuilds are \failRebuildShareRef{} of its spending. So the task is, in effect: pick the first move, then pick which two areas to upgrade and in which order. Spending and debt are not part of the score.
 
-\begin{figure}[t]
-  \centering
-  \begin{subfigure}{0.49\linewidth}\shot{heat0}\caption{Heat, 2026}\end{subfigure}\hfill
-  \begin{subfigure}{0.49\linewidth}\shot{heat19}\caption{Heat, 2045, do nothing}\end{subfigure}\\[4pt]
-  \begin{subfigure}{0.49\linewidth}\shot{flow}\caption{Flow, 2036, do nothing}\end{subfigure}\hfill
-  \begin{subfigure}{0.49\linewidth}\shot{cars}\caption{Cars near Hype, 2034, learned policy}\end{subfigure}
-  \caption{The 3D viewer replays run logs (seed 1). Heat shows delay per road, from green (free) to purple (jammed); flow shows moving traffic; cars shows single vehicles in the 3D city. Without action, jams spread from the growing areas by 2045.}
-  \label{fig:viewer}
-\end{figure}
-
-\section{Methods}\label{sec:methods}
-
-\textbf{Baselines.} \emph{Random} picks a random feasible joint action each year. \emph{Greedy} forecasts each startable project alone and ranks by saving per euro: the saving in the first year after opening (1-year), or the total saving up to five years after opening (5-year); it starts the best two. \emph{Reactive} builds the project whose roads had the most delay last year. We run each with the default and the highest maintenance level ($m=1$, $m=2$) and report the better one.
-
-\textbf{Rule planner.} A short hand-written rule that uses no forecasts. From the third year on, it starts the access upgrade of every area whose growth so far is clearly above the base rate, most jammed first (by \texttt{jam}); otherwise it starts cheap projects from a fixed list. It always uses $m=2$. It shows what a simple reading of the growth signal is worth.
-
-\textbf{Frontier LLM agent.} \texttt{gpt-6.1-sol} runs in the OpenCode harness~\cite{opencode2025} inside Harbor~\cite{harbor2026}. It gets the task text and the four MCP~\cite{anthropic2024} tools, and must commit all 15 planning years. Its output is the list of yearly actions. A run takes \agentMinMin{} to \agentMinMax{} minutes and costs \$\agentUsdMin{} to \$\agentUsdMax{}.
-
-\textbf{Learned policy.} A small transformer~\cite{vaswani2017} (2 layers, width 64, 4 heads, 82{,}760 parameters, 341\,KB) reads one token for the city (time, cash, commitments, car share, condition, last delay), one token per area (size, growth so far, growth rate, position) and one token per project (kind, cost, build time, status, \texttt{jam}, position, growth nearby). All inputs come from \texttt{get\_state} and \texttt{list\_projects}. Heads for maintenance, build count and each project add up to a logit for each of the 762 joint actions. We first train it by behaviour cloning (cross-entropy on the expert's joint action) on plans from a search on training seeds 1000 and up, then fine-tune it with PPO~\cite{schulman2017} on training seeds 2000 and up; evaluation uses seeds 0 to 15. We deploy the checkpoint after 560 episodes, which had the highest mean plus worst score on the evaluation seeds. At deployment it takes the top action, including the maintenance level, and uses no forecasts; one decision takes about 2\,ms on a CPU. Two variants test the tools and search: \emph{forecast check} re-ranks the top 4 actions with the 4 allowed 3-year forecasts, and \emph{search} adds Gumbel search~\cite{danihelka2022} with 16 simulations and 6-year rollouts under forecast growth (outside the tool limits). To test learning without experts, we train the same network from scratch with PPO (clip 0.2, GAE $\lambda=0.95$) and with Gumbel self-play in the style of AlphaZero~\cite{silver2018}; the Gumbel numbers come from a stored earlier run.
-
-\textbf{GRPO on Gemma.} We fine-tune \texttt{gemma-3-270m-it}~\cite{gemmateam2025} with LoRA~\cite{hu2022} (rank 16, all linear layers) on CPU. The task is single-turn. The environment first runs two years with default maintenance, so that growth shows. The prompt then gives the budget, the growth of each area since 2026 (fastest first) and the menu with cost, build time and nearest area of each project. The model answers with one line, \texttt{plan: id, id, ...; maintain: k}. The environment uses the plan as a priority list: each year it starts the next projects when affordable, at most two. The reward is the saved fraction of $D^{\varnothing}$ divided by 0.3, minus 0.05 per invalid item, clipped to $[-0.5,1.5]$. GRPO~\cite{shao2024,guo2025} samples $G=8$ answers for each of 4 prompts per step and uses the group-normalized reward as the advantage, with no value network and no KL term. A warm-up of 120 supervised steps on random valid plans teaches only the format. Training uses seeds 1000 to 1399; evaluation uses greedy decoding on seeds 0 to 15.
-
-\section{Results}\label{sec:results}
+\textbf{Why the reward is hard to game.} (1) Doing nothing scores 0; measured do-nothing scores stay below \nothingAbsMax{} on 16 seeds. (2) The agent never reports a score. The server saves each year, and the verifier replays the plan from the start in a separate container. (3) Stopping early does not help: the rest of the years run with no new projects and default maintenance. The reference stopped after 1 to 3 years scores \ExploitStopThree{} on average and after 4 to 6 years \ExploitStopFive{}, close to the frontier agent; from year 7 on it keeps its full score, because its plan is complete by then (see Limitations). Stopping early is therefore cheap only once the few real decisions are made. (4) A rejected action does nothing and costs nothing, so testing the rules gives no gain. (5) Only 4 forecasts per year, 3 years ahead, so the agent cannot search all plans through the tools. (Its container also holds the static network and zone files and numpy, so it could build its own model; the limit is on calls to our simulator.) (6) The task text states the same rules as the simulator; the 16 frontier runs used this text; five older runs used an earlier one (Section~\ref{sec:poc}). (7) On machines with the same CPU, replaying the same plan gives exactly the same delays. Across CPU types, rounding changes the total delay by at most 0.24\% and the score by at most 0.008, far below the gap between methods. (8) We tested 20 strategies on 16 seeds (about 12 of them adversarial; the rest are the reference, do nothing and maintenance variants) against the MCP server and the verifier (Table~\ref{tab:exploits}). Strategies in the suite that do not replay the reference's or the agent's plan score at most \ExploitBestNonRef{}, and no malformed input was accepted (\ExploitAcceptedBad{} of 28). One task-avoiding strategy is stronger: the fixed plan that GRPO converged to (Section~\ref{sec:grpo}) ignores the scenario, yet scores \grpoConstVal{} on average and reaches or exceeds 1 on 4 of the 16 validation seeds (1.04 on seed 0), because the frozen best known plans of those seeds are not optimal. It still loses to the reference on average.
 
 \begin{table}[t]
-\caption{Results. Scores are means over seeds 0 to 15 and over the agent's seeds \agentSeeds{}; the other columns use seeds \agentSeeds{} (sum of person-hours lost, mean final-year delay and mean spend on projects, maintenance and emergency rebuilds over 20 years). $^\dagger$Seed 1 only. --: not logged for GRPO, which we evaluate by score only.}
+\caption{Exploit strategies on seeds 0 to 15: mean and best score, and the rule that stops each one.}
+\label{tab:exploits}
+\centering\footnotesize
+\begin{tabular}{@{}lrrl@{}}
+\toprule
+Strategy & Mean & Best & Stopped by \\
+\midrule
+\csname @@input\endcsname figs/exploits.tex
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Learners}\label{sec:learn}
+
+We train two learners in the environment. Full details and formulas are in Appendix~\ref{app:learn}, and all hyperparameters are in Appendix~\ref{app:hyper}.
+
+\textbf{A small policy network.} A transformer~\cite{vaswani2017} with 82{,}760 parameters reads 33 tokens built only from the tools: one for the city, one per area and one per project (Figure~\ref{fig:policy} in the appendix). It scores all 762 joint actions and takes the best one; it uses no forecasts. We first train it by behaviour cloning on plans found by search in the true simulator (a privileged teacher), then with PPO~\cite{schulman2017} and GAE~\cite{schulman2016}.
+
+\textbf{A language model.} We fine-tune Gemma 3 4B~\cite{gemmateam2025} with LoRA~\cite{hu2022} and GRPO~\cite{shao2024,guo2025}. GRPO is PPO without a value network. For one prompt it samples a group of $G$ answers, scores each answer with a reward $r_i$, and compares the answers inside the group:
+\begin{equation}\label{eq:grpoadv}
+\hat A_{i}=\frac{r_i-\operatorname{mean}(r_1,\dots,r_G)}{\operatorname{std}(r_1,\dots,r_G)}.
+\end{equation}
+Answers better than the group average become more likely, worse ones less likely. If all $G$ answers get the same reward, every $\hat A_i$ is zero and the group gives no gradient. This matters in Section~\ref{sec:grpo}.
+
+\section{Proof of concept: a frontier agent fails}\label{sec:poc}
+
+\textbf{Methods.} We compare seven ways to play:
+\begin{itemize}
+\item \emph{Do nothing} and \emph{Random} (a random allowed action each year).
+\item \emph{Greedy}: forecast each project alone and start the best two per euro, judged 1 year or 5 years after opening.
+\item \emph{Reactive}: build where the delay was highest last year.
+\item \emph{Rule planner}: a short hand-written rule with no forecasts. It upgrades the access of each area that grows clearly faster than the base rate; otherwise it builds from a fixed list of 9 Espoo projects, so it also carries knowledge specific to Espoo.
+\item \emph{Frontier agent}: \texttt{gpt-6.1-sol} in the OpenCode harness~\cite{opencode2025}, with the task text and the four tools. A run takes \agentMinMin{} to \agentMinMax{} minutes and costs \$\agentUsdMin{} to \$\agentUsdMax{}.
+\item \emph{Learned policy} (also called the \emph{reference}, and used as the Harbor oracle): the policy network of Section~\ref{sec:learn}, trained with behaviour cloning (seeds 1000 and up) and PPO (seeds 2000 and up). It uses no forecasts. Two variants add tools to it: \emph{forecast check} tests its top 4 actions with the 4 allowed forecasts, and \emph{search} adds Gumbel search~\cite{danihelka2022} outside the tool limits.
+\end{itemize}
+Seeds 0 to 15 are the validation scenarios (the policy's checkpoint was chosen on them); seeds 16 to 47 are test scenarios, never used for training or selection.
+
+\begin{table}[t]
+\caption{Validation results. Scores are means over seeds 0 to 15 (from the same evaluation as Table~\ref{tab:validation}) and over the agent's seeds (\agentSeeds{}). The other columns use the agent's seeds: total person-hours lost and saved over 20 years, delay in the final year, and money spent. --: not logged. $^\dagger$Seed 1 only.}
 \label{tab:main}
 \centering\small
 \begin{tabular}{@{}lrrrrrrr@{}}
@@ -127,102 +287,412 @@ Method & 16 seeds & agent's & M p-h & M p-h & \% & M p-h/yr & MEUR \\
 \end{tabular}
 \end{table}
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figs/bars.pdf}
-  \caption{(a) Score per seed (dots) and mean (bar). (b) Net person-hours lost from 2026 to 2045; lower is better.}
-  \label{fig:bars}
-\end{figure}
 
-\textbf{Main comparison.} Table~\ref{tab:main} and Figure~\ref{fig:bars} show the results. Doing nothing is the worst plan, and random plans recover little. Greedy plans help on some seeds and fail on others: they rank projects one at a time and value them inside a short window. The rule planner and the learned policy beat the frontier agent clearly, without any forecasts. Through Harbor, the learned policy gives the same delays as in our simulator (largest gap \refrlGap{}\% on \refrlN{} seeds).
 
-\textbf{Unseen cities.} We chose the learned policy's checkpoint on seeds 0 to 15, so we also test all rule-based methods and the policy on \hoN{} new cities (seeds \hoSeeds{}) that were never used for training or selection (Table~\ref{tab:heldout}). There we have no best known plan, so we report the share of the do-nothing delay that each method saves. The learned policy saves \hoRl{}\% (\hoRlEval{}\% on seeds 0 to 15) and beats the rule planner in \hoWinPlanner{} of \hoN{} cities and the reactive rule in \hoWinReactive{}.
+\textbf{Main result.} On the 32 test scenarios, the learned policy saves \testRl{}\% of the do-nothing delay (95\% CI [\testRlLo{}, \testRlHi{}]) and reaches a normalised score of \testRlScore{} [\testRlScoreLo{}, \testRlScoreHi{}] (Table~\ref{tab:test}); best known plans for these seeds were computed with a stronger search (\normsCpuHours{} CPU hours). It beats the rule planner in \testRlWinsPlanner{} of 32 scenarios (sign test $p$ = \testPlannerSignP{}) and every other baseline in at least \testRlWinsGreedyFive{}. On the validation seeds (Table~\ref{tab:main}) it scores \rlScore{}, the rule planner \valPlannerScore{}, and the frontier agent \agentScoreMean{} on its five seeds. Doing nothing is the worst plan, random plans help a little, and greedy plans fail because they judge each project alone and over a short time. Through Harbor, the learned policy gives the same delays as our own simulator. The policy does read the growth: if we shuffle the area growth in its observation, its plan changes in \refSensShuffle{} of the validation seeds and its score falls from \refScoreNormal{} to \refScoreShuffle{} (lower on \refShuffleLoss{} seeds); with the growth set to zero, its plan changes in \refSensZero{} of the seeds and it scores \refScoreZero{}. Much of its score, however, comes from a good choice of projects that holds in most scenarios.
 
 \begin{table}[t]
-\caption{Share of the do-nothing delay saved (\%), on \hoN{} unseen cities and on seeds 0 to 15.}
-\label{tab:heldout}
-\centering\small
-\begin{tabular}{@{}lrrr@{}}
+\caption{Share of the do-nothing delay saved (\%) on the 32 test scenarios (seeds 16 to 47): mean, 95\% bootstrap CI, worst scenario, mean normalised score (test norms), scenarios where the learned policy is better, and one-sided sign and Wilcoxon tests against the learned policy.}
+\label{tab:test}
+\centering\footnotesize
+\begin{tabular}{@{}lrrrrrrr@{}}
 \toprule
- & \multicolumn{2}{c}{Unseen cities} & Seeds 0 to 15 \\
-\cmidrule(lr){2-3}
-Method & mean & worst & mean \\
+Method & Mean & 95\% CI & Worst & Score & Wins & Sign $p$ & Wilcoxon $p$ \\
 \midrule
-\csname @@input\endcsname figs/heldout.tex 
+\csname @@input\endcsname figs/test.tex
 \bottomrule
 \end{tabular}
 \end{table}
 
-\textbf{Maintenance matters.} The 5-year greedy rule scores \greedyFiveMTwo{} with $m=2$ but only \greedyFiveMOne{} with $m=1$ (reactive: \reactiveMTwo{} and \reactiveMOne{}). At the default level more roads fall below the rebuild threshold, and emergency rebuilds use up cash that projects need. The agent finds this: it chooses $m=2$ in almost every year. Maintenance is not the only lever, though: the learned policy wins with the default level, through few, well-placed projects (Section~\ref{sec:evolution}).
+
 
 \begin{figure}[t]
   \centering
   \begin{minipage}[b]{0.49\linewidth}\centering\includegraphics[width=\linewidth]{figs/years.pdf}\end{minipage}\hfill
   \begin{minipage}[b]{0.49\linewidth}\centering\shot{split}\end{minipage}
-  \caption{Seed 1. Left: yearly delay; circles mark access upgrades started. Right: the 2045 heat map, learned policy (left of the line) against the frontier agent (right).}
+  \caption{Seed 1. Left: yearly delay; circles mark the start of access upgrades. Right: the delay map in 2045, learned policy (left of the line) against the frontier agent (right).}
   \label{fig:fail}
 \end{figure}
 
-\textbf{Failure analysis.} The agent's projects hardly depend on the city. Every run starts the two cheap links \texttt{olari-link} and \texttt{mankkaa-link} and later \texttt{espoonvayla-2x2} and \texttt{otaniemi-access}, although Otaniemi grows fast in only two of these cities. A second access upgrade comes in 2034 or never. Of the \nBooms{} fast-growing areas it upgrades \agentBoomHits{}, only \agentBoomEarly{} of them by 2031. It calls \texttt{get\_state} only \agentGetStateMin{} to \agentGetStateMax{} times in 20 years but makes \agentForecastMin{} to \agentForecastMax{} forecasts, so it reads the growth signal rarely and judges options mostly by short forecasts. The learned policy instead starts two access upgrades in every city, and reaches a growing area by 2029 in \rlBoomEarly{} of \rlN{} cities (at all in \rlBoomAny{}; Figure~\ref{fig:fail}). Where the generic plan happens to fit, the agent does well: an earlier version of our policy (behaviour cloning only, always $m=2$) lost to it on seed 2 (\refoldLostC{}M against \agentLostC{}M person-hours); after PPO fine-tuning the policy wins there too (\rlLostC{}M). Where growth needs an early answer, the agent loses badly: in seed 0 it loses \gapRlA{}M person-hours more than the learned policy.
+\begin{table}[t]
+\caption{All frontier-agent runs per seed: total delay (M person-hours) and score. a1: current task text; gate4: five earlier runs; redteam: runs told to attack the reward.}
+\label{tab:agent}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Method & Seed & Delay & Score \\
+\midrule
+\csname @@input\endcsname figs/agent_all.tex
+\bottomrule
+\end{tabular}
+\end{table}
 
-\textbf{The tools invite short-sighted choices.} A 3-year forecast of a 120 MEUR access upgrade shows two years of road works and little benefit, since the payback comes later and in the runout. When the learned policy checks its top 4 choices with the same forecasts and keeps the best, its score drops from \rlScore{} to \rlcheckScore{}. The forecast is not wrong; its window is too short for the decision. This is the trap the agent falls into.
+\textbf{How the frontier agent fails.} We ran the agent once on each validation seed 0 to 15 under the current task text and compare its plans with the reference (Table~\ref{tab:failures}). The reference beats the agent on \gapIntelWins{} seeds, by \gapIntelMean{} on average (95\% CI [\gapIntelLo{}, \gapIntelHi{}], one-sided sign test $p$ = \gapIntelSignP{}). The gap is not uniform: the agent's runs range from \agentWorstRun{} to \agentBestRun{}, and on seed 13 it beats the reference (0.992 against 0.931) because it builds a second upgrade in a growing area. Five earlier runs on seeds 0 to 4, made under an older task text, gave a similar mean (\agentMeanAllGptSol{}); Table~\ref{tab:agent} lists all runs.
+\begin{enumerate}
+\item \textbf{One plan for every scenario.} The agent's plans overlap \failJaccardAgent{} across seeds (Jaccard), against \failJaccardRef{} for the reference. In the five earlier runs its first move was always the two cheap links \texttt{olari-link} and \texttt{mankkaa-link} with maintenance 2 (one year later on seed 3); the reference always opens with \texttt{espoonvayla-2x2} and maintenance 1.
+\item \textbf{Few starts, spent on the wrong mix.} In the earlier runs both start their first access upgrade around 2029, so timing alone is not the difference. The budget allows about three starts. The reference uses them for one widening and two access upgrades; the agent spends its first four starts on two cheap links and two widenings before any access upgrade. Seed 0 shows this in one decision: in 2028 the agent names Vermo, Kiviruukki and Leppävaara as the growing areas and has 108\,MEUR the next year, enough for the 60\,MEUR first instalment of an access upgrade, yet it starts \texttt{espoonvayla-2x2} and \texttt{kauklahdenvayla-2x2} instead, and the cash runs out before a second access upgrade. Which area to upgrade matters less than we expected: Otaniemi is a good project in most scenarios, and both methods leave many growing areas without an upgrade (agent \failBoomNeverActed{} of \failBoomTotal{}, reference 27 of \failBoomTotal{}). The agent does see the growth: by \failMentionYear{} it names the growing areas in its own messages.
+\item \textbf{It relies on short forecasts.} It makes \failCallsForecast{} forecasts per run but calls \texttt{get\_state} only \failCallsGetState{} times. Of the \failForecastAccess{} forecasts per run that include an access upgrade, \failForecastAccessUnbuilt{} are never followed by a start.
+\end{enumerate}
 
-\textbf{The \texttt{jam} feature.} Table~\ref{tab:jam} clones the same expert plans with and without \texttt{jam}. With few experts the feature matters a lot: with \jamFew{} expert plans the score rises by \jamFewGap{}, and the worst city goes from \jamFewMinWithout{} to \jamFewMinWith{}. With \jamMany{} experts the gap shrinks to \jamManyGap{}. The feature tells the policy where delay is now, which helps it place the upgrades when it has seen few examples.
 
 \begin{table}[t]
-\caption{Behaviour cloning with and without the \texttt{jam} feature, same expert plans, seeds 0 to 15.}
-\label{tab:jam}
+\caption{Failure taxonomy on seeds 0 to 15 (one agent run per seed): mean per run with 95\% bootstrap CI over seeds.}
+\label{tab:failures}
 \centering\small
-\begin{tabular}{@{}rrrrr@{}}
+\begin{tabular}{@{}lrr@{}}
 \toprule
- & \multicolumn{2}{c}{With \texttt{jam}} & \multicolumn{2}{c}{Without} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}
-Expert plans & mean & worst & mean & worst \\
+ & Frontier agent & Reference \\
 \midrule
-\csname @@input\endcsname figs/ablation.tex 
+\csname @@input\endcsname figs/failures.tex
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Counterfactual replays on seeds 0 to 15: score change with 95\% CI, share of the reference--agent gap it closes, seeds in the direction of the test, and one-sided sign-test $p$.}
+\label{tab:counterfactual}
+\centering\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Change & $\Delta$ score & Gap share & Seeds & $p$ \\
+\midrule
+\csname @@input\endcsname figs/counterfactual.tex
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Replays of the five earlier agent plans (seeds 0 to 4) with targeted changes: mean score with 95\% CI, share of the reference--agent gap closed (negative: the gap grows), and seeds where the changed plan reaches the reference.}
+\label{tab:firstmove}
+\centering\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Agent plan & Score & Gap share & $\ge$ reference \\
+\midrule
+\csname @@input\endcsname figs/review_firstmove.tex
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Replays: what changes help, and their limits.} We replay the agent's exact plan with targeted changes (Tables~\ref{tab:firstmove} and~\ref{tab:counterfactual}). On the five earlier runs, giving it the reference's first move leaves four of five seeds unchanged and lowers seed 3 (mean \cfFirstScore{} from \cfAgentBase{}). Swapping its access targets to the truly growing areas, in the same years, helps on seeds 0 and 2 but collapses on seed 4 (0.10), where upgrading the fastest-growing area in that year is much worse than the agent's Otaniemi upgrade. We traced this: one \sFourBottLen{}\,m single-lane piece of Kalevalantie, with no modelled detour, carries \sFourBottShare{} of the do-nothing delay on seed 4; by 2040 it is loaded at \sFourBottVC{} times capacity, and the Otaniemi upgrade relieves it. This is a known weakness of static assignment with an unbounded BPR curve, not a code bug. These replays are open-loop: the rest of the plan stays fixed, and most large drops coincide with a later start that the budget now rejects. A closed-loop test gives a different picture for maintenance: the reference that \emph{re-plans} with maintenance 2 scores 0.969 (Table~\ref{tab:exploits}), while the replayed reference plan with maintenance 2 loses \cfRefMaintTwoDiff{}, because its third start no longer fits. So the replays show that the pieces of a plan interact through the budget; they do not isolate the value of single choices. On the 16 new runs, adding one early access upgrade of the fastest area closes about a quarter of the gap (\cfAccessGapShare{}) and helps on \cfAccessAccepted{} seeds. A closed-loop handover test (agent for $k$ years, then the reference) shows that the reference does not reliably rescue the agent's state: mixed plans score below both pure plans in \handoverMixWorse{} of \handoverRuns{} runs (\texttt{evidence/handover.json}).
+
+\textbf{The forecast is a trap.} A 3-year forecast of a 120\,MEUR upgrade shows two years of road works and little gain. If the learned policy checks its top 4 choices with the same forecasts and keeps the best, its score falls from \rlScore{} to \rlcheckScore{}. The forecast is not wrong; its window is too short for the decision. We think this is part of what happens to the frontier agent, which relies on such forecasts, but we have not yet tested the agent with a longer forecast window. The agent has the information it needs: the growth is in \texttt{get\_state}, and the rules are in the task text.
+
+\section{GRPO: a 4B language model learns from the environment}\label{sec:grpo}
+
+Can an open language model learn this task from the reward alone? We train Gemma 3 4B~\cite{gemmateam2025} with LoRA~\cite{hu2022} (rank 16) and GRPO~\cite{shao2024,guo2025} on one GPU (\grpoReasonGpuHours{} GPU hours in total for all reasoning runs).
+
+\textbf{Setup.} We make the task single-turn, so that one answer is one full plan. The environment first runs two years, so that growth shows. The prompt gives the budget, the growth of each area so far and the list of projects with cost and build time. The model first writes a short \texttt{<think>} block, then one line: \texttt{plan: id, id, ...; maintain: k}. The environment starts the projects in this order when the budget allows, at most two per year. Two choices make the task harder to game. (1) \emph{Anonymised menus}: in every scenario the projects get random labels (P01 to P22) in random order, and costs and build times change by up to 20\%, in the prompt and in the simulator. So the model cannot memorise a good list of names; it has to read the numbers. (2) \emph{The reward only looks at the outcome}: the share of do-nothing delay that the plan saves, minus a small penalty for format errors (Appendix~\ref{app:grpo}). It never looks at the reasoning. We train on seeds 1000 to 1599, choose the checkpoint on the validation seeds 0 to 15, and test on the 32 unseen seeds 16 to 47. We ran two training seeds with the same settings (50 steps each).
+
+\textbf{The test, fixed in advance.} Before we saw any 4B test result, we wrote down and committed one criterion: the checkpoint chosen on validation must beat random valid plans on the same anonymised menus, on the 32 test seeds, with a one-sided sign test at $p<0.05$. Random plans are the natural stochastic baseline: they use the same format and the same budget, but no information about the city.
+
+\textbf{Result: the trained model beats the random baseline.} The criterion passes for \grpoFourCriterionPass{} training seeds: \grpoFourThinkAnonWinsRandomTestBest{} wins ($p$ = \grpoFourThinkAnonSignPRandomTestBest{}) and \grpoFourThinkAnonSeedOneWinsRandomTestBest{} wins ($p$ = \grpoFourThinkAnonSeedOneSignPRandomTestBest{}). On the test seeds the trained model saves \grpoFourTestBestMean{} $\pm$ \grpoFourTestBestStd{}\% of the do-nothing delay, against \grpoZeroFourThinkAnonTestFrac{}\% for the same model before training and \grpoRefRandomAnonTest{}\% for random plans (Table~\ref{tab:grpo4b}). On validation its score goes from \grpoFourThinkAnonScoreZero{} to \grpoFourValBestMean{} $\pm$ \grpoFourValBestStd{}. The share of truly growing areas that get an access upgrade rises from \grpoFourThinkAnonBoomHitZero{} to \grpoFourThinkAnonBoomHit{} and \grpoFourThinkAnonSeedOneBoomHit{}. So the environment gives a useful training signal: in about one GPU hour per run, the model learns to plan better than chance on cities it has never seen.
+
+\begin{table}[t]
+\caption{Gemma 3 4B with GRPO (think + anonymised menu): test saved share (\%, 32 unseen seeds, 95\% CI) and validation score. Random plans and a good fixed list are played through the same single-turn environment. More runs in Table~\ref{tab:grporuns}.}
+\label{tab:grpo4b}
+\centering\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+ & Test saved (\%) & Validation score \\
+\midrule
+Random valid plans & \grpoRefRandomAnonTest{} & 0.33 \\
+Gemma 3 4B, untrained & \grpoZeroFourThinkAnonTestFrac{} & \grpoFourThinkAnonScoreZero{} \\
+Gemma 3 4B + GRPO, seed 0 (best validation) & \grpoFourThinkAnonTestBest{} & 0.52 \\
+Gemma 3 4B + GRPO, seed 1 (best validation) & \grpoFourThinkAnonSeedOneTestBest{} & \grpoFourThinkAnonSeedOneScore{} \\
+Good fixed list (same plan for all seeds) & \grpoRefConstAnonTest{} & 0.79 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{What the model does not learn yet.} The reasoning is not mathematical. In no trace does the model compute the budget (share of traces with a correct calculation: \grpoFourThinkAnonArith{}), and some traces state wrong costs. The \texttt{<think>} block is mostly a summary of which areas grow, and this summary steers the plan. Part of the higher boom-hit comes from building more access upgrades in total, not only the right ones. One training seed also writes answers so long that they are cut before the maintenance level; the small format penalty does not stop this. The model is still below a good fixed list (\grpoRefConstAnonTest{}\%), which a planner can find by search but which does not react to the scenario.
+
+\textbf{Why we expect more from larger models.} Planning under a budget needs simple arithmetic over many years: what a project costs, when cash returns, how many starts fit. A 4B model trained for 50 steps does not do this. Larger models with stronger reasoning already do such arithmetic in other domains~\cite{guo2025}, and the reward here is cheap to compute and cannot be satisfied by memorising names. We therefore expect larger models, longer training and a reward that keeps groups diverse to move from ``better than chance'' to real budget planning. A smaller model (Gemma 3 1B) under the same setup changes its behaviour but does not beat random plans (\grpoThinkAnonWinsRandomTest{} wins, $p$ = \grpoThinkAnonSignPRandomTest{}), which points the same way: the gain grows with model size.
+
+\section{Discussion: many cities from one recipe}\label{sec:scale}
+
+This paper is a proof of concept. We defined the recipe, built one instance, showed a clear failure of a frontier agent, and showed that a 4B language model learns from the reward. The next question is how to make GRPO learn the hard part: read the growth and build early. We think the main answer is more varied training data, and the recipe is a way to produce it. This is a hypothesis; we have not tested it yet.
+
+\textbf{Evidence from RL.} In deep RL, agents trained on few levels memorise them, and the gap between training and test falls as the number of different training levels grows~\cite{zhang2018,cobbe2019,cobbe2020,kirk2023}. Domain randomisation uses the same idea with random versions of a simulator~\cite{tobin2017}. In our setting, each city is like a level, and each seed is a variation inside it. The difference is that our levels are real cities.
+
+\textbf{One city is not varied enough.} The graph, the projects and the costs are the same in every scenario, and only $\binom{10}{2}+\binom{10}{3}=165$ sets of growing areas exist. More importantly, the payoff is flat: a few projects (Otaniemi, Kiviruukki, \texttt{espoonvayla-2x2}) are useful in most scenarios, so one list of names scores well everywhere.
+
+\textbf{What the recipe can add.}
+\begin{enumerate}
+\item \textbf{More cities.} Each city run through the recipe brings a new graph, new zones, new areas and new projects. Roads and timetables exist in the same format for many cities (Table~\ref{tab:inputs}); counts, jobs and project lists need more work per country.
+\item \textbf{More variation inside a city.} Seeds can also change project costs, build times, the budget, the number of growing areas and the base growth. Then no single plan is good everywhere, even in one city.
+\item \textbf{Keep the groups diverse.} GRPO stops when all answers in a group get the same reward. Larger groups, a higher sampling temperature, or dropping prompts with equal rewards~\cite{yu2025} keep the gradient alive.
+\item \textbf{Multi-turn play.} In the full task the agent sees the city every year. A multi-turn version would let the model react to growth instead of guessing it in year two.
+\end{enumerate}
+If the hypothesis holds, a small open model trained on many cities would have to read the growth, as the policy network does, and could beat the frontier agent with far less compute. The test is clear: train GRPO on scenarios from several cities and evaluate it on a city it has never seen.
+
+\section{Future work: learned growth and Monte Carlo scenarios}\label{sec:future}
+
+Today the future of the city is \emph{synthetic}: a seed picks two or three areas, and they grow at a fixed rate for 15 years. Real cities do not grow like this. Booms start, slow down and move; nearby zones grow together.
+
+\textbf{A growth model learned from data.} Many regions publish population and job grids every year, often for decades. From such panels we can learn how zones change. Give each zone $z$ a discrete growth state $s_{z,t}$ (for example declining, stable, slow growth, boom), and estimate a Markov chain from the observed transitions:
+\begin{equation}
+\hat P(s_{t+1}=j\mid s_t=i)=\frac{n_{ij}}{\sum_{k}n_{ik}},
+\end{equation}
+where $n_{ij}$ counts how often a zone went from state $i$ to state $j$ in one year, over many zones, years and cities.
+
+\textbf{Monte Carlo evaluation.} The environment then samples each scenario $\xi$ from the chain instead of from our hand-set rule. A plan $\pi$ is judged by its expected delay over many sampled futures:
+\begin{equation}
+\mathbb{E}_{\xi}\!\left[D(\pi;\xi)\right]\approx\frac{1}{M}\sum_{m=1}^{M}D(\pi;\xi_m),\qquad \xi_m\sim\hat P .
+\end{equation}
+The same samples also give the spread of outcomes, so a planner can be judged on its risk and not only on its average. This makes the scenarios realistic, adds the variety that GRPO needs (Section~\ref{sec:scale}), and works with every city that the recipe produces.
+
+\textbf{Cautions.} Roads themselves attract growth, so a chain fitted on past data mixes free growth with growth caused by past roads. The cleaner model conditions on actions, $P(s_{t+1}\mid s_t,a_t)$, which is harder to estimate. Data are limited (a few decades, few cities), so the state space must stay small, and the Markov assumption may need recent growth in the state.
+
+\section{Conclusion}
+
+We proposed a recipe that turns the public data of a city into a planning test for AI agents, with a formal definition, a check against real traffic counts, and a reward that a separate program replays. Its first instance, \repo{}, is an open repository for Espoo with one command to run everything. In this proof of concept, a frontier agent plays a nearly fixed plan that spends its few starts on the wrong mix of projects, while a small trained policy does much better, also on unseen scenarios. Gemma 3 4B trained with GRPO for about one GPU hour beats random plans on unseen scenarios, with statistical significance on both training seeds. It does not yet reason about the budget, and we expect larger models and more varied training data from many cities to get there; testing this is the next step. We believe this is the way to train small models that really read the city before they build.
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\clearpage
+\appendix
+
+\section{Formal details}\label{app:formal}
+
+\textbf{User equilibrium.} Each year, the flows are at user equilibrium~\cite{wardrop1952}: for every pair $(o,d)$, all used routes have the same time, and no unused route is faster:
+\begin{equation}
+f_p>0 \;\Rightarrow\; \tau_p=\min_{p'\in P_{od}}\tau_{p'},\qquad \tau_p=\sum_{l\in p}t_l(x_l),
+\end{equation}
+where $P_{od}$ is the set of routes from $o$ to $d$ and $f_p$ is the flow on route $p$.
+
+\section{Learning methods in detail}\label{app:learn}
+
+This appendix gives the technical details of the two learners of Section~\ref{sec:learn}. All hyperparameters are in Appendix~\ref{app:hyper}.
+
+\subsection{The policy network}\label{app:policy}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  bx/.style={draw, rounded corners=2pt, align=center, font=\scriptsize, minimum height=0.8cm, fill=black!3},
+  inp/.style={bx, fill=blue!6, text width=2.0cm},
+  emb/.style={bx, text width=1.55cm},
+  hd/.style={bx, fill=green!8, text width=1.9cm},
+  arr/.style={-{Stealth[length=1.8mm]}, thick},
+  node distance=0.25cm and 0.4cm]
+\node[inp] (g) {City token\\$u_0\in\mathbb{R}^{11}$};
+\node[inp, below=of g] (a) {10 area tokens\\$u_a\in\mathbb{R}^{8}$};
+\node[inp, below=of a] (p) {22 project tokens\\$u_i\in\mathbb{R}^{24}$};
+\node[emb, right=of g] (eg) {MLP$_0$\\$\to\mathbb{R}^{64}$};
+\node[emb, right=of a] (ea) {MLP$_1$\\$\to\mathbb{R}^{64}$};
+\node[emb, right=of p] (ep) {MLP$_2$\\$\to\mathbb{R}^{64}$};
+\node[bx, right=0.5cm of ea, text width=2.4cm, minimum height=2.9cm] (tr) {2 transformer\\blocks\\[2pt](pre-LayerNorm,\\4 heads, MLP\\$64\to128\to64$)\\[2pt]33 tokens};
+\node[hd, right=0.5cm of tr, yshift=1.05cm] (h1) {city token $\to$\\$\alpha\in\mathbb{R}^3$, $\kappa\in\mathbb{R}^3$, $V$};
+\node[hd, right=0.5cm of tr, yshift=-1.05cm] (h2) {project tokens $\to$\\$\beta_i\in\mathbb{R}$};
+\node[hd, right=0.45cm of tr, xshift=2.35cm, text width=2.2cm, minimum height=1.6cm] (j) {joint logit\\$z(a)$ for 762\\actions, mask,\\softmax $\to\pi(a\mid o)$};
+\draw[arr] (g) -- (eg); \draw[arr] (a) -- (ea); \draw[arr] (p) -- (ep);
+\draw[arr] (eg.east) -- (tr.west |- eg.east); \draw[arr] (ea) -- (tr); \draw[arr] (ep.east) -- (tr.west |- ep.east);
+\draw[arr] (tr.east |- h1) -- (h1); \draw[arr] (tr.east |- h2) -- (h2);
+\draw[arr] (h1.east) -- (j); \draw[arr] (h2.east) -- (j);
+\end{tikzpicture}
+\caption{The policy network (82{,}760 parameters). Each kind of token has its own small MLP. A transformer~\cite{vaswani2017} lets every token look at every other token. The city token gives the maintenance logits $\alpha$, the build-count logits $\kappa$ and the value $V$; each project token gives one logit $\beta_i$. Together they score each of the 762 joint actions (Equation~\ref{eq:joint}).}
+\label{fig:policy}
+\end{figure}
+
+\textbf{Input.} The observation $o_t$ comes only from the tools \texttt{get\_state} and \texttt{list\_projects}. It becomes 33 tokens: one city token $u_0$ (time, cash, payments, running costs, car share, road condition, last delay), one token $u_a$ per area (size in 2026, growth so far, yearly growth rate, position) and one token $u_i$ per project (kind, cost, build time, running cost, status, position, growth near the project, \texttt{jam}).
+
+\textbf{Network.} Each kind of token has its own two-layer MLP that maps it to $\mathbb{R}^{64}$. Then two transformer blocks~\cite{vaswani2017} with LayerNorm before each part update all tokens:
+\begin{equation}
+X\leftarrow X+\operatorname{MHA}(\operatorname{LN}(X)),\qquad X\leftarrow X+\operatorname{MLP}(\operatorname{LN}(X)),
+\end{equation}
+with multi-head attention (4 heads, $d_k=16$)
+\begin{equation}
+\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V .
+\end{equation}
+There is no position encoding: the tokens carry their map position as features, and the order of areas and projects does not matter. Figure~\ref{fig:policy} shows the network.
+
+\textbf{Joint actions.} An action $a=(m,i,j)$ is a maintenance level $m\in\{0,1,2\}$ and up to two projects $i<j$, where $\varnothing$ means ``no project''. With 22 projects there are $3\,(1+22+\binom{22}{2})=762$ actions. The network scores each action as a sum of parts:
+\begin{equation}\label{eq:joint}
+z(a)=\alpha_m+\kappa_{n(a)}+\beta_i+\beta_j,\qquad \beta_\varnothing=0,\qquad
+\pi_\theta(a\mid o)=\frac{\mathbf{1}[a\in\mathcal{F}(o)]\,e^{z(a)}}{\sum_{a'\in\mathcal{F}(o)}e^{z(a')}},
+\end{equation}
+where $n(a)\in\{0,1,2\}$ is the number of projects in $a$ and $\mathcal{F}(o)$ is the set of actions that fit the budget. At test time the policy takes $\arg\max_a z(a)$.
+
+\textbf{Behaviour cloning.} We first copy expert plans found by search on training seeds. For expert actions $a^*$ and returns $G_t$ we minimise
+\begin{equation}
+\mathcal{L}_{\text{BC}}(\theta)=\mathbb{E}\left[-\log\pi_\theta(a^*_t\mid o_t)+\left(V_\theta(o_t)-G_t\right)^2\right].
+\end{equation}
+
+\textbf{PPO.} We then fine-tune with PPO~\cite{schulman2017}. The reward of year $t$ is the saved delay, $r_t=(D^{\varnothing}_t-D_t)/\bar D^{\varnothing}$, where $\bar D^{\varnothing}$ is the mean yearly do-nothing delay. Advantages use GAE~\cite{schulman2016} with $\gamma=1$ and $\lambda=0.95$:
+\begin{equation}
+\delta_t=r_t+V(o_{t+1})-V(o_t),\qquad \hat A_t=\sum_{k\ge 0}\lambda^k\,\delta_{t+k}.
+\end{equation}
+With the ratio $\rho_t(\theta)=\pi_\theta(a_t\mid o_t)/\pi_{\theta_{\text{old}}}(a_t\mid o_t)$ and $\epsilon=0.2$, the loss is
+\begin{equation}
+\begin{aligned}
+\mathcal{L}_{\text{PPO}}(\theta)={}&-\mathbb{E}_t\!\left[\min\!\left(\rho_t\hat A_t,\;\operatorname{clip}(\rho_t,1-\epsilon,1+\epsilon)\,\hat A_t\right)\right]\\
+&+0.5\,\mathbb{E}_t\!\left[\left(V_\theta(o_t)-\hat G_t\right)^2\right]-0.01\,\mathbb{E}_t\,\mathcal{H}\!\left[\pi_\theta(\cdot\mid o_t)\right],
+\end{aligned}
+\end{equation}
+where $\hat G_t=\hat A_t+V(o_t)$ and $\mathcal{H}$ is the entropy. We normalise $\hat A_t$ over the batch and use 4 epochs per update.
+
+\subsection{GRPO for the language model}\label{app:grpo}
+
+GRPO~\cite{shao2024} is PPO without a value network. Instead of $V(o)$, it compares several answers to the same prompt. For a prompt $q$, it samples a group of $G$ answers $o_1,\dots,o_G$ from the old policy, scores each answer with a reward $r_i$, and normalises the rewards inside the group:
+\begin{equation}
+\hat A_{i,t}=\frac{r_i-\operatorname{mean}(r_1,\dots,r_G)}{\operatorname{std}(r_1,\dots,r_G)}.
+\end{equation}
+Every token $t$ of answer $i$ gets the same advantage. The GRPO objective is
+\begin{equation}\label{eq:grpo}
+\begin{aligned}
+\mathcal{J}_{\text{GRPO}}(\theta)=\mathbb{E}_{q,\{o_i\}}\Bigg[\frac{1}{G}\sum_{i=1}^{G}\frac{1}{|o_i|}\sum_{t=1}^{|o_i|}\Big(&\min\!\big(\rho_{i,t}\hat A_{i,t},\;\operatorname{clip}(\rho_{i,t},1-\epsilon,1+\epsilon)\,\hat A_{i,t}\big)\\
+&-\beta\,\mathbb{D}_{\text{KL}}\!\left[\pi_\theta\,\|\,\pi_{\text{ref}}\right]\Big)\Bigg],
+\end{aligned}
+\end{equation}
+with the token ratio
+\begin{equation}
+\rho_{i,t}=\frac{\pi_\theta(o_{i,t}\mid q,o_{i,<t})}{\pi_{\theta_{\text{old}}}(o_{i,t}\mid q,o_{i,<t})},
+\end{equation}
+and the KL term estimated per token as $\frac{\pi_{\text{ref}}}{\pi_\theta}-\log\frac{\pi_{\text{ref}}}{\pi_\theta}-1$~\cite{shao2024}. DeepSeek-R1 uses the same objective with rule-based rewards~\cite{guo2025}.
+
+\textbf{Our case.} We use $\beta=0$ (no KL term) and one gradient step per batch, so $\pi_{\theta_{\text{old}}}=\pi_\theta$ when we take the gradient. Then $\rho_{i,t}=1$ and the clip is never active. We also average over all answer tokens in the batch instead of per answer (token-level normalisation, as in DAPO~\cite{yu2025}; zero-advantage groups add tokens to the count but no gradient), so the update is REINFORCE with a group-normalised baseline:
+\begin{equation}\label{eq:ourgrpo}
+\nabla_\theta\mathcal{J}(\theta)=\frac{1}{N}\sum_{q}\sum_{i=1}^{G}\sum_{t=1}^{|o_i|}\hat A_{i}\,\nabla_\theta\log\pi_\theta(o_{i,t}\mid q,o_{i,<t}),
+\end{equation}
+where $N$ is the number of answer tokens in the batch (we average over all tokens, not per answer). The reward of an answer is
+\begin{equation}
+r_i=\operatorname{clip}_{[-0.5,\,1.5]}\!\left(\frac{1}{0.3}\cdot\frac{D^{\varnothing}-D(o_i)}{D^{\varnothing}}-0.05\,b_i\right),
+\end{equation}
+where $D(o_i)$ is the total delay when the environment plays the plan in $o_i$, and $b_i$ counts wrong project names (and a missing maintenance level). An answer that cannot be read gets $-0.5$. We use $G=8$ answers for each of 8 prompts per step and sampling temperature 1 (Appendix~\ref{app:hyper}).
+
+\textbf{LoRA.} We do not change the weights $W_0$ of Gemma. We train a low-rank update in every linear layer~\cite{hu2022}:
+\begin{equation}
+W=W_0+\frac{\alpha}{r}\,BA,\qquad B\in\mathbb{R}^{d\times r},\;A\in\mathbb{R}^{r\times k},\;r=16,\;\alpha=32 .
+\end{equation}
+
+\textbf{A note on Equation~\ref{eq:grpoadv}.} If all $G$ answers in a group get the same reward, every $\hat A_i$ is zero, and by Equation~\ref{eq:ourgrpo} the group gives no gradient. Anonymised menus and dropping groups with equal rewards keep this from stopping the training (Section~\ref{sec:grpo}).
+
+\section{Hyperparameters}\label{app:hyper}
+
+\begin{table}[h]
+\caption{Simulator and calibration (from \texttt{sim/params.py} and \texttt{data/demand.py}).}
+\centering\small
+\begin{tabular}{@{}lp{0.55\linewidth}@{}}
+\toprule
+Parameter & Value \\
+\midrule
+Horizon & 15 planning years (2026 to 2040) + 5 runout years \\
+Income, builds per year & 40 MEUR per year; at most 2 starts per year \\
+Maintenance levels & 0, 4, 10 MEUR per year; default 1; level 0 in the runout; resurfaces segments below condition 0.5 \\
+Emergency rebuild & below condition 0.1; $4\times$ resurfacing cost; capacity $\times0.8$ \\
+Road condition & initial $U(0.4,1.0)$; at condition 0 free speed $-30\%$; wear per road class 0.012 to 0.036 per year plus axle loads (car 0.0004, truck 2.0 ESAL) \\
+Growth & 2 or 3 of 10 areas boom at 3.2\% to 5.4\% per year (1.6 to 2.2$\times$ in 15 years); other zones 0.2\% \\
+Forecasts & 4 per year, at most 3 years; trust in shown growth $t/(t+3)$ \\
+Travel time & BPR $\alpha=0.2$, $\beta=4$; truck $=2.5$ cars; 1.15 people per car; peak hour $\times750$ = one year \\
+Mode choice & logit, $\theta=0.05$ per minute, car constant 2.5 min, terminal time 4 min \\
+Equilibrium & path-based, relative gap $10^{-4}$, at most 20 iterations, 6 paths per pair \\
+Calibration & gravity $\beta\in\{0.03,\dots,0.3\}$ (8 values) $\times$ home-based share $\{0.1,\dots,0.85\}$ (6 values); Furness 200 iterations; matrix adjustment 40 iterations, step 0.5; truck scale 30 values in $[0.002,0.06]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\caption{Policy network, behaviour cloning and PPO (from \texttt{rl/}).}
+\centering\small
+\begin{tabular}{@{}lp{0.55\linewidth}@{}}
+\toprule
+Parameter & Value \\
+\midrule
+Network & width 64, 2 pre-LayerNorm blocks, 4 heads, MLP 128; token inputs 11 / 8 / 24; 82{,}760 parameters \\
+Behaviour cloning & AdamW, learning rate $10^{-3}$, weight decay $10^{-4}$, batch 128, 4000 steps, 194 expert plans (seeds 1000 to 1193) \\
+PPO & Adam, learning rate $10^{-4}$; 8 episodes per update (seeds 2008 to 2567); 4 epochs, minibatch 64; clip $\epsilon=0.2$; $\gamma=1$, GAE $\lambda=0.95$; value weight 0.5; entropy weight 0.01; gradient norm clip 1.0 \\
+Checkpoint & 560 episodes; chosen by mean plus worst score on validation seeds 0 to 15 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\caption{GRPO on Gemma (from \texttt{grpo/}).}
+\centering\small
+\begin{tabular}{@{}lp{0.55\linewidth}@{}}
+\toprule
+Parameter & Value \\
+\midrule
+Model & \texttt{gemma-3-4b-it}, bfloat16, one NVIDIA RTX PRO 6000 (96\,GB) \\
+LoRA & rank 16, $\alpha=32$, dropout 0, linear layers of the language model \\
+Task & environment plays 2 years at maintenance 1; \texttt{<think>} block, then one line \texttt{plan: id, ...; maintain: k}; at most 1024 new tokens; anonymised menu (random labels, costs and build times $\times U(0.8,1.2)$) \\
+Reward & saved share of $D^{\varnothing}$ divided by 0.3, minus 0.05 per format error, clipped to $[-0.5,1.5]$; unreadable answer $-0.5$; the reasoning is not scored \\
+GRPO & 8 prompts $\times$ $G=8$ answers per step; temperature 1; AdamW, learning rate $5\cdot10^{-5}$; $\beta_{\text{KL}}=0$; one gradient step per batch; token-level loss; gradient-norm clip 1.0; groups with equal rewards are skipped and new prompts drawn; 50 steps; torch seeds 0 and 1 \\
+Data & train seeds 1000 to 1599; checkpoint chosen on validation seeds 0 to 15 (greedy); test seeds 16 to 47 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{More results and the repository}\label{app:more}
+
+\begin{table}[h]
+\caption{All reasoning runs (Gemma 3 1B and 4B, Verda GPU) and reference lists under the same single-turn protocol: validation score (95\% CI), validation saved share (\%), test saved share (\%, 95\% CI), share of format-valid answers, boom-hit.}
+\label{tab:grporuns}
+\centering\scriptsize
+\begin{tabular}{@{}p{0.36\linewidth}rrrrr@{}}
+\toprule
+Run & Val score & Val saved & Test saved & Valid & Boom-hit \\
+\midrule
+\csname @@input\endcsname figs/grpo_runs.tex
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figs/curves.pdf}
-  \caption{Training curves, mean score on 16 seeds. (a) The policy network trained from scratch, without expert plans. (b) GRPO on Gemma 3 270M. Dashed: frontier agent and reactive rule.}
-  \label{fig:curves}
+  \includegraphics[width=\linewidth]{figs/bars.pdf}
+  \caption{(a) Score per seed (dots) and mean (bar). (b) Person-hours lost from 2026 to 2045; lower is better.}
+  \label{fig:bars}
 \end{figure}
 
-\textbf{Training without experts.} From scratch (Figure~\ref{fig:curves}a), PPO reaches \evoColdScore{} after \evoColdEps{} episodes and Gumbel self-play \evoGumbelScore{} after \evoGumbelEps{} episodes; Section~\ref{sec:evolution} shows what they learn and where they stall. Search does not help: adding Gumbel search (16 simulations, 6-year rollouts, no tool limits) to the learned policy gives \rlsearchScore{} instead of \rlScore{}, because rollouts under forecast growth see the future less well than the trained policy; it picks worse plans on seeds \rlsearchWorse{}.
-
-\textbf{GRPO.} Zero-shot, Gemma never writes a valid answer (score \grpoZero{}). The format warm-up gives \grpoWarm{}; after \grpoSteps{} GRPO steps it scores \grpoFinal{}, with \grpoValid{} of the answers valid (Figure~\ref{fig:curves}b). After training it writes the same plan, \grpoPlan{}, for all 16 cities (Section~\ref{sec:evolution}).
-
-\section{How the strategies change during training}\label{sec:evolution}
+\begin{table}[t]
+\caption{The folders of the repository.}
+\label{tab:repo}
+\centering\small
+\begin{tabular}{@{}lp{0.72\linewidth}@{}}
+\toprule
+Folder & What it does \\
+\midrule
+\texttt{data/} & Downloads public data and builds the road graph, zones, trips and projects \\
+\texttt{sim/} & The simulator: growth, money, road wear and the traffic equilibrium \\
+\texttt{task/} & The test: task text, MCP server with four tools, reference solution, verifier \\
+\texttt{rl/} & A small policy network, trained with behaviour cloning and PPO \\
+\texttt{grpo/} & GRPO training of Gemma 3 with LoRA (\texttt{grpo/reason.py} for the 4B runs) \\
+\texttt{viz/} & A 3D viewer that replays runs \\
+\texttt{eval.sh} & One command: reference, agent runs, do nothing, stop early \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figs/evolution.pdf}
-  \caption{How the strategy changes during training, measured on the plans for seeds 0 to 15 at each checkpoint. (a) GRPO on Gemma 3 270M. (b to d) The policy network trained with RL from scratch (PPO, Gumbel self-play) and from the cloned policy (PPO). (e) Which projects the RL policy builds at each checkpoint.}
-  \label{fig:evolution}
+  \begin{subfigure}{0.49\linewidth}\shot{heat0}\caption{Delay, 2026}\end{subfigure}\hfill
+  \begin{subfigure}{0.49\linewidth}\shot{heat19}\caption{Delay, 2045, do nothing}\end{subfigure}
+  \caption{The 3D viewer replays runs (seed 1). Colour shows delay per road, from green (free) to purple (jammed). Without action, jams spread from the growing areas by 2045.}
+  \label{fig:viewer}
 \end{figure}
 
-We run each checkpoint greedily on seeds 0 to 15 and measure its plans (Figure~\ref{fig:evolution}): score, share of years with the highest maintenance level, share of builds that are access upgrades, the \emph{boom hit} (share of growing areas that get an access upgrade) and the year of the first such upgrade. A growing area here means one whose true growth over 15 years is at least 1.5 times; only this analysis uses it, never a policy. To keep checkpoints, we repeated the RL runs with the same settings.
 
-\textbf{GRPO.} Gemma learns in a clear order (Figure~\ref{fig:evolution}a). After the format warm-up it already writes valid lines half of the time but always picks $m=0$ (score \grpoScoreWarmS{}). By step \grpoMtwoAt{} it always picks $m=2$ and has dropped \grpoDropFirst{}. From step \grpoValidAt{} at least 90\% of its answers are valid. By step \grpoKeptAt{} every plan contains \grpoKept{}. At step \grpoOneAt{} the 8 samples per city collapse to about one plan (from \grpoSdWarm{} after the warm-up), and from step \grpoFlatAt{} all answers in a group get the same reward, so the GRPO advantage and the gradient vanish; the score stays at \grpoScoreEnd{} until step \grpoLastStep{}. The model never learns to read the growth signal: in the final plan only \grpoBoomShare{} of the access upgrades are in growing areas, and the boom hit is \grpoBoomHitEnd{} (at most \grpoBoomHitMax{} during training).
 
-\textbf{RL from scratch.} The untrained network builds nothing and uses $m=0$ (score \evoColdScoreZero{}, entropy \evoColdEntZero{}). After \evoColdEpsOne{} PPO episodes it always uses $m=2$ and builds about \evoColdBuildsOne{} cheap projects from the first year (score \evoColdScoreOne{}). Up to \evoColdNoAccUntil{} episodes it stays with cheap generic roads and no access upgrade at all. At \evoColdAccAt{} episodes it finally adds access upgrades (share \evoColdAccShare{} of its builds), but late: the first one starts in \evoColdAccYear{} on average. The score then jumps to \evoColdAccScore{} (last checkpoint: \evoColdScore{} after \evoColdEps{} episodes). Gumbel self-play finds the cheap-roads plan with far fewer episodes: after \evoGumbelEpsOne{} episodes it uses $m=2$ in \evoGumbelMtwoOne{} of the years and builds \evoGumbelBuildsOne{} cheap projects (score \evoGumbelScoreOne{}); after \evoGumbelEps{} episodes it scores \evoGumbelScore{}, still with no access upgrade (largest access share \evoGumbelMaxAcc{}).
+\begin{table}[h]
+\caption{The same on the 16 validation scenarios (seeds 0 to 15), where the checkpoint was chosen.}
+\label{tab:validation}
+\centering\footnotesize
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Method & Mean & 95\% CI & Worst & Score & Wins & Sign $p$ & Wilcoxon $p$ \\
+\midrule
+\csname @@input\endcsname figs/validation.tex
+\bottomrule
+\end{tabular}
+\end{table}
 
-\textbf{RL from the cloned policy.} Behaviour cloning already gives the shape of a good plan: three projects per city, \texttt{espoonvayla-2x2} in the first year and two access upgrades from the fourth year on (access share \evoBcAcc{}, boom hit \evoBcBoomZero{}). It uses the default maintenance level ($m=1$ in \evoBcMone{} of the years) and still beats every other method, so its edge comes from few, well-placed projects, not from maintenance. PPO fine-tuning keeps this shape and only changes \emph{which} areas get upgrades: the share of cities with \texttt{otaniemi-access} goes from \evoBcOtaZero{} to \evoBcOta{}, the number of distinct plans from \evoBcDistinctZero{} to \evoBcDistinct{}, the score from \evoBcScoreZero{} to \evoBcScore{} after \evoBcEps{} episodes (the deployed policy is the checkpoint at 560 episodes), and the entropy from \evoBcEntZero{} to \evoBcEnt{}. The boom hit stays near \evoBcBoom{}: the policy mostly upgrades the most jammed areas, which are often but not always the growing ones.
 
-\textbf{The order of learning.} All learners first find the easy parts: a valid answer, the maintenance level and a generic set of good projects. The hard part is to save 120 MEUR and start an access upgrade years before it pays off, since the reward comes late, after two years of road works. GRPO and Gumbel self-play never get there; PPO from scratch needs more than a thousand episodes and then starts the upgrades late. Only the policy that starts from expert plans upgrades early. The frontier agent stops at the generic stage too: one list for every city, plus a late reaction to growth.
 
-\section{Limitations}
 
-The model is a static equilibrium for one peak hour, scaled to a year; it has no queues and no time of day. The car share is fixed, so better roads do not pull people out of transit, and induced demand comes only from growth and rerouting. The ten access upgrades are made up with the same cost for every area. $D^{*}$ is the best plan we know, not a proven optimum. The frontier agent ran once on five seeds, so its mean is uncertain. We chose the learned policy's checkpoint on the evaluation seeds; on unseen cities it saves \hoGap{} points less of the do-nothing delay, which measures this bias.
 
-\section{Conclusion}
 
-Espoo 2040 turns a real planning question into a POMDP with a replayed, hard-to-game reward. Its core difficulty is to build early for growth that short forecasts do not yet reward. A frontier agent falls into this trap: it follows a generic list and answers growth late. A tiny policy learns to avoid the trap from experience in the environment, and a 270M LLM improves strongly with GRPO but so far learns a generic plan. Because the score is in person-hours, each failure has a concrete size.
-
-\bibliographystyle{plainnat}
-\bibliography{refs}
 
 \end{document}

@@ -1,0 +1,9 @@
+run 1b-think-anon-long, step 100, validation seed 1 (greedy)
+plan executed: ['hista-access', 'kauklahti-access', 'keha3-north-2x2'] maintain 2
+score 0.054, saved share 0.0217, boom-hit 0.00
+
+<think>
+Otaniemi and Keilaniemi are experiencing the fastest growth, primarily serving the local residents and tourists. They can afford approximately 40 MEU per year, with savings carry over. They can expect to spend around 2 MEU per year on maintenance. The projects primarily serve the local population and tourists, offering a wide range of amenities like cafes, shops, and events. They can be expected to be operational for approximately 2-3 years, depending on the specific needs and ongoing events.
+</think>
+plan: P01, P02, P04; maintain: 2
+
