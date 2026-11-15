@@ -25,7 +25,7 @@ INK, MUTED = "#26251f", "#8a8984"
 COL = dict(nothing="#9b9a94", random="#c3c2b7", greedy1="#1baf7a", greedy5="#199e70", reactive="#2a78d6", agent="#eb6834", planner="#008300",
            rl="#6250d6", rlcheck="#9085e9", rlsearch="#3f2fb0", grpo="#e87ba4", best=INK)
 NAME = dict(nothing="Do nothing", random="Random", greedy1="Greedy (1-year)", greedy5="Greedy (5-year)", reactive="Reactive",
-            agent="Frontier LLM agent", planner="Rule planner", rl="Learned policy", rlcheck="Learned + forecast check",
+            agent="Frontier LLM agent (5 older runs)", planner="Rule planner", rl="Learned policy", rlcheck="Learned + forecast check",
             rlsearch="Learned + search", grpo="GRPO Gemma 270M", best="Best known")
 KEYS = list(NAME)
 
@@ -110,6 +110,7 @@ def fig_problem():
 
 
 def fig_bars(vals, lost=None, name="bars"):
+    KEYS = [k for k in globals()['KEYS'] if k in vals]
     fig, ax = plt.subplots(1, 2, figsize=(5.5, 2.9), gridspec_kw=dict(width_ratios=[1, 1], wspace=0.75))
     for i, k in enumerate(KEYS):
         y, v = len(KEYS) - 1 - i, np.array(vals[k], float)
@@ -282,6 +283,8 @@ def table_rows():
 def table(vals, search, grpo):
     rows, n3 = [], sum(norms[s][0] for s in ASEEDS)
     for k in KEYS:
+        if k == "grpo":  # the 270M run is no longer in the paper; the 4B runs have their own table
+            continue
         name = NAME[k] + (f" ($m{{=}}{LEVEL[k]}$)" if k in LEVEL and k != "nothing" else "")
         if k in ("rlsearch", "grpo"):
             sc = [search[s] for s in ASEEDS] if k == "rlsearch" else [grpo[int(s)] for s in ASEEDS]
@@ -739,7 +742,7 @@ def main():
     worse = sorted((s for s in search if search[s] < runs["rl"][s]["score"] - 0.02), key=lambda s: search[s] - runs["rl"][s]["score"])
     M.update(rlsearchScore=f"{np.mean(vals['rlsearch']):.2f}", rlsearchWorse=", ".join(worse[:3]))
     fig_problem()
-    fig_bars(vals)
+    fig_bars({k: v for k, v in vals.items() if k != "grpo"})
     fig_years()
     fig_curves(ev, zs)
     grpo = strategy()

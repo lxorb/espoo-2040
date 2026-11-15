@@ -245,7 +245,7 @@ def build(M):
                         + f" & {e['valid']:.2f} & {e['boom_hit']:.2f} \\\\")
     for k, v in sorted(D["refs"].items()):
         sv, st = boot([v[str(s)]["score"] for s in range(16)]), boot([v[str(s)]["frac"] for s in range(16, 48)])
-        nm = {"oracle": "Growth-aware oracle list (hidden info)", "random": "Random valid lists (4 per seed)", "const": "Run A constant plan"}[k.split("-")[0]]
+        nm = {"oracle": "Growth-aware oracle list (hidden info)", "random": "Random valid lists (4 per seed)", "const": "Best fixed list (same plan for all seeds)"}[k.split("-")[0]]
         rows.append(f"{nm}, {k.split('-')[1]} & {sv['mean']:.2f} [{sv['lo']:.2f}, {sv['hi']:.2f}] & {100 * np.mean([v[str(s)]['frac'] for s in range(16)]):.1f} & "
                     f"{100 * st['mean']:.1f} [{100 * st['lo']:.1f}, {100 * st['hi']:.1f}] & 1.00 & {np.mean([v[str(s)]['boom_hit'] for s in range(16)]):.2f} \\\\")
     for k, v in sorted(D["zero"].items()):
