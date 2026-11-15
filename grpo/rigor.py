@@ -83,7 +83,8 @@ def main():
         r = res.get(f"{s}|{','.join(p)}|{k}") if p else None
         base, best = norms.get(str(s), (None, None))
         return dict(frac=r["frac"] if r else 0.0, saved_ph=r["saving"] if r else 0.0, delay=r["delay"] if r else None,
-                    score=(r["saving"] * 1e6 / (base - best) if r else 0.0) if base else None)
+                    score=(r["saving"] * 1e6 / (base - best) if r else 0.0) if base else None,
+                    score_clip=float(np.clip(r["saving"] * 1e6 / (base - best), 0, 1) if r else 0.0) if base else None)
 
     out = dict(meta=dict(script="grpo/rigor.py", command="python -m grpo.rigor " + " ".join(sys.argv[1:]), seeds=dict(val=VAL, test=TEST), date=str(date.today()),
                          machine=subprocess.run(["lscpu"], capture_output=True, text=True).stdout.split("Model name:")[1].split("\n")[0].strip() + " " + platform.node(),
@@ -91,19 +92,18 @@ def main():
                methods={}, sensitivity={}, tests={})
     for name, m in methods.items():
         rows = {s: [score(s, p, k) for p, k in ps] for s, ps in m.items()}
-        per = {str(s): {f: (float(np.mean([x[f] for x in r])) if all(x[f] is not None for x in r) else None) for f in ("score", "frac", "saved_ph", "delay")} for s, r in rows.items()}
+        per = {str(s): {f: (float(np.mean([x[f] for x in r])) if all(x[f] is not None for x in r) else None) for f in ("score", "score_clip", "frac", "saved_ph", "delay")} for s, r in rows.items()}
         out["methods"][name] = dict(seeds=per, plans={str(s): [dict(plan=p, maintain=k) for p, k in ps] for s, ps in m.items()},
-                                    **{sp: {f: boot([per[str(s)][f] for s in ss]) for f in ("score", "frac") if all(per[str(s)][f] is not None for s in ss)} for sp, ss in (("val", VAL), ("test", TEST))})
+                                    **{sp: {f: boot([per[str(s)][f] for s in ss]) for f in ("score", "score_clip", "frac") if all(per[str(s)][f] is not None for s in ss)} for sp, ss in (("val", VAL), ("test", TEST))})
     for c in a.ckpts:
         out["sensitivity"][c] = {v: dict(changed=float(np.mean([plans[f"{c}|{n}|{v}"] != plans[f"{c}|{n}|orig"] for n in range(len(infos))])), n=len(infos)) for v in V[0] if v != "orig"}
         out["sensitivity"][c]["shuffle"] = float(np.mean([out["sensitivity"][c][f"shuf{j}"]["changed"] for j in range(3)]))
-    for o in ("const", "random", a.ckpts[0]):
+    for x, o in [(final, "const"), (final, "random"), (final, a.ckpts[0])] + [(c, "const") for c in a.ckpts[2:]]:
         for sp, ss in (("val", VAL), ("test", TEST)):
-            f = "score" if all(out["methods"][x]["seeds"][str(s)]["score"] is not None for x in (final, o) for s in ss) else "frac"
-            out["tests"][f"{final} vs {o} {sp}"] = dict(metric=f, **paired(*[[out["methods"][x]["seeds"][str(s)][f] for s in ss] for x in (final, o)]))
-    for sp in ("val", "test"):
-        v = [out["methods"][c][sp][f]["mean"] for c in a.ckpts[1:] for f in ["score" if "score" in out["methods"][c][sp] else "frac"]]
-        out.setdefault("seed_runs", dict(runs=a.ckpts[1:]))[sp] = dict(metric="score" if "score" in out["methods"][final][sp] else "frac", values=v, mean=float(np.mean(v)), std=float(np.std(v, ddof=1)) if len(v) > 1 else None)
+            f = "score" if all(out["methods"][y]["seeds"][str(s)]["score"] is not None for y in (x, o) for s in ss) else "frac"
+            out["tests"][f"{x} vs {o} {sp}"] = dict(metric=f, **paired(*[[out["methods"][y]["seeds"][str(s)][f] for s in ss] for y in (x, o)]))
+    out["seed_runs"] = dict(runs=a.ckpts[1:], **{sp: {f: dict(values=v, mean=float(np.mean(v)), std=float(np.std(v, ddof=1)) if len(v) > 1 else None)
+                                                    for f in out["methods"][final][sp] for v in [[out["methods"][c][sp][f]["mean"] for c in a.ckpts[1:]]]} for sp in ("val", "test")})
     (ROOT / "evidence").mkdir(exist_ok=True)
     (ROOT / "evidence" / "grpo.json").write_text(json.dumps(out, indent=1))
     for name, m in out["methods"].items():
