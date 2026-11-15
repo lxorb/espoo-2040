@@ -371,7 +371,8 @@ def main():
         log["steps"] = [s for s in log["steps"] if s["step"] < start]
         log["evals"] = [e for e in log["evals"] if e["step"] <= start]
     else:
-        m = get_peft_model(m, LoraConfig(r=16, lora_alpha=32, lora_dropout=0.0, target_modules="all-linear", task_type="CAUSAL_LM"))
+        tm = "all-linear" if a.size != "4b" else r".*language_model.*\.(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)"
+        m = get_peft_model(m, LoraConfig(r=16, lora_alpha=32, lora_dropout=0.0, target_modules=tm, task_type="CAUSAL_LM"))
     opt = torch.optim.AdamW([p for p in m.parameters() if p.requires_grad], lr=a.lr, weight_decay=0.0)
     if (d / "opt.pt").exists() and start:
         opt.load_state_dict(torch.load(d / "opt.pt"))

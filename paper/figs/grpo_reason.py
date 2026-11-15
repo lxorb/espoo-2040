@@ -18,7 +18,7 @@ TRACE_SEEDS = [0, 1]  # fixed before looking at any output
 RATE_EUR_H = 1.70  # assumed Verda on-demand price for 1x RTX PRO 6000 (EUR per GPU hour); replace with the invoice rate
 RUNS_ORDER = [("1b-think-anon", "ThinkAnon", "1B think + anon"), ("1b-think-named", "ThinkNamed", "1B think + named"),
               ("1b-nothink-anon", "NothinkAnon", "1B no-think + anon"), ("1b-nothink-named", "NothinkNamed", "1B no-think + named"),
-              ("1b-think-anon-long", "ThinkAnonLong", "1B think + anon, 100 steps")]
+              ("1b-think-anon-long", "ThinkAnonLong", "1B think + anon, 100 steps"), ("4b-think-anon", "FourThinkAnon", "4B think + anon")]
 KEEP = ("score", "frac", "sampled_score", "sampled_frac", "valid", "sampled_valid", "boom_hit", "boom_rank", "entropy", "sample_reward_std", "distinct",
         "n_access", "ntok", "sens_shuffle", "sens_zero", "sens_swap", "faithful", "swap_plan_new", "swap_think_new", "recall", "precision",
         "arith_share", "arith_correct", "plan_in_think", "think_in_plan")
@@ -98,7 +98,7 @@ def build(M):
     runs = {n: D["runs"][n] for n, _, _ in RUNS_ORDER if n in D["runs"]}
     tag = {n: t for n, t, _ in RUNS_ORDER}
     lab = {n: l for n, _, l in RUNS_ORDER}
-    col = {"1b-think-anon": "#c2185b", "1b-think-named": "#f48fb1", "1b-nothink-anon": "#1565c0", "1b-nothink-named": "#90caf9", "1b-think-anon-long": "#6a1b9a"}
+    col = {"1b-think-anon": "#c2185b", "1b-think-named": "#f48fb1", "1b-nothink-anon": "#1565c0", "1b-nothink-named": "#90caf9", "1b-think-anon-long": "#6a1b9a", "4b-think-anon": "#2e7d32"}
     grd = json.loads((HERE / "data" / "grpo.json").read_text())
     norms = json.loads((ROOT / "sim" / "norms.json").read_text())
 
@@ -151,7 +151,7 @@ def build(M):
                 M[f"grpoRef{nm}Score"] = fmt(float(np.mean([v[str(s)]["score"] for s in ss])))
                 M[f"grpoRef{nm}BoomHit"] = fmt(float(np.mean([v[str(s)]["boom_hit"] for s in ss])))
     for k, v in D["zero"].items():
-        nm = "Zero" + "".join(w.capitalize() for w in k.split("-")).replace("1b", "One").replace("4b", "Four").replace("1B", "One").replace("4B", "Four")
+        nm = "grpoZero" + "".join(w.capitalize() for w in k.split("-")).replace("1b", "One").replace("4b", "Four").replace("1B", "One").replace("4B", "Four")
         M[nm + "Score"] = fmt(v["score"])
         M[nm + "Frac"] = fmt(100 * v["frac"], 1)
         M[nm + "Valid"] = fmt(v["valid"])
@@ -229,7 +229,11 @@ def build(M):
                     f"{100 * st['mean']:.1f} [{100 * st['lo']:.1f}, {100 * st['hi']:.1f}] & 1.00 & {np.mean([v[str(s)]['boom_hit'] for s in range(16)]):.2f} \\\\")
     for k, v in sorted(D["zero"].items()):
         if k.endswith("-val") and k.startswith("4b"):
-            rows.append(f"Gemma 3 4B zero-shot, {k[3:-4].replace('-', ' + ')} & {v['score']:.2f} & {100 * v['frac']:.1f} & -- & {v['valid']:.2f} & {v['boom_hit']:.2f} \\\\")
+            te = D["zero"].get(k[:-4] + "-test")
+            tf = boot([s["frac"] for s in te["seeds"]]) if te else None
+            sv = boot([s["score"] for s in v["seeds"]])
+            rows.append(f"Gemma 3 4B zero-shot, {k[3:-4].replace('-', ' + ')} & {sv['mean']:.2f} [{sv['lo']:.2f}, {sv['hi']:.2f}] & {100 * v['frac']:.1f} & "
+                        + (f"{100 * tf['mean']:.1f} [{100 * tf['lo']:.1f}, {100 * tf['hi']:.1f}]" if tf else "--") + f" & {v['valid']:.2f} & {v['boom_hit']:.2f} \\\\")
     (HERE / "grpo_runs.tex").write_text("\n".join(rows) + "\n")
 
     # --- table: factorial
