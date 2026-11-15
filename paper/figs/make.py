@@ -575,7 +575,10 @@ def rules_v2(d):
              vOneLearnedWins=str(paired(per("v1", "learned"), per("v1", "planner"))[0]),
              vTwoLearnedMTwo=f"{lm2[0]:.3f}", vTwoeLearnedMTwo=f"{lm2[1]:.3f}", vTwoLearnedMTwoWins=str(mt["exploits_v2"]["reference-maintain-2"]["wins_over_ref"]),
              vOneMinCash=neg(cash("v1"), "{:.0f}"), vTwoMinCash=neg(cash("v2"), "{:.1f}"), vTwoMaintZero=neg(mean("v2", "maintain-0")),
-             vTwoStopSeven=f"{mt['exploits_v2']['stop-7']['score_mean']:.3f}", vTwoStopSevenWins=str(mt["exploits_v2"]["stop-7"]["wins_over_ref"]))
+             vTwoStopSeven=f"{mt['exploits_v2']['stop-7']['score_mean']:.3f}", vTwoStopSevenWins=str(mt["exploits_v2"]["stop-7"]["wins_over_ref"]),
+             vTwoeStopSeven=f"{mt['exploits_v2e']['stop-7']['score_mean']:.3f}", vTwoeStopSevenWins=str(mt["exploits_v2e"]["stop-7"]["wins_over_ref"]))
+    if have("v2", "learned-m2"):
+        M.update({f"v{t}LearnedMTwoWinsPlanner": str(paired(per(v, "learned-m2"), per(v, "planner"))[0]) for v, t in (("v1", "One"), ("v2", "Two"), ("v2e", "Twoe"))})
 
 
 def evidence():
