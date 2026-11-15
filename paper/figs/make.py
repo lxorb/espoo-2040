@@ -1,9 +1,9 @@
 import json
-import re
 from pathlib import Path
 
 import matplotlib
 import numpy as np
+from scipy.stats import binomtest, wilcoxon
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
 DATA = HERE / "data"
-RLDIR = ROOT / "runs" / "rl" / "vm" / "6fae939a" / "runs" / "rl"
+EVID = ROOT / "evidence"
 Y0 = 2026
 
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Times", "Nimbus Roman", "DejaVu Serif"], "font.size": 8, "axes.titlesize": 8,
@@ -29,6 +29,7 @@ KEYS = list(NAME)
 
 load = lambda p: json.loads(Path(p).read_text())
 norms, runs, growth, booms = load(ROOT / "sim" / "norms.json"), load(DATA / "runs.json"), load(DATA / "growth.json"), load(DATA / "booms.json")
+RLD, GRD = load(DATA / "rl.json"), load(DATA / "grpo.json")
 ASEEDS = sorted(runs["agent"], key=int)
 LEVEL, M = {}, {}
 key = lambda n: n.split()[0].lower().replace("ä", "a")
@@ -56,7 +57,7 @@ def rescore():
 
 
 def grpo_curve():
-    g = load(ROOT / "runs" / "grpo" / "curve.json")
+    g = GRD
     for e in g["evals"]:
         for x in e["seeds"]:
             x["score"] = clip(x["greedy"]["saving"] * 1e6 / (norms[str(x["seed"])][0] - norms[str(x["seed"])][1])) if x.get("greedy") else 0.0
@@ -152,7 +153,7 @@ def fig_curves(ev, zs):
             a.text(0.02, y + 0.01, NAME[k], transform=a.get_yaxis_transform(), fontsize=8, color=COL[k], ha="left", va="bottom")
         a.set_ylim(-0.05, 1.05)
     for n, c, lab in (("ppocold2", "#86b6ef", "PPO from scratch"), ("gz2", "#6250d6", "Gumbel self-play from scratch")):
-        x, y = zip(*[(r.get("episodes", r["it"]), r["mean_net"]) for r in load(RLDIR / f"{n}-6fae939a.json") if "mean_net" in r])
+        x, y = zip(*[(r.get("episodes", r["it"]), r["mean_net"]) for r in RLD["curves"][n]])
         ax[0].plot(x, y, color=c, lw=1.4, marker="o", ms=2.5, label=lab)
     ax[0].legend(loc="lower right")
     ax[0].set(xlabel="training episodes", ylabel="mean score, 16 seeds", title="(a) Learning without expert plans")
@@ -198,8 +199,7 @@ def fig_evolution(rl, gs):
 
 
 def strategy():
-    rl = load(ROOT / "runs" / "rl" / "strategy.json")
-    gs = [r for r in load(ROOT / "runs" / "grpo" / "strategy.json") if r.get("run", "A") == "A" and r["step"] >= 0]
+    rl, gs = RLD["strategy"], GRD["strategy"]
     for k, t in (("ppocold2", "Cold"), ("gz2", "Gumbel"), ("ppobc1s", "Bc")):
         rows, z, one = rl[k], rl[k][-1], rl[k][1]
         acc = next((r for r in rows if r["access_share"] > 0), None)
@@ -230,7 +230,7 @@ def strategy():
 
 def ablation():
     by = {}
-    for r in load(ROOT / "runs" / "rl" / "ablation-jam.json")["rows"]:
+    for r in RLD["ablation"]:
         sc = [clip(x) for x in r["scores"]]
         by.setdefault(r["experts"], {})[r["jam"]] = (np.mean(sc), min(sc))
     es = sorted(by)
@@ -241,7 +241,7 @@ def ablation():
 
 
 def heldout():
-    h = {(r["policy"], r["part"]): r for r in load(ROOT / "runs" / "rl" / "heldout.json")}
+    h = {(r["policy"], r["part"]): r for r in RLD["heldout"]}
     ks = ("rl", "planner", "reactive", "greedy5", "greedy1")
     pct = lambda x: f"{100 * x:.1f}"
     (HERE / "heldout.tex").write_text("".join(f"{NAME[k]} & {pct(h[k, 'heldout']['mean'])} & {pct(min(h[k, 'heldout']['saved_frac']))} & {pct(h[k, 'eval']['mean'])} \\\\\n" for k in ks))
@@ -303,10 +303,117 @@ def cats():
     (HERE / "cats.tex").write_text("".join(f"{k} & {len(v)} & {rng([p['cost'] for p in v])} & {rng([p['years'] for p in v])} \\\\\n" for k, v in groups.items()))
 
 
+def boot(v, n=10000, seed=0):
+    v = np.asarray(v, float)
+    m = v[np.random.default_rng(seed).integers(0, v.size, (n, v.size))].mean(1)
+    return v.mean(), *np.percentile(m, [2.5, 97.5])
+
+
+def paired(a, b):
+    d = np.asarray(a, float) - np.asarray(b, float)
+    nz = d[d != 0]
+    sign = binomtest(int((nz > 0).sum()), nz.size, 0.5, alternative="greater").pvalue if nz.size else 1.0
+    wil = wilcoxon(nz, alternative="greater").pvalue if nz.size else 1.0
+    return int((d > 0).sum()), d.size, sign, wil
+
+
+def tag(p):
+    return "".join(w.title() for w in p.replace(":", " m").replace("1", " one").replace("5", " five").replace("2", " two").split())
+
+
+def test_tables(d):
+    for part in ("validation", "test"):
+        if part not in d:
+            continue
+        rows, pol = [], d[part]["policies"]
+        ref = pol.get("deploy")
+        for p, v in pol.items():
+            seeds = sorted(v, key=int)
+            sf = [v[s]["saved_frac"] for s in seeds]
+            m, lo, hi = boot(sf)
+            t = f"{part}{tag(p)}"
+            M.update({f"{t}Saved": f"{100 * m:.1f}", f"{t}SavedLo": f"{100 * lo:.1f}", f"{t}SavedHi": f"{100 * hi:.1f}", f"{t}Worst": f"{100 * min(sf):.1f}"})
+            cells = [NAME.get({"deploy": "rl"}.get(p, p).split(":")[0], p) + (f" ($m{{=}}{p.split(':')[1]}$)" if ":" in p else ""), f"{100 * m:.1f}", f"[{100 * lo:.1f}, {100 * hi:.1f}]", f"{100 * min(sf):.1f}"]
+            if ref and p != "deploy":
+                w, n, sp, wp = paired([ref[s]["saved_frac"] for s in seeds], sf)
+                M.update({f"{t}Wins": str(w), f"{t}N": str(n), f"{t}SignP": f"{sp:.2g}", f"{t}WilcoxonP": f"{wp:.2g}"})
+                cells += [f"{w}/{n}", f"{sp:.2g}", f"{wp:.2g}"]
+            else:
+                cells += ["--"] * 3
+            rows.append(" & ".join(cells) + " \\\\")
+        (HERE / f"{part}.tex").write_text("\n".join(rows) + "\n")
+
+
+def neg(x, f="{:.3f}"):
+    return ("$-$" if x < 0 else "") + f.format(abs(x))
+
+
+def failures(d):
+    a, r = d["summary"]["agent"], d["summary"]["reference"]
+    runs_ = [x for x in d["runs"] if x["role"] == "agent"]
+    tot5 = lambda w, k: sum(d["summary"][w][k]["per_seed"].values())
+    share = lambda w: d["summary"][w]["rebuild_spend"]["mean"] / d["summary"][w]["total_spend"]["mean"]
+    M.update(failJaccardAgent=f"{d['summary']['jaccard_pairs']['agent']['pairs']['mean']:.2f}", failJaccardRef=f"{d['summary']['jaccard_pairs']['reference']['pairs']['mean']:.2f}",
+             failMentionYear=str(int(np.median([b["first_mention_msg"] for x in runs_ for b in x["sees_acts"]]))),
+             failBoomNeverActed=str(a["never_upgraded_mentioned"]), failBoomTotal=str(a["boom_total"]), failLagYears=f"{a['lag']['mean']:.1f}",
+             failBoomAgent=f"{tot5('agent', 'boom_upgraded'):.0f}", failBoomRef=f"{tot5('reference', 'boom_upgraded'):.0f}",
+             failBoomEarlyAgent=f"{tot5('agent', 'boom_upgraded_by_2031'):.0f}", failBoomEarlyRef=f"{tot5('reference', 'boom_upgraded_by_2031'):.0f}",
+             failBlockedAgent=f"{a['boom_access_blocked_years']['mean']:.1f}", failBlockedRef=f"{r['boom_access_blocked_years']['mean']:.1f}",
+             failMaintTwoShare=f"{100 * a['maint2_share']['mean']:.1f}\\%", failRebuildShareAgent=f"{100 * share('agent'):.0f}\\%", failRebuildShareRef=f"{100 * share('reference'):.0f}\\%",
+             failForecastAccess=f"{a['forecasts_with_access']['mean']:.1f}", failForecastAccessUnbuilt=f"{a['forecasts_access_never_started']['mean']:.1f}",
+             failCallsGetState=f"{a['calls']['get_state']['mean']:.1f}", failCallsForecast=f"{a['calls']['forecast']['mean']:.1f}")
+    rows = [("Score", "score", "{:.2f}"), ("Plan overlap with other seeds (Jaccard)", "jaccard_other_seeds", "{:.2f}"),
+            ("Growing areas upgraded (of 3)", "boom_upgraded", "{:.1f}"), ("of them by 2031", "boom_upgraded_by_2031", "{:.1f}"),
+            ("Years a growing-area upgrade was not affordable", "boom_access_blocked_years", "{:.1f}"), ("Spend on maintenance level 2 (share)", "maint2_share", "{:.3f}"),
+            ("Cash at the end (MEUR)", "cash_end", "{:.0f}")]
+    cell = lambda w, k, f: f"{neg(d['summary'][w][k]['mean'], f)} [{neg(d['summary'][w][k]['lo'], f)}, {neg(d['summary'][w][k]['hi'], f)}]"
+    (HERE / "failures.tex").write_text("".join(f"{n} & {cell('agent', k, f)} & {cell('reference', k, f)} \\\\\n" for n, k, f in rows))
+
+
+def gshare(a):
+    return neg(a["gap_share_pooled"], "{:.2f}" if abs(a["gap_share_pooled"]) >= 0.1 else "{:.3f}")
+
+
+def counterfactual(d):
+    s_ = d["summary"]
+    g = s_["gap"]
+    M.update(gapIntelMean=f"{g['mean']:.3f}", gapIntelLo=f"{g['lo']:.3f}", gapIntelHi=f"{g['hi']:.3f}")
+    for arm, t in (("a_access", "Access"), ("b_maint1", "MaintOne"), ("c_both", "Both"), ("d_ref_maint2", "RefMaintTwo")):
+        a = s_[arm]
+        M.update({f"cf{t}Diff": neg(a["diff"]["mean"]), f"cf{t}GapShare": gshare(a)})
+    acc = [r for r in d["rows"] if r["arm"] == "a_access"]
+    M["cfAccessAccepted"] = f"{sum(r['added'] is not None for r in acc)}/{len(acc)}"
+    rows = []
+    names = dict(a_access="Agent plus an early upgrade of the fastest area", b_maint1="Agent with maintenance 1", c_both="Agent with both changes", d_ref_maint2="Reference with maintenance 2")
+    for arm, a in ((k, s_[k]) for k in names):
+        t = a["test"]
+        rows.append(f"{names[arm]} & {neg(a['diff']['mean'])} [{neg(a['diff']['lo'])}, {neg(a['diff']['hi'])}] & {gshare(a)} & {t['wins']}/{t['n']} & {t['sign_p']:.2g} \\\\")
+    (HERE / "counterfactual.tex").write_text("\n".join(rows) + "\n")
+
+
+def evidence():
+    f = EVID / "test.json"
+    if f.exists():
+        test_tables(load(f))
+    for name, fn in (("failures", failures), ("counterfactual", counterfactual)):
+        if (EVID / f"{name}.json").exists():
+            fn(load(EVID / f"{name}.json"))
+    if (EVID / "failures.json").exists():
+        t = load(EVID / "failures.json")["summary"]["reference_vs_agent_score"]
+        M.update(gapIntelWins=f"{t['wins']}/{t['n']}", gapIntelSignP=f"{t['sign_p']:.3f}")
+    for name in ("test", "exploits", "failures", "counterfactual", "grpo", "norms"):
+        if not (EVID / f"{name}.json").exists():
+            print("missing", f"evidence/{name}.json")
+    agents = sorted(EVID.glob("*/plan.json"))
+    if agents:
+        rows = [load(p) for p in agents]
+        (HERE / "agent.tex").write_text("".join(f"{r['who']} & {r['seed']} & {r['delay'] / 1e6:.1f} & {r['score']:.3f} \\\\\n" for r in rows))
+
+
 def main():
     rescore()
     ev, zs, final = grpo_curve()
-    d = load(ROOT / "runs" / "rl" / "search-eval.json")
+    d = RLD["search"]
     search = {str(s): clip(x) for s, x in zip(d["seeds"], d["scores"])}
     vals = {k: [runs[k][s]["score"] for s in sorted(runs[k], key=int)] for k in KEYS if k in runs}
     vals.update(best=[1.0] * len(norms), grpo=final, rlsearch=list(search.values()))
@@ -322,8 +429,8 @@ def main():
     table(vals, search, grpo)
     facts()
     cats()
-    used = set(re.findall(r"\\(\w+)\{\}", (HERE.parent / "main.tex").read_text()))
-    (HERE / "numbers.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(M.items()) if k in used))
+    evidence()
+    (HERE / "numbers.tex").write_text("".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(M.items())))
 
 
 if __name__ == "__main__":

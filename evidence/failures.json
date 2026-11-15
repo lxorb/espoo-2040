@@ -1,0 +1,1232 @@
+{
+ "meta": {
+  "script": "paper/figs/failures.py",
+  "command": "uv run python paper/figs/failures.py",
+  "seeds": [
+   0,
+   1,
+   2,
+   3,
+   4
+  ],
+  "date": "2026-11-15T00:51:46+00:00",
+  "machine": "espoo-runner INTEL(R) XEON(R) PLATINUM 8573C",
+  "sim": "5e027888f58d0da4aa178b2131813d7945729857"
+ },
+ "runs": [
+  {
+   "job": "gate4-s0",
+   "seed": 0,
+   "who": "gpt-6.1-sol",
+   "role": "agent",
+   "score": 0.518145978893335,
+   "replay_off": 0.0005078311833128723,
+   "builds": [
+    "espoonvayla-2x2",
+    "kauklahdenvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ],
+   "boom": [
+    "Kiviruukki",
+    "Leppävaara",
+    "Vermo"
+   ],
+   "fastest": "Kiviruukki",
+   "sees_acts": [
+    {
+     "area": "Kiviruukki",
+     "project": "kiviruukki-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Leppävaara",
+     "project": "leppavaara-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Vermo",
+     "project": "vermo-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    }
+   ],
+   "boom_upgraded": 0,
+   "boom_upgraded_by_2031": 0,
+   "cash_lock_years": 15,
+   "cash_lock_years_no_upgrade": 15,
+   "boom_access_blocked_years": 13,
+   "boom_access_skipped_years": 2,
+   "maint2_years": 14,
+   "maint2_spend": 84.31935600000001,
+   "total_spend": 1494.6856220000002,
+   "maint2_share": 0.056412769855358924,
+   "maint_spend": 88.28430600000002,
+   "rebuild_spend": 1185.4013160000002,
+   "cash_end": -662.0856220000002,
+   "split_off": 1.4210854715202004e-14,
+   "forecasts_with_access": 8,
+   "forecasts_access_never_started": 5,
+   "calls": {
+    "get_state": 7,
+    "list_projects": 1,
+    "forecast": 36,
+    "commit_year": 20
+   },
+   "jaccard_other_seeds": 0.7
+  },
+  {
+   "job": "gate4-s1",
+   "seed": 1,
+   "who": "gpt-6.1-sol",
+   "role": "agent",
+   "score": 0.6030646016214565,
+   "replay_off": 0.00017862667122800225,
+   "builds": [
+    "espoonvayla-2x2",
+    "kiviruukki-access",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ],
+   "boom": [
+    "Kera",
+    "Kiviruukki",
+    "Otaniemi and Keilaniemi"
+   ],
+   "fastest": "Kiviruukki",
+   "sees_acts": [
+    {
+     "area": "Kera",
+     "project": "kera-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Kiviruukki",
+     "project": "kiviruukki-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": 2034,
+     "lag": 6
+    },
+    {
+     "area": "Otaniemi and Keilaniemi",
+     "project": "otaniemi-access",
+     "first_mention_msg": 2046,
+     "first_mention": 2026,
+     "first_upgrade": 2029,
+     "lag": 3
+    }
+   ],
+   "boom_upgraded": 2,
+   "boom_upgraded_by_2031": 1,
+   "cash_lock_years": 15,
+   "cash_lock_years_no_upgrade": 4,
+   "boom_access_blocked_years": 13,
+   "boom_access_skipped_years": 0,
+   "maint2_years": 15,
+   "maint2_spend": 96.389634,
+   "total_spend": 1594.418006,
+   "maint2_share": 0.0604544314209156,
+   "maint_spend": 96.389634,
+   "rebuild_spend": 1196.028372,
+   "cash_end": -762.418006,
+   "split_off": 5.684341886080802e-14,
+   "forecasts_with_access": 10,
+   "forecasts_access_never_started": 3,
+   "calls": {
+    "get_state": 7,
+    "list_projects": 1,
+    "forecast": 28,
+    "commit_year": 20
+   },
+   "jaccard_other_seeds": 0.7
+  },
+  {
+   "job": "gate4-s2",
+   "seed": 2,
+   "who": "gpt-6.1-sol",
+   "role": "agent",
+   "score": 0.873712127683437,
+   "replay_off": 0.002203303399448587,
+   "builds": [
+    "espoonvayla-2x2",
+    "leppavaara-access",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ],
+   "boom": [
+    "Espoon keskus",
+    "Kauklahti",
+    "Vermo"
+   ],
+   "fastest": "Vermo",
+   "sees_acts": [
+    {
+     "area": "Espoon keskus",
+     "project": "espoon-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Kauklahti",
+     "project": "kauklahti-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Vermo",
+     "project": "vermo-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    }
+   ],
+   "boom_upgraded": 0,
+   "boom_upgraded_by_2031": 0,
+   "cash_lock_years": 15,
+   "cash_lock_years_no_upgrade": 15,
+   "boom_access_blocked_years": 13,
+   "boom_access_skipped_years": 2,
+   "maint2_years": 15,
+   "maint2_spend": 89.385912,
+   "total_spend": 1600.5803600000002,
+   "maint2_share": 0.05584593828203665,
+   "maint_spend": 89.385912,
+   "rebuild_spend": 1209.1944480000002,
+   "cash_end": -768.6803600000004,
+   "split_off": 5.684341886080802e-14,
+   "forecasts_with_access": 10,
+   "forecasts_access_never_started": 6,
+   "calls": {
+    "get_state": 8,
+    "list_projects": 1,
+    "forecast": 38,
+    "commit_year": 20
+   },
+   "jaccard_other_seeds": 0.7
+  },
+  {
+   "job": "gate4-s3",
+   "seed": 3,
+   "who": "gpt-6.1-sol",
+   "role": "agent",
+   "score": 0.9325946736333376,
+   "replay_off": 0.0031567578235062203,
+   "builds": [
+    "espoonvayla-2x2",
+    "kera-access",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ],
+   "boom": [
+    "Finnoo",
+    "Kera",
+    "Otaniemi and Keilaniemi"
+   ],
+   "fastest": "Finnoo",
+   "sees_acts": [
+    {
+     "area": "Finnoo",
+     "project": "finnoo-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Kera",
+     "project": "kera-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": 2034,
+     "lag": 6
+    },
+    {
+     "area": "Otaniemi and Keilaniemi",
+     "project": "otaniemi-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2027,
+     "first_upgrade": 2029,
+     "lag": 2
+    }
+   ],
+   "boom_upgraded": 2,
+   "boom_upgraded_by_2031": 1,
+   "cash_lock_years": 15,
+   "cash_lock_years_no_upgrade": 4,
+   "boom_access_blocked_years": 13,
+   "boom_access_skipped_years": 0,
+   "maint2_years": 15,
+   "maint2_spend": 89.276088,
+   "total_spend": 1607.514056,
+   "maint2_share": 0.05553673864734157,
+   "maint_spend": 89.276088,
+   "rebuild_spend": 1216.237968,
+   "cash_end": -775.5140560000002,
+   "split_off": 4.263256414560601e-14,
+   "forecasts_with_access": 8,
+   "forecasts_access_never_started": 2,
+   "calls": {
+    "get_state": 8,
+    "list_projects": 2,
+    "forecast": 34,
+    "commit_year": 20
+   },
+   "jaccard_other_seeds": 0.7
+  },
+  {
+   "job": "gate4-s4",
+   "seed": 4,
+   "who": "gpt-6.1-sol",
+   "role": "agent",
+   "score": 0.9216055434013684,
+   "replay_off": 0.0004889637885752671,
+   "builds": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ],
+   "boom": [
+    "Espoon keskus",
+    "Hista",
+    "Leppävaara"
+   ],
+   "fastest": "Leppävaara",
+   "sees_acts": [
+    {
+     "area": "Espoon keskus",
+     "project": "espoon-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Hista",
+     "project": "hista-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Leppävaara",
+     "project": "leppavaara-access",
+     "first_mention_msg": 2028,
+     "first_mention": 2028,
+     "first_upgrade": null,
+     "lag": null
+    }
+   ],
+   "boom_upgraded": 0,
+   "boom_upgraded_by_2031": 0,
+   "cash_lock_years": 15,
+   "cash_lock_years_no_upgrade": 15,
+   "boom_access_blocked_years": 12,
+   "boom_access_skipped_years": 3,
+   "maint2_years": 15,
+   "maint2_spend": 112.806375,
+   "total_spend": 1359.537779,
+   "maint2_share": 0.08297406423157587,
+   "maint_spend": 112.806375,
+   "rebuild_spend": 1064.731404,
+   "cash_end": -525.8377790000001,
+   "split_off": 5.684341886080802e-14,
+   "forecasts_with_access": 6,
+   "forecasts_access_never_started": 2,
+   "calls": {
+    "get_state": 7,
+    "list_projects": 1,
+    "forecast": 35,
+    "commit_year": 20
+   },
+   "jaccard_other_seeds": 0.8
+  },
+  {
+   "job": "ref3-s0",
+   "seed": 0,
+   "who": "reference",
+   "role": "reference",
+   "score": 1.0,
+   "replay_off": 0.00032553084320163306,
+   "builds": [
+    "espoonvayla-2x2",
+    "kiviruukki-access",
+    "otaniemi-access"
+   ],
+   "boom": [
+    "Kiviruukki",
+    "Leppävaara",
+    "Vermo"
+   ],
+   "fastest": "Kiviruukki",
+   "sees_acts": [
+    {
+     "area": "Kiviruukki",
+     "project": "kiviruukki-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": 2032,
+     "lag": null
+    },
+    {
+     "area": "Leppävaara",
+     "project": "leppavaara-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Vermo",
+     "project": "vermo-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": null,
+     "lag": null
+    }
+   ],
+   "boom_upgraded": 1,
+   "boom_upgraded_by_2031": 0,
+   "cash_lock_years": 15,
+   "cash_lock_years_no_upgrade": 7,
+   "boom_access_blocked_years": 13,
+   "boom_access_skipped_years": 1,
+   "maint2_years": 0,
+   "maint2_spend": 0,
+   "total_spend": 1731.204172,
+   "maint2_share": 0.0,
+   "maint_spend": 27.626016000000003,
+   "rebuild_spend": 1423.578156,
+   "cash_end": -898.404172,
+   "split_off": 5.684341886080802e-14,
+   "forecasts_with_access": null,
+   "forecasts_access_never_started": null,
+   "calls": null,
+   "jaccard_other_seeds": 0.5
+  },
+  {
+   "job": "ref3-s1",
+   "seed": 1,
+   "who": "reference",
+   "role": "reference",
+   "score": 1.0,
+   "replay_off": 0.00021936924077085374,
+   "builds": [
+    "espoonvayla-2x2",
+    "kera-access",
+    "kiviruukki-access"
+   ],
+   "boom": [
+    "Kera",
+    "Kiviruukki",
+    "Otaniemi and Keilaniemi"
+   ],
+   "fastest": "Kiviruukki",
+   "sees_acts": [
+    {
+     "area": "Kera",
+     "project": "kera-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": 2029,
+     "lag": null
+    },
+    {
+     "area": "Kiviruukki",
+     "project": "kiviruukki-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": 2032,
+     "lag": null
+    },
+    {
+     "area": "Otaniemi and Keilaniemi",
+     "project": "otaniemi-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": null,
+     "lag": null
+    }
+   ],
+   "boom_upgraded": 2,
+   "boom_upgraded_by_2031": 1,
+   "cash_lock_years": 15,
+   "cash_lock_years_no_upgrade": 4,
+   "boom_access_blocked_years": 13,
+   "boom_access_skipped_years": 0,
+   "maint2_years": 0,
+   "maint2_spend": 0,
+   "total_spend": 1701.5852530000002,
+   "maint2_share": 0.0,
+   "maint_spend": 27.504741000000003,
+   "rebuild_spend": 1394.0805120000002,
+   "cash_end": -868.7852530000002,
+   "split_off": 5.684341886080802e-14,
+   "forecasts_with_access": null,
+   "forecasts_access_never_started": null,
+   "calls": null,
+   "jaccard_other_seeds": 0.35
+  },
+  {
+   "job": "ref3-s2",
+   "seed": 2,
+   "who": "reference",
+   "role": "reference",
+   "score": 0.9052386871092605,
+   "replay_off": 0.002427277786316868,
+   "builds": [
+    "espoonvayla-2x2",
+    "leppavaara-access",
+    "otaniemi-access"
+   ],
+   "boom": [
+    "Espoon keskus",
+    "Kauklahti",
+    "Vermo"
+   ],
+   "fastest": "Vermo",
+   "sees_acts": [
+    {
+     "area": "Espoon keskus",
+     "project": "espoon-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Kauklahti",
+     "project": "kauklahti-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Vermo",
+     "project": "vermo-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": null,
+     "lag": null
+    }
+   ],
+   "boom_upgraded": 0,
+   "boom_upgraded_by_2031": 0,
+   "cash_lock_years": 15,
+   "cash_lock_years_no_upgrade": 15,
+   "boom_access_blocked_years": 13,
+   "boom_access_skipped_years": 2,
+   "maint2_years": 0,
+   "maint2_spend": 0,
+   "total_spend": 1742.1928420000002,
+   "maint2_share": 0.0,
+   "maint_spend": 27.69591,
+   "rebuild_spend": 1434.4969320000002,
+   "cash_end": -909.3928420000002,
+   "split_off": 5.684341886080802e-14,
+   "forecasts_with_access": null,
+   "forecasts_access_never_started": null,
+   "calls": null,
+   "jaccard_other_seeds": 0.425
+  },
+  {
+   "job": "ref3-s3",
+   "seed": 3,
+   "who": "reference",
+   "role": "reference",
+   "score": 0.988850665605254,
+   "replay_off": 0.0005650181834190599,
+   "builds": [
+    "espoonvayla-2x2",
+    "kera-access",
+    "otaniemi-access"
+   ],
+   "boom": [
+    "Finnoo",
+    "Kera",
+    "Otaniemi and Keilaniemi"
+   ],
+   "fastest": "Finnoo",
+   "sees_acts": [
+    {
+     "area": "Finnoo",
+     "project": "finnoo-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Kera",
+     "project": "kera-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": 2029,
+     "lag": null
+    },
+    {
+     "area": "Otaniemi and Keilaniemi",
+     "project": "otaniemi-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": 2032,
+     "lag": null
+    }
+   ],
+   "boom_upgraded": 2,
+   "boom_upgraded_by_2031": 1,
+   "cash_lock_years": 15,
+   "cash_lock_years_no_upgrade": 4,
+   "boom_access_blocked_years": 13,
+   "boom_access_skipped_years": 0,
+   "maint2_years": 0,
+   "maint2_spend": 0,
+   "total_spend": 1742.290753,
+   "maint2_share": 0.0,
+   "maint_spend": 27.504741000000003,
+   "rebuild_spend": 1434.786012,
+   "cash_end": -909.4907530000002,
+   "split_off": 4.973799150320701e-14,
+   "forecasts_with_access": null,
+   "forecasts_access_never_started": null,
+   "calls": null,
+   "jaccard_other_seeds": 0.5
+  },
+  {
+   "job": "ref3-s4",
+   "seed": 4,
+   "who": "reference",
+   "role": "reference",
+   "score": 0.9797466875423484,
+   "replay_off": 7.129419940796582e-05,
+   "builds": [
+    "espoon-access",
+    "espoonvayla-2x2",
+    "otaniemi-access"
+   ],
+   "boom": [
+    "Espoon keskus",
+    "Hista",
+    "Leppävaara"
+   ],
+   "fastest": "Leppävaara",
+   "sees_acts": [
+    {
+     "area": "Espoon keskus",
+     "project": "espoon-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": 2032,
+     "lag": null
+    },
+    {
+     "area": "Hista",
+     "project": "hista-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": null,
+     "lag": null
+    },
+    {
+     "area": "Leppävaara",
+     "project": "leppavaara-access",
+     "first_mention_msg": null,
+     "first_mention": null,
+     "first_upgrade": null,
+     "lag": null
+    }
+   ],
+   "boom_upgraded": 1,
+   "boom_upgraded_by_2031": 0,
+   "cash_lock_years": 15,
+   "cash_lock_years_no_upgrade": 7,
+   "boom_access_blocked_years": 13,
+   "boom_access_skipped_years": 1,
+   "maint2_years": 0,
+   "maint2_spend": 0,
+   "total_spend": 1688.274241,
+   "maint2_share": 0.0,
+   "maint_spend": 27.707493000000003,
+   "rebuild_spend": 1380.566748,
+   "cash_end": -855.4742410000002,
+   "split_off": 5.684341886080802e-14,
+   "forecasts_with_access": null,
+   "forecasts_access_never_started": null,
+   "calls": null,
+   "jaccard_other_seeds": 0.425
+  }
+ ],
+ "summary": {
+  "jaccard_pairs": {
+   "agent": {
+    "pairs": {
+     "mean": 0.72,
+     "lo": 0.68,
+     "hi": 0.76,
+     "n": 10
+    }
+   },
+   "reference": {
+    "pairs": {
+     "mean": 0.44000000000000006,
+     "lo": 0.35,
+     "hi": 0.5,
+     "n": 10
+    }
+   }
+  },
+  "agent": {
+   "score": {
+    "mean": 0.7698245850465868,
+    "lo": 0.6158216163405659,
+    "hi": 0.9164225123505698,
+    "n": 5,
+    "per_seed": {
+     "0": 0.518145978893335,
+     "1": 0.6030646016214565,
+     "2": 0.873712127683437,
+     "3": 0.9325946736333376,
+     "4": 0.9216055434013684
+    }
+   },
+   "jaccard_other_seeds": {
+    "mean": 0.72,
+    "lo": 0.7,
+    "hi": 0.76,
+    "n": 5,
+    "per_seed": {
+     "0": 0.7,
+     "1": 0.7,
+     "2": 0.7,
+     "3": 0.7,
+     "4": 0.8
+    }
+   },
+   "boom_upgraded": {
+    "mean": 0.8,
+    "lo": 0.0,
+    "hi": 1.6,
+    "n": 5,
+    "per_seed": {
+     "0": 0.0,
+     "1": 2.0,
+     "2": 0.0,
+     "3": 2.0,
+     "4": 0.0
+    }
+   },
+   "boom_upgraded_by_2031": {
+    "mean": 0.4,
+    "lo": 0.0,
+    "hi": 0.8,
+    "n": 5,
+    "per_seed": {
+     "0": 0.0,
+     "1": 1.0,
+     "2": 0.0,
+     "3": 1.0,
+     "4": 0.0
+    }
+   },
+   "cash_lock_years": {
+    "mean": 15.0,
+    "lo": 15.0,
+    "hi": 15.0,
+    "n": 5,
+    "per_seed": {
+     "0": 15.0,
+     "1": 15.0,
+     "2": 15.0,
+     "3": 15.0,
+     "4": 15.0
+    }
+   },
+   "cash_lock_years_no_upgrade": {
+    "mean": 10.6,
+    "lo": 6.2,
+    "hi": 15.0,
+    "n": 5,
+    "per_seed": {
+     "0": 15.0,
+     "1": 4.0,
+     "2": 15.0,
+     "3": 4.0,
+     "4": 15.0
+    }
+   },
+   "boom_access_blocked_years": {
+    "mean": 12.8,
+    "lo": 12.4,
+    "hi": 13.0,
+    "n": 5,
+    "per_seed": {
+     "0": 13.0,
+     "1": 13.0,
+     "2": 13.0,
+     "3": 13.0,
+     "4": 12.0
+    }
+   },
+   "boom_access_skipped_years": {
+    "mean": 1.4,
+    "lo": 0.4,
+    "hi": 2.4,
+    "n": 5,
+    "per_seed": {
+     "0": 2.0,
+     "1": 0.0,
+     "2": 2.0,
+     "3": 0.0,
+     "4": 3.0
+    }
+   },
+   "maint2_years": {
+    "mean": 14.8,
+    "lo": 14.4,
+    "hi": 15.0,
+    "n": 5,
+    "per_seed": {
+     "0": 14.0,
+     "1": 15.0,
+     "2": 15.0,
+     "3": 15.0,
+     "4": 15.0
+    }
+   },
+   "maint2_share": {
+    "mean": 0.062244788487445725,
+    "lo": 0.055835624742823074,
+    "hi": 0.07298267255259697,
+    "n": 5,
+    "per_seed": {
+     "0": 0.056412769855358924,
+     "1": 0.0604544314209156,
+     "2": 0.05584593828203665,
+     "3": 0.05553673864734157,
+     "4": 0.08297406423157587
+    }
+   },
+   "maint2_spend": {
+    "mean": 94.43547300000002,
+    "lo": 87.31536000000001,
+    "hi": 103.825623,
+    "n": 5,
+    "per_seed": {
+     "0": 84.31935600000001,
+     "1": 96.389634,
+     "2": 89.385912,
+     "3": 89.276088,
+     "4": 112.806375
+    }
+   },
+   "maint_spend": {
+    "mean": 95.228463,
+    "lo": 88.90134000000002,
+    "hi": 104.61861300000001,
+    "n": 5,
+    "per_seed": {
+     "0": 88.28430600000002,
+     "1": 96.389634,
+     "2": 89.385912,
+     "3": 89.276088,
+     "4": 112.806375
+    }
+   },
+   "rebuild_spend": {
+    "mean": 1174.3187016,
+    "lo": 1117.7579952,
+    "hi": 1209.3786408,
+    "n": 5,
+    "per_seed": {
+     "0": 1185.4013160000002,
+     "1": 1196.028372,
+     "2": 1209.1944480000002,
+     "3": 1216.237968,
+     "4": 1064.731404
+    }
+   },
+   "total_spend": {
+    "mean": 1531.3471646000003,
+    "lo": 1436.1626030000002,
+    "hi": 1602.1213676,
+    "n": 5,
+    "per_seed": {
+     "0": 1494.6856220000002,
+     "1": 1594.418006,
+     "2": 1600.5803600000002,
+     "3": 1607.514056,
+     "4": 1359.537779
+    }
+   },
+   "cash_end": {
+    "mean": -698.9071646000001,
+    "lo": -770.1613676000003,
+    "hi": -603.0226030000001,
+    "n": 5,
+    "per_seed": {
+     "0": -662.0856220000002,
+     "1": -762.418006,
+     "2": -768.6803600000004,
+     "3": -775.5140560000002,
+     "4": -525.8377790000001
+    }
+   },
+   "forecasts_with_access": {
+    "mean": 8.4,
+    "lo": 7.2,
+    "hi": 9.6,
+    "n": 5,
+    "per_seed": {
+     "0": 8.0,
+     "1": 10.0,
+     "2": 10.0,
+     "3": 8.0,
+     "4": 6.0
+    }
+   },
+   "forecasts_access_never_started": {
+    "mean": 3.6,
+    "lo": 2.2,
+    "hi": 5.0,
+    "n": 5,
+    "per_seed": {
+     "0": 5.0,
+     "1": 3.0,
+     "2": 6.0,
+     "3": 2.0,
+     "4": 2.0
+    }
+   },
+   "lag": {
+    "mean": 4.25,
+    "lo": 2.5,
+    "hi": 6.0,
+    "n": 4
+   },
+   "never_upgraded_mentioned": 11,
+   "boom_total": 15,
+   "calls": {
+    "get_state": {
+     "mean": 7.4,
+     "lo": 7.0,
+     "hi": 7.8,
+     "n": 5
+    },
+    "list_projects": {
+     "mean": 1.2,
+     "lo": 1.0,
+     "hi": 1.6,
+     "n": 5
+    },
+    "forecast": {
+     "mean": 34.2,
+     "lo": 31.0,
+     "hi": 36.8,
+     "n": 5
+    },
+    "commit_year": {
+     "mean": 20.0,
+     "lo": 20.0,
+     "hi": 20.0,
+     "n": 5
+    }
+   }
+  },
+  "reference": {
+   "score": {
+    "mean": 0.9747672080513727,
+    "lo": 0.9390925497740259,
+    "hi": 0.9977701331210508,
+    "n": 5,
+    "per_seed": {
+     "0": 1.0,
+     "1": 1.0,
+     "2": 0.9052386871092605,
+     "3": 0.988850665605254,
+     "4": 0.9797466875423484
+    }
+   },
+   "jaccard_other_seeds": {
+    "mean": 0.43999999999999995,
+    "lo": 0.39499999999999996,
+    "hi": 0.485,
+    "n": 5,
+    "per_seed": {
+     "0": 0.5,
+     "1": 0.35,
+     "2": 0.425,
+     "3": 0.5,
+     "4": 0.425
+    }
+   },
+   "boom_upgraded": {
+    "mean": 1.2,
+    "lo": 0.6,
+    "hi": 1.8,
+    "n": 5,
+    "per_seed": {
+     "0": 1.0,
+     "1": 2.0,
+     "2": 0.0,
+     "3": 2.0,
+     "4": 1.0
+    }
+   },
+   "boom_upgraded_by_2031": {
+    "mean": 0.4,
+    "lo": 0.0,
+    "hi": 0.8,
+    "n": 5,
+    "per_seed": {
+     "0": 0.0,
+     "1": 1.0,
+     "2": 0.0,
+     "3": 1.0,
+     "4": 0.0
+    }
+   },
+   "cash_lock_years": {
+    "mean": 15.0,
+    "lo": 15.0,
+    "hi": 15.0,
+    "n": 5,
+    "per_seed": {
+     "0": 15.0,
+     "1": 15.0,
+     "2": 15.0,
+     "3": 15.0,
+     "4": 15.0
+    }
+   },
+   "cash_lock_years_no_upgrade": {
+    "mean": 7.4,
+    "lo": 4.6,
+    "hi": 11.2,
+    "n": 5,
+    "per_seed": {
+     "0": 7.0,
+     "1": 4.0,
+     "2": 15.0,
+     "3": 4.0,
+     "4": 7.0
+    }
+   },
+   "boom_access_blocked_years": {
+    "mean": 13.0,
+    "lo": 13.0,
+    "hi": 13.0,
+    "n": 5,
+    "per_seed": {
+     "0": 13.0,
+     "1": 13.0,
+     "2": 13.0,
+     "3": 13.0,
+     "4": 13.0
+    }
+   },
+   "boom_access_skipped_years": {
+    "mean": 0.8,
+    "lo": 0.2,
+    "hi": 1.4,
+    "n": 5,
+    "per_seed": {
+     "0": 1.0,
+     "1": 0.0,
+     "2": 2.0,
+     "3": 0.0,
+     "4": 1.0
+    }
+   },
+   "maint2_years": {
+    "mean": 0.0,
+    "lo": 0.0,
+    "hi": 0.0,
+    "n": 5,
+    "per_seed": {
+     "0": 0.0,
+     "1": 0.0,
+     "2": 0.0,
+     "3": 0.0,
+     "4": 0.0
+    }
+   },
+   "maint2_share": {
+    "mean": 0.0,
+    "lo": 0.0,
+    "hi": 0.0,
+    "n": 5,
+    "per_seed": {
+     "0": 0.0,
+     "1": 0.0,
+     "2": 0.0,
+     "3": 0.0,
+     "4": 0.0
+    }
+   },
+   "maint2_spend": {
+    "mean": 0.0,
+    "lo": 0.0,
+    "hi": 0.0,
+    "n": 5,
+    "per_seed": {
+     "0": 0.0,
+     "1": 0.0,
+     "2": 0.0,
+     "3": 0.0,
+     "4": 0.0
+    }
+   },
+   "maint_spend": {
+    "mean": 27.6077802,
+    "lo": 27.528996,
+    "hi": 27.6865644,
+    "n": 5,
+    "per_seed": {
+     "0": 27.626016000000003,
+     "1": 27.504741000000003,
+     "2": 27.69591,
+     "3": 27.504741000000003,
+     "4": 27.707493000000003
+    }
+   },
+   "rebuild_spend": {
+    "mean": 1413.501672,
+    "lo": 1394.0555376000002,
+    "hi": 1432.4288088,
+    "n": 5,
+    "per_seed": {
+     "0": 1423.578156,
+     "1": 1394.0805120000002,
+     "2": 1434.4969320000002,
+     "3": 1434.786012,
+     "4": 1380.566748
+    }
+   },
+   "total_spend": {
+    "mean": 1721.1094521999999,
+    "lo": 1701.7201636000002,
+    "hi": 1740.0342723999997,
+    "n": 5,
+    "per_seed": {
+     "0": 1731.204172,
+     "1": 1701.5852530000002,
+     "2": 1742.1928420000002,
+     "3": 1742.290753,
+     "4": 1688.274241
+    }
+   },
+   "cash_end": {
+    "mean": -888.3094522000001,
+    "lo": -907.2342724000002,
+    "hi": -868.9201636000004,
+    "n": 5,
+    "per_seed": {
+     "0": -898.404172,
+     "1": -868.7852530000002,
+     "2": -909.3928420000002,
+     "3": -909.4907530000002,
+     "4": -855.4742410000002
+    }
+   },
+   "forecasts_with_access": {
+    "mean": null,
+    "lo": null,
+    "hi": null,
+    "n": 0,
+    "per_seed": {}
+   },
+   "forecasts_access_never_started": {
+    "mean": null,
+    "lo": null,
+    "hi": null,
+    "n": 0,
+    "per_seed": {}
+   },
+   "lag": {
+    "mean": null,
+    "lo": null,
+    "hi": null,
+    "n": 0
+   },
+   "never_upgraded_mentioned": 0,
+   "boom_total": 15,
+   "calls": {
+    "get_state": {
+     "mean": null,
+     "lo": null,
+     "hi": null,
+     "n": 0
+    },
+    "list_projects": {
+     "mean": null,
+     "lo": null,
+     "hi": null,
+     "n": 0
+    },
+    "forecast": {
+     "mean": null,
+     "lo": null,
+     "hi": null,
+     "n": 0
+    },
+    "commit_year": {
+     "mean": null,
+     "lo": null,
+     "hi": null,
+     "n": 0
+    }
+   }
+  },
+  "reference_vs_agent_score": {
+   "n": 5,
+   "wins": 5,
+   "ties": 0,
+   "sign_p": 0.03125,
+   "wilcoxon_p": 0.03125
+  },
+  "agent_gt_reference_boom_access_blocked_years": {
+   "n": 5,
+   "wins": 0,
+   "ties": 4,
+   "sign_p": 1.0,
+   "wilcoxon_p": 1.0
+  },
+  "agent_gt_reference_maint2_share": {
+   "n": 5,
+   "wins": 5,
+   "ties": 0,
+   "sign_p": 0.03125,
+   "wilcoxon_p": 0.03125
+  },
+  "agent_gt_reference_jaccard_other_seeds": {
+   "n": 5,
+   "wins": 5,
+   "ties": 0,
+   "sign_p": 0.03125,
+   "wilcoxon_p": 0.03125
+  }
+ }
+}
