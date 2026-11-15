@@ -134,11 +134,13 @@ def build(M):
             M[a] = M[b]
 
     # --- figure: curves
-    fig, ax = plt.subplots(1, 4, figsize=(7.0, 1.9))
+    fig, ax = plt.subplots(2, 2, figsize=(6.4, 4.0))
+    ax = ax.ravel()
     A = grd["strategy"]
-    ax[0].plot([r["step"] for r in A], [r["score"] for r in A], color="#9e9e9e", lw=1, ls="--", label="run A (270M)")
+    Ad = {e["step"]: len({(tuple((x.get("greedy") or {}).get("plan", [])), (x.get("greedy") or {}).get("maintain")) for x in e["seeds"]}) for e in grd["evals"] if e["step"] >= 0}
+    ax[0].plot([r["step"] for r in A], [r["score"] for r in A], color="#9e9e9e", lw=1, ls="--", label="run A (270M, no-think, named)")
     ax[1].plot([r["step"] for r in A], [r["boom_hit"] for r in A], color="#9e9e9e", lw=1, ls="--")
-    ax[2].plot([r["step"] for r in A], [r["sample_distinct"] for r in A], color="#9e9e9e", lw=1, ls="--")
+    ax[2].plot(list(Ad), list(Ad.values()), color="#9e9e9e", lw=1, ls="--")
     ax[3].plot([r["step"] for r in A if r["train_std"] is not None], [r["train_std"] for r in A if r["train_std"] is not None], color="#9e9e9e", lw=1, ls="--")
     for n, r in runs.items():
         x = [e["step"] for e in r["evals"]]
@@ -147,11 +149,14 @@ def build(M):
         ax[2].plot(x, [e["distinct"] for e in r["evals"]], color=col[n], lw=1.2, marker="o", ms=2)
         st = r["steps"]
         w = 5
-        ax[3].plot([s["step"] for s in st][w - 1:], np.convolve([s["std"] for s in st], np.ones(w) / w, "valid"), color=col[n], lw=1.2)
-    for a_, t in zip(ax, ("val score (greedy)", "boom-hit", "distinct plans (16 seeds)\nrun A: per-seed samples", "within-group reward std\n(used groups, 5-step mean)")):
+        if len(st) >= w:
+            ax[3].plot([s["step"] for s in st][w - 1:], np.convolve([s["std"] for s in st], np.ones(w) / w, "valid"), color=col[n], lw=1.2)
+    for a_, t in zip(ax, ("validation score (greedy, seeds 0-15)", "boom-hit (growing areas upgraded)", "distinct greedy plans over 16 seeds",
+                          "within-group reward std")):
         a_.set_title(t)
+    for a_ in ax[2:]:
         a_.set_xlabel("GRPO step")
-    ax[0].legend(fontsize=5.5, loc="lower right")
+    ax[0].legend(fontsize=6, loc="upper left")
     fig.tight_layout()
     fig.savefig(HERE / "grpo_curves.pdf")
     plt.close(fig)
@@ -159,15 +164,17 @@ def build(M):
     # --- figure: reasoning
     th = {n: r for n, r in runs.items() if r["args"]["think"]}
     if th:
-        keys = (("ntok", "think length (tokens)"), ("recall", "growth recall in <think>"), ("arith_share", "traces with arithmetic"),
-                ("think_in_plan", "named growing area\nupgraded in plan"), ("faithful", "faithfulness (swap test)"))
-        fig, ax = plt.subplots(1, len(keys), figsize=(7.0, 1.8))
+        keys = (("ntok", "answer length (tokens)"), ("recall", "growth recall in reasoning"), ("arith_share", "has arithmetic"),
+                ("think_in_plan", "named area upgraded"), ("faithful", "faithfulness (swap test)"))
+        fig, ax = plt.subplots(2, 3, figsize=(6.4, 3.6))
+        ax = ax.ravel()
+        ax[5].axis("off")
         for a_, (k, t) in zip(ax, keys):
             for n, r in th.items():
                 a_.plot([e["step"] for e in r["evals"]], [e.get(k) if e.get(k) is not None else np.nan for e in r["evals"]], color=col[n], lw=1.2, marker="o", ms=2, label=lab[n])
             a_.set_title(t)
             a_.set_xlabel("GRPO step")
-        ax[0].legend(fontsize=5.5)
+        ax[0].legend(fontsize=6)
         fig.tight_layout()
         fig.savefig(HERE / "grpo_reasoning.pdf")
         plt.close(fig)
