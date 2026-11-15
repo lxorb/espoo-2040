@@ -1,16 +1,23 @@
 #!/bin/bash
+# Usage: SEED=0 MODEL=provider/model ./eval.sh   (or ./eval.sh sync to only refresh the task copies)
+set -uo pipefail
 MODEL=${MODEL:-openai/gpt-6.1-sol}
 cd "$(dirname "$0")"
+for f in sim/norms.json data/out/net.json data/out/zones.json data/out/od.npy data/out/truck.npy data/out/pt.npy data/catalogue.json rl/policy.py rl/policy.npz rl/places.json; do
+  [ -f "$f" ] || { echo "eval.sh: missing $f (needs a full clone); task copies left untouched" >&2; exit 1; }
+done
+set -e
 for s in task/environment/server task/tests; do
   rm -rf $s/sim $s/data
   mkdir -p $s/sim $s/data/out
   cp sim/*.py $s/sim/
-  cp sim/norms.json $s/sim/ 2>/dev/null
+  cp sim/norms.json $s/sim/
   cp data/out/{net,zones}.json data/out/{od,truck,pt}.npy $s/data/out/
   cp data/catalogue.json $s/data/
 done
-cp rl/policy.py rl/policy.npz rl/places.json task/solution/ 2>/dev/null
-[ "$1" = sync ] && exit
+cp rl/policy.py rl/policy.npz rl/places.json task/solution/
+set +e
+[ "${1:-}" = sync ] && exit 0
 id=$(date +%m%d-%H%M)-s${SEED:-0}
 h() { harbor run -y -p task --job-name "$id-$1" "${@:2}"; }
 h reference -a oracle

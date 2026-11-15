@@ -1,0 +1,1468 @@
+{
+ "meta": {
+  "script": "paper/figs/review.py",
+  "command": "python paper/figs/review.py",
+  "date": "2026-11-15T03:57:39+00:00",
+  "machine": "Alessandros-MacBook-Pro.local arm64 arm",
+  "note": "Apple silicon; scores may differ from Intel runs by up to about 0.008"
+ },
+ "first_move": {
+  "reference": {
+   "0": 0.9998244549000903,
+   "1": 1.0,
+   "2": 0.9132247613118794,
+   "3": 0.9879362050468995,
+   "4": 0.9800392359616377
+  },
+  "arms": {
+   "base": {
+    "score": {
+     "mean": 0.7700121405053103,
+     "lo": 0.6161216969324818,
+     "hi": 0.9149874275565433,
+     "n": 5
+    },
+    "diff": {
+     "mean": 0.0,
+     "lo": 0.0,
+     "hi": 0.0,
+     "n": 5
+    },
+    "per_seed": {
+     "0": 0.5186827255043056,
+     "1": 0.6030921381974219,
+     "2": 0.8816345398669319,
+     "3": 0.9251831290058223,
+     "4": 0.9214681699520699
+    },
+    "gap_share": 0.0,
+    "beats_reference": 0,
+    "test": {
+     "n": 5,
+     "wins": 0,
+     "ties": 5,
+     "sign_p": null,
+     "wilcoxon_p": null
+    },
+    "started": {
+     "0": [
+      "espoonvayla-2x2",
+      "kauklahdenvayla-2x2",
+      "mankkaa-link",
+      "olari-link",
+      "otaniemi-access"
+     ],
+     "1": [
+      "espoonvayla-2x2",
+      "kiviruukki-access",
+      "mankkaa-link",
+      "olari-link",
+      "otaniemi-access"
+     ],
+     "2": [
+      "espoonvayla-2x2",
+      "leppavaara-access",
+      "mankkaa-link",
+      "olari-link",
+      "otaniemi-access"
+     ],
+     "3": [
+      "espoonvayla-2x2",
+      "kera-access",
+      "mankkaa-link",
+      "olari-link",
+      "otaniemi-access"
+     ],
+     "4": [
+      "espoonvayla-2x2",
+      "mankkaa-link",
+      "olari-link",
+      "otaniemi-access"
+     ]
+    },
+    "rejected": {
+     "0": 0,
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 0
+    }
+   },
+   "first": {
+    "score": {
+     "mean": 0.6922394262571694,
+     "lo": 0.5452278566044553,
+     "hi": 0.8392509959098835,
+     "n": 5
+    },
+    "diff": {
+     "mean": -0.07777271424814095,
+     "lo": -0.2298340221619723,
+     "hi": 1.765869757965888e-05,
+     "n": 5
+    },
+    "per_seed": {
+     "0": 0.5169138569562279,
+     "1": 0.6042434143702553,
+     "2": 0.8814118447120864,
+     "3": 0.5440340773697824,
+     "4": 0.9145939378774949
+    },
+    "gap_share": -0.3771844490490844,
+    "beats_reference": 0,
+    "test": {
+     "n": 5,
+     "wins": 1,
+     "ties": 0,
+     "sign_p": 0.96875,
+     "wilcoxon_p": 0.9375
+    },
+    "started": {
+     "0": [
+      "espoonvayla-2x2",
+      "kauklahdenvayla-2x2",
+      "otaniemi-access"
+     ],
+     "1": [
+      "espoonvayla-2x2",
+      "kiviruukki-access",
+      "otaniemi-access"
+     ],
+     "2": [
+      "espoonvayla-2x2",
+      "leppavaara-access",
+      "otaniemi-access"
+     ],
+     "3": [
+      "espoonvayla-2x2",
+      "kera-access",
+      "mankkaa-link",
+      "olari-link"
+     ],
+     "4": [
+      "espoonvayla-2x2",
+      "otaniemi-access"
+     ]
+    },
+    "rejected": {
+     "0": 0,
+     "1": 0,
+     "2": 0,
+     "3": 1,
+     "4": 0
+    }
+   },
+   "first_m1": {
+    "score": {
+     "mean": 0.5946893531307454,
+     "lo": 0.4009233735079419,
+     "hi": 0.7674045322362243,
+     "n": 5
+    },
+    "diff": {
+     "mean": -0.1753227873745648,
+     "lo": -0.2959388432613315,
+     "hi": -0.0547067314877981,
+     "n": 5
+    },
+    "per_seed": {
+     "0": 0.507987138763515,
+     "1": 0.27543901051869296,
+     "2": 0.6667067448837877,
+     "3": 0.6204530460227945,
+     "4": 0.9028608254649374
+    },
+    "gap_share": -0.8502857281106879,
+    "beats_reference": 0,
+    "test": {
+     "n": 5,
+     "wins": 0,
+     "ties": 0,
+     "sign_p": 1.0,
+     "wilcoxon_p": 1.0
+    },
+    "started": {
+     "0": [
+      "espoonvayla-2x2",
+      "kauklahdenvayla-2x2",
+      "otaniemi-access"
+     ],
+     "1": [
+      "espoonvayla-2x2",
+      "otaniemi-access"
+     ],
+     "2": [
+      "espoonvayla-2x2",
+      "otaniemi-access"
+     ],
+     "3": [
+      "espoonvayla-2x2",
+      "mankkaa-link",
+      "olari-link",
+      "otaniemi-access"
+     ],
+     "4": [
+      "espoonvayla-2x2",
+      "otaniemi-access"
+     ]
+    },
+    "rejected": {
+     "0": 0,
+     "1": 1,
+     "2": 1,
+     "3": 1,
+     "4": 0
+    }
+   },
+   "targets": {
+    "score": {
+     "mean": 0.6271499356564048,
+     "lo": 0.3603249892470097,
+     "hi": 0.8602418307702724,
+     "n": 5
+    },
+    "diff": {
+     "mean": -0.14286220484890563,
+     "lo": -0.48618757363351806,
+     "hi": 0.047360878998410925,
+     "n": 5
+    },
+    "per_seed": {
+     "0": 0.586523764679497,
+     "1": 0.6030921381974219,
+     "2": 0.9238753788211477,
+     "3": 0.9251831290058223,
+     "4": 0.09707526757813455
+    },
+    "gap_share": -0.6928574185278606,
+    "beats_reference": 1,
+    "test": {
+     "n": 5,
+     "wins": 2,
+     "ties": 2,
+     "sign_p": 0.5,
+     "wilcoxon_p": 0.625
+    },
+    "started": {
+     "0": [
+      "espoonvayla-2x2",
+      "kauklahdenvayla-2x2",
+      "kiviruukki-access",
+      "mankkaa-link",
+      "olari-link"
+     ],
+     "1": [
+      "espoonvayla-2x2",
+      "kiviruukki-access",
+      "mankkaa-link",
+      "olari-link",
+      "otaniemi-access"
+     ],
+     "2": [
+      "espoon-access",
+      "espoonvayla-2x2",
+      "mankkaa-link",
+      "olari-link",
+      "vermo-access"
+     ],
+     "3": [
+      "espoonvayla-2x2",
+      "kera-access",
+      "mankkaa-link",
+      "olari-link",
+      "otaniemi-access"
+     ],
+     "4": [
+      "espoonvayla-2x2",
+      "leppavaara-access",
+      "mankkaa-link",
+      "olari-link"
+     ]
+    },
+    "rejected": {
+     "0": 0,
+     "1": 0,
+     "2": 0,
+     "3": 0,
+     "4": 0
+    }
+   },
+   "first_targets": {
+    "score": {
+     "mean": 0.552426491382539,
+     "lo": 0.29180613731227545,
+     "hi": 0.7894043036839791,
+     "n": 5
+    },
+    "diff": {
+     "mean": -0.2175856491227715,
+     "lo": -0.5618898029610866,
+     "hi": 0.04951238983321593,
+     "n": 5
+    },
+    "per_seed": {
+     "0": 0.5837901822767344,
+     "1": 0.6042434143702553,
+     "2": 0.9397324195911262,
+     "3": 0.5440340773697824,
+     "4": 0.09033236330479592
+    },
+    "gap_share": -1.0552534263303242,
+    "beats_reference": 1,
+    "test": {
+     "n": 5,
+     "wins": 3,
+     "ties": 0,
+     "sign_p": 0.5,
+     "wilcoxon_p": 0.6875
+    },
+    "started": {
+     "0": [
+      "espoonvayla-2x2",
+      "kauklahdenvayla-2x2",
+      "kiviruukki-access"
+     ],
+     "1": [
+      "espoonvayla-2x2",
+      "kiviruukki-access",
+      "otaniemi-access"
+     ],
+     "2": [
+      "espoon-access",
+      "espoonvayla-2x2",
+      "vermo-access"
+     ],
+     "3": [
+      "espoonvayla-2x2",
+      "kera-access",
+      "mankkaa-link",
+      "olari-link"
+     ],
+     "4": [
+      "espoonvayla-2x2",
+      "leppavaara-access"
+     ]
+    },
+    "rejected": {
+     "0": 0,
+     "1": 0,
+     "2": 0,
+     "3": 1,
+     "4": 0
+    }
+   }
+  },
+  "truth": {
+   "0": {
+    "boom": [
+     "Kiviruukki",
+     "Leppävaara",
+     "Vermo"
+    ],
+    "fastest": "Kiviruukki",
+    "rate": {
+     "Finnoo": 0.002,
+     "Kera": 0.002000000000000001,
+     "Vermo": 0.045637188696691436,
+     "Kiviruukki": 0.04656603963666473,
+     "Espoonlahti": 0.002,
+     "Leppävaara": 0.044152458298492264,
+     "Otaniemi and Keilaniemi": 0.0020000000000000005,
+     "Espoon keskus": 0.002,
+     "Kauklahti": 0.0020000000000000005,
+     "Hista": 0.002000000000000001
+    }
+   },
+   "1": {
+    "boom": [
+     "Kera",
+     "Kiviruukki",
+     "Otaniemi and Keilaniemi"
+    ],
+    "fastest": "Kiviruukki",
+    "rate": {
+     "Finnoo": 0.002,
+     "Kera": 0.041104544171645364,
+     "Vermo": 0.002,
+     "Kiviruukki": 0.04497477934311865,
+     "Espoonlahti": 0.002,
+     "Leppävaara": 0.002,
+     "Otaniemi and Keilaniemi": 0.03956005913486704,
+     "Espoon keskus": 0.002,
+     "Kauklahti": 0.0020000000000000005,
+     "Hista": 0.002000000000000001
+    }
+   },
+   "2": {
+    "boom": [
+     "Espoon keskus",
+     "Kauklahti",
+     "Vermo"
+    ],
+    "fastest": "Vermo",
+    "rate": {
+     "Finnoo": 0.002,
+     "Kera": 0.002000000000000001,
+     "Vermo": 0.05106878490941097,
+     "Kiviruukki": 0.002,
+     "Espoonlahti": 0.002,
+     "Leppävaara": 0.002,
+     "Otaniemi and Keilaniemi": 0.0020000000000000005,
+     "Espoon keskus": 0.04986496285409091,
+     "Kauklahti": 0.03658927058377962,
+     "Hista": 0.002000000000000001
+    }
+   },
+   "3": {
+    "boom": [
+     "Finnoo",
+     "Kera",
+     "Otaniemi and Keilaniemi"
+    ],
+    "fastest": "Finnoo",
+    "rate": {
+     "Finnoo": 0.05069112723272112,
+     "Kera": 0.03882246121325547,
+     "Vermo": 0.002,
+     "Kiviruukki": 0.002,
+     "Espoonlahti": 0.002,
+     "Leppävaara": 0.002,
+     "Otaniemi and Keilaniemi": 0.04075253654898578,
+     "Espoon keskus": 0.002,
+     "Kauklahti": 0.0020000000000000005,
+     "Hista": 0.002000000000000001
+    }
+   },
+   "4": {
+    "boom": [
+     "Espoon keskus",
+     "Hista",
+     "Leppävaara"
+    ],
+    "fastest": "Leppävaara",
+    "rate": {
+     "Finnoo": 0.002,
+     "Kera": 0.002000000000000001,
+     "Vermo": 0.002,
+     "Kiviruukki": 0.002,
+     "Espoonlahti": 0.002,
+     "Leppävaara": 0.046386577813273586,
+     "Otaniemi and Keilaniemi": 0.0020000000000000005,
+     "Espoon keskus": 0.041610395748941105,
+     "Kauklahti": 0.0020000000000000005,
+     "Hista": 0.04097414930297628
+    }
+   }
+  }
+ },
+ "reference_sensitivity": {
+  "normal": {
+   "score": {
+    "mean": 0.9717353949464212,
+    "lo": 0.950466431023707,
+    "hi": 0.9915529915846301,
+    "n": 16
+   },
+   "changed": 0.0,
+   "test": {
+    "n": 16,
+    "wins": 0,
+    "ties": 16,
+    "sign_p": null,
+    "wilcoxon_p": null
+   },
+   "builds": {
+    "0": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "1": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kera-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "2": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "leppavaara-access"
+     ]
+    ],
+    "3": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kera-access"
+     ],
+     [
+      6,
+      "otaniemi-access"
+     ]
+    ],
+    "4": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "espoon-access"
+     ]
+    ],
+    "5": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "leppavaara-access"
+     ]
+    ],
+    "6": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "espoon-access"
+     ]
+    ],
+    "7": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kiviruukki-access"
+     ],
+     [
+      6,
+      "otaniemi-access"
+     ]
+    ],
+    "8": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kiviruukki-access"
+     ],
+     [
+      6,
+      "kera-access"
+     ]
+    ],
+    "9": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "10": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "11": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "espoonlahti-access"
+     ]
+    ],
+    "12": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kera-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "13": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kiviruukki-access"
+     ],
+     [
+      6,
+      "espoonlahti-access"
+     ]
+    ],
+    "14": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kera-access"
+     ]
+    ],
+    "15": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kera-access"
+     ],
+     [
+      6,
+      "otaniemi-access"
+     ]
+    ]
+   }
+  },
+  "shuffle": {
+   "score": {
+    "mean": 0.8925842432168085,
+    "lo": 0.8409933027411275,
+    "hi": 0.9382839573042995,
+    "n": 16
+   },
+   "changed": 0.625,
+   "test": {
+    "n": 16,
+    "wins": 9,
+    "ties": 6,
+    "sign_p": 0.0107421875,
+    "wilcoxon_p": 0.001953125
+   },
+   "builds": {
+    "0": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "1": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "2": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "leppavaara-access"
+     ]
+    ],
+    "3": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kera-access"
+     ],
+     [
+      6,
+      "otaniemi-access"
+     ]
+    ],
+    "4": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "5": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "6": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kera-access"
+     ],
+     [
+      6,
+      "otaniemi-access"
+     ]
+    ],
+    "7": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kiviruukki-access"
+     ],
+     [
+      6,
+      "otaniemi-access"
+     ]
+    ],
+    "8": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "9": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kera-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "10": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "11": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kera-access"
+     ],
+     [
+      6,
+      "leppavaara-access"
+     ]
+    ],
+    "12": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "kera-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "13": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "14": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "leppavaara-access"
+     ]
+    ],
+    "15": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kera-access"
+     ]
+    ]
+   }
+  },
+  "zero": {
+   "score": {
+    "mean": 0.8809052337666414,
+    "lo": 0.8104448410896773,
+    "hi": 0.9388942106142745,
+    "n": 16
+   },
+   "changed": 0.75,
+   "test": {
+    "n": 16,
+    "wins": 11,
+    "ties": 4,
+    "sign_p": 0.003173828125,
+    "wilcoxon_p": 0.000732421875
+   },
+   "builds": {
+    "0": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "1": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "2": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "3": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kera-access"
+     ]
+    ],
+    "4": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "5": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "6": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "7": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "8": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "9": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "10": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "11": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "12": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ]
+    ],
+    "13": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kiviruukki-access"
+     ],
+     [
+      6,
+      "espoonlahti-access"
+     ]
+    ],
+    "14": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kera-access"
+     ]
+    ],
+    "15": [
+     [
+      0,
+      "espoonvayla-2x2"
+     ],
+     [
+      3,
+      "otaniemi-access"
+     ],
+     [
+      6,
+      "kera-access"
+     ]
+    ]
+   }
+  }
+ },
+ "grpo_headroom": {
+  "const": {
+   "score": {
+    "mean": 0.8311526108043028,
+    "lo": 0.7271925626985948,
+    "hi": 0.9188819654491982,
+    "n": 16
+   },
+   "per_seed": {
+    "0": 1.038067632446643,
+    "1": 0.7109183665183134,
+    "2": 0.7402481202429616,
+    "3": 0.6660993952439821,
+    "4": 0.9690975252616779,
+    "5": 0.84003886026529,
+    "6": 0.9166736227903362,
+    "7": 1.004341941975849,
+    "8": 0.8339382760171569,
+    "9": 1.0044610423352935,
+    "10": 0.9575449418727028,
+    "11": 1.0148342839405546,
+    "12": 0.5397854510889688,
+    "13": 0.9612451144485024,
+    "14": 0.8139623239255905,
+    "15": 0.2871848744950217
+   },
+   "vs_const": {
+    "n": 16,
+    "wins": 0,
+    "ties": 16,
+    "sign_p": null,
+    "wilcoxon_p": null
+   }
+  },
+  "growth_m1": {
+   "score": {
+    "mean": 0.713509534169625,
+    "lo": 0.5793386479952997,
+    "hi": 0.82622308250393,
+    "n": 16
+   },
+   "per_seed": {
+    "0": 0.6416877523682843,
+    "1": 0.6987684547105261,
+    "2": 0.845479813821288,
+    "3": 0.7626810912760618,
+    "4": 0.07083563792456228,
+    "5": 0.6876247998980066,
+    "6": 0.9019819679565836,
+    "7": 0.7796537439532392,
+    "8": 0.7078501841755128,
+    "9": 0.6938204425661929,
+    "10": 0.7793722347687507,
+    "11": 0.9759303705406209,
+    "12": 0.9327627936233392,
+    "13": 0.9275886311313493,
+    "14": 0.12348569267582749,
+    "15": 0.8866289353238543
+   },
+   "vs_const": {
+    "n": 16,
+    "wins": 4,
+    "ties": 0,
+    "sign_p": 0.9893646240234375,
+    "wilcoxon_p": 0.9477081298828125
+   }
+  },
+  "growth_m2": {
+   "score": {
+    "mean": 0.7261397820582376,
+    "lo": 0.5867890592709932,
+    "hi": 0.8416649948559942,
+    "n": 16
+   },
+   "per_seed": {
+    "0": 0.646603278739781,
+    "1": 0.7109278069107748,
+    "2": 0.8777790020289082,
+    "3": 0.7786089335333816,
+    "4": 0.039011799294594626,
+    "5": 0.7112013772546548,
+    "6": 0.9326163098724553,
+    "7": 0.7935232763658123,
+    "8": 0.7105953249425346,
+    "9": 0.7293762538185817,
+    "10": 0.8089253519815603,
+    "11": 0.9810160690463733,
+    "12": 0.9433910302665,
+    "13": 0.9325713541826863,
+    "14": 0.12804711380718573,
+    "15": 0.8940422308860183
+   },
+   "vs_const": {
+    "n": 16,
+    "wins": 6,
+    "ties": 0,
+    "sign_p": 0.8949432373046875,
+    "wilcoxon_p": 0.903594970703125
+   }
+  },
+  "growfirst_m1": {
+   "score": {
+    "mean": 0.7201120331664074,
+    "lo": 0.58244348037378,
+    "hi": 0.8364449737555277,
+    "n": 16
+   },
+   "per_seed": {
+    "0": 0.6513265739610822,
+    "1": 0.7283580706784286,
+    "2": 0.8411273901507832,
+    "3": 0.7853487225818366,
+    "4": 0.058327320826351316,
+    "5": 0.661362065017625,
+    "6": 0.9236726331576812,
+    "7": 0.7922202755937663,
+    "8": 0.7280244790874455,
+    "9": 0.6592226993581737,
+    "10": 0.7640611575224651,
+    "11": 0.9922221025561184,
+    "12": 0.9610563687385605,
+    "13": 0.9352643925448764,
+    "14": 0.12314619743038821,
+    "15": 0.9170520814569364
+   },
+   "vs_const": {
+    "n": 16,
+    "wins": 6,
+    "ties": 0,
+    "sign_p": 0.8949432373046875,
+    "wilcoxon_p": 0.912322998046875
+   }
+  },
+  "growfirst_m2": {
+   "score": {
+    "mean": 0.7333453040368464,
+    "lo": 0.5906605216897153,
+    "hi": 0.8532569660998689,
+    "n": 16
+   },
+   "per_seed": {
+    "0": 0.6561809181388842,
+    "1": 0.7399438011721025,
+    "2": 0.8701159158880751,
+    "3": 0.8056209311188228,
+    "4": 0.025137564396822444,
+    "5": 0.6851721475983669,
+    "6": 0.9559096262033975,
+    "7": 0.8074982732281198,
+    "8": 0.73193586308935,
+    "9": 0.69554803913852,
+    "10": 0.7957975569635748,
+    "11": 0.9969509715789413,
+    "12": 0.9720041834044766,
+    "13": 0.9414109966695405,
+    "14": 0.12597701757636562,
+    "15": 0.9283210584241819
+   },
+   "vs_const": {
+    "n": 16,
+    "wins": 6,
+    "ties": 0,
+    "sign_p": 0.8949432373046875,
+    "wilcoxon_p": 0.8627777099609375
+   }
+  },
+  "reflike_m1": {
+   "score": {
+    "mean": 0.7719795287631132,
+    "lo": 0.6345370606473942,
+    "hi": 0.8858660103870629,
+    "n": 16
+   },
+   "per_seed": {
+    "0": 0.6689290812576191,
+    "1": 0.7255979210669796,
+    "2": 0.9253304284362035,
+    "3": 0.815785234121169,
+    "4": 0.12818510430413263,
+    "5": 0.805652978928844,
+    "6": 0.9468251805255927,
+    "7": 0.7982404904000322,
+    "8": 0.7411582393931498,
+    "9": 0.8511710351301089,
+    "10": 0.9046251145341082,
+    "11": 0.992779355508307,
+    "12": 0.9715269413159584,
+    "13": 1.0067654140047655,
+    "14": 0.14957726028775498,
+    "15": 0.919522680995085
+   },
+   "vs_const": {
+    "n": 16,
+    "wins": 7,
+    "ties": 0,
+    "sign_p": 0.7727508544921875,
+    "wilcoxon_p": 0.76812744140625
+   }
+  },
+  "reflike_m2": {
+   "score": {
+    "mean": 0.761669895378563,
+    "lo": 0.6250151235968319,
+    "hi": 0.8761428597520009,
+    "n": 16
+   },
+   "per_seed": {
+    "0": 0.6692788978914285,
+    "1": 0.6910903189764637,
+    "2": 0.9357966375714138,
+    "3": 0.7845533959404546,
+    "4": 0.1332322080342009,
+    "5": 0.8015446645908114,
+    "6": 0.9679018199899823,
+    "7": 0.7609585797735998,
+    "8": 0.7025872563163499,
+    "9": 0.8540451536150339,
+    "10": 0.9069902950268453,
+    "11": 0.9935351298728338,
+    "12": 0.9503568943429116,
+    "13": 1.0071483993725163,
+    "14": 0.14828441512896967,
+    "15": 0.879414259613193
+   },
+   "vs_const": {
+    "n": 16,
+    "wins": 6,
+    "ties": 0,
+    "sign_p": 0.8949432373046875,
+    "wilcoxon_p": 0.76812744140625
+   }
+  },
+  "search": {
+   "score": {
+    "mean": 0.9611858931514117,
+    "lo": 0.9236821263591604,
+    "hi": 0.9935862031698934,
+    "n": 16
+   },
+   "per_seed": {
+    "0": 1.0102457302842713,
+    "1": 1.0184972978915874,
+    "2": 0.9843884643973824,
+    "3": 1.001272583623621,
+    "4": 0.9868835592292682,
+    "5": 0.8049553336476725,
+    "6": 0.9887318704348533,
+    "7": 1.0467100864157102,
+    "8": 0.8728617314924619,
+    "9": 1.0146092934269666,
+    "10": 0.8914547261378735,
+    "11": 1.011418347275408,
+    "12": 0.9782476476293045,
+    "13": 1.0189823661183668,
+    "14": 0.8228697386568923,
+    "15": 0.9268455137609457
+   },
+   "vs_const": {
+    "n": 16,
+    "wins": 12,
+    "ties": 0,
+    "sign_p": 0.0384063720703125,
+    "wilcoxon_p": 0.00775146484375
+   }
+  },
+  "best_listed": {
+   "score": {
+    "mean": 0.9276992476310375,
+    "lo": 0.8836477176766127,
+    "hi": 0.9686905287846108,
+    "n": 16
+   }
+  }
+ }
+}

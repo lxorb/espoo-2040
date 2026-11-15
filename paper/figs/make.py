@@ -596,6 +596,14 @@ def main():
     search = {str(s): clip(x) for s, x in zip(d["seeds"], d["scores"])}
     vals = {k: [runs[k][s]["score"] for s in sorted(runs[k], key=int)] for k in KEYS if k in runs}
     vals.update(best=[1.0] * len(norms), grpo=final, rlsearch=list(search.values()))
+    if (EVID / "test.json").exists():
+        # 16-seed scores come from the frozen-norm Intel evaluation (evidence/test.json), so Table main agrees with validation.tex
+        V = load(EVID / "test.json")["validation"]["policies"]
+        pol = dict(rl="deploy", planner="planner", nothing="nothing", random="random")
+        pol.update({k: f"{k}:2" if LEVEL.get(k) == 2 else k for k in ("greedy1", "greedy5", "reactive")})
+        for k, p in pol.items():
+            if p in V and k in vals:
+                vals[k] = [V[p][str(s)]["score"] for s in range(16)]
     worse = sorted((s for s in search if search[s] < runs["rl"][s]["score"] - 0.02), key=lambda s: search[s] - runs["rl"][s]["score"])
     M.update(rlsearchScore=f"{np.mean(vals['rlsearch']):.2f}", rlsearchWorse=", ".join(worse[:3]))
     fig_problem()
