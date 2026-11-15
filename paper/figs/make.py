@@ -33,6 +33,7 @@ norms, runs, growth, booms = load(ROOT / "sim" / "norms.json"), load(DATA / "run
 RLD, GRD = load(DATA / "rl.json"), load(DATA / "grpo.json")
 ASEEDS = sorted(runs["agent"], key=int)
 LEVEL, M = {}, {}
+BASE_JOBS = {"gate4"}
 key = lambda n: n.split()[0].lower().replace("ä", "a")
 tot = lambda r: sum(r["delay"])
 raw = lambda s, d: (norms[s][0] - d) / (norms[s][0] - norms[s][1])
@@ -419,6 +420,9 @@ def exploits(d):
              ExploitRefDebt=neg(np.mean(r["end_cash"]), "{:.1f}"), ExploitNothingDebt=neg(np.mean(st["nothing"]["end_cash"]), "{:.1f}"),
              ExploitBlindAccess=f"{st['blind-access-m0']['mean']:.3f}", ExploitBoomAccess=f"{st['boom-access-m0']['mean']:.3f}", ExploitBestNonRef=f"{best[0]:.3f}",
              ExploitRefOverOne=str(sum(x > 1 for x in r["score"])), ExploitAcceptedBad=str(len({a for v in st.values() for a in v["accepted_bad"]})))
+    if "bad_inputs_tried" in d["meta"]:
+        n_bad = d["meta"]["bad_inputs_tried"]
+        M["ExploitRejected"] = f"{n_bad - int(M['ExploitAcceptedBad'])}/{n_bad}"
     rows, keys = [], list(st)
     i = 0
     while i < len(keys):
@@ -486,6 +490,11 @@ def letters(x):
     return "".join(w.title() for w in re.split("[^a-zA-Z]+", str(x)) if w)
 
 
+def job_of(p):
+    d = p.parent if p.parent.parent == EVID else p.parent.parent
+    return re.sub(r"-s\d+$", "", d.name)
+
+
 def agent_summary(runs, ref, sfx):
     sc = [r["score"] for r in runs]
     m, lo, hi = boot(sc)
@@ -509,7 +518,7 @@ def agent_runs(rows):
     groups = {}
     for r in rows:
         if r["who"] != "reference":
-            groups.setdefault((r.get("model", r["who"]), r.get("variant", "base")), []).append(r)
+            groups.setdefault((r.get("model", r["who"]), r.get("variant", "base" if r["job"] in BASE_JOBS else r["job"])), []).append(r)
     base = [r for (m, v), g in groups.items() if v == "base" for r in g]
     out = []
     if base:
@@ -539,15 +548,27 @@ def agent_runs(rows):
 
 
 def rules_v2(d):
+    var, mt = d["variants"], d["meta"]
+    per = lambda v, k: [var[v][s][k]["score"] for s in sorted(var[v], key=int)]
+    ci = lambda x: "{} [{}, {}]".format(*(neg(v) for v in boot(x)))
     rows = []
-    for name, v in d.get("methods", {}).items():
-        sc = v.get("score") or v.get("values") or []
-        if sc:
-            m, lo, hi = boot(sc)
-            rows.append(f"{name} & {m:.3f} [{lo:.3f}, {hi:.3f}] \\\\")
-            M[f"rulesV{letters(name)}"] = f"{m:.3f}"
-    if rows:
-        (HERE / "rules_v2.tex").write_text("\n".join(rows) + "\n")
+    for k, name in (("planner", "Rule planner"), ("learned", "Learned policy"), ("reactive", "Reactive"), ("maintain-0", "Do nothing, maintenance 0"), ("maintain-2", "Do nothing, maintenance 2")):
+        cells = [ci(per(v, k)) for v in ("v1", "v2", "v2e")]
+        wins = [paired(per(v, k), per(v, "planner"))[0] for v in ("v2", "v2e")] if k != "planner" else ["--", "--"]
+        rows.append(f"{name} & " + " & ".join(cells) + f" & {wins[0]} & {wins[1]} \\\\")
+    ex1 = load(EVID / "exploits.json")["strategies"]["reference-maintain-2"]["score"] if (EVID / "exploits.json").exists() else None
+    lm2 = [mt[f"exploits_{v}"]["reference-maintain-2"]["score_mean"] for v in ("v2", "v2e")]
+    rows.insert(2, f"Learned policy, maintenance 2 & {ci(ex1) if ex1 else '--'} & {lm2[0]:.3f} & {lm2[1]:.3f} & -- & -- \\\\")
+    (HERE / "rules_v2.tex").write_text("\n".join(rows) + "\n")
+    mean = lambda v, k: np.mean(per(v, k))
+    cash = lambda v: min(var[v][s]["learned"]["min_cash"] for s in var[v])
+    M.update(vTwoPlanner=f"{mean('v2', 'planner'):.3f}", vTwoLearned=f"{mean('v2', 'learned'):.3f}", vTwoePlanner=f"{mean('v2e', 'planner'):.3f}",
+             vTwoeLearned=f"{mean('v2e', 'learned'):.3f}", vOnePlanner=f"{mean('v1', 'planner'):.3f}", vOneLearned=f"{mean('v1', 'learned'):.3f}",
+             vTwoPlannerWins=str(paired(per("v2", "planner"), per("v2", "learned"))[0]), vTwoePlannerWins=str(paired(per("v2e", "planner"), per("v2e", "learned"))[0]),
+             vOneLearnedWins=str(paired(per("v1", "learned"), per("v1", "planner"))[0]),
+             vTwoLearnedMTwo=f"{lm2[0]:.3f}", vTwoeLearnedMTwo=f"{lm2[1]:.3f}", vTwoLearnedMTwoWins=str(mt["exploits_v2"]["reference-maintain-2"]["wins_over_ref"]),
+             vOneMinCash=neg(cash("v1"), "{:.0f}"), vTwoMinCash=neg(cash("v2"), "{:.1f}"), vTwoMaintZero=neg(mean("v2", "maintain-0")),
+             vTwoStopSeven=f"{mt['exploits_v2']['stop-7']['score_mean']:.3f}", vTwoStopSevenWins=str(mt["exploits_v2"]["stop-7"]["wins_over_ref"]))
 
 
 def evidence():
@@ -563,7 +584,7 @@ def evidence():
     for name in ("test", "exploits", "failures", "counterfactual", "grpo", "norms"):
         if not (EVID / f"{name}.json").exists():
             print("missing", f"evidence/{name}.json")
-    agent_runs([load(p) | dict(job=p.parent.name) for p in sorted(EVID.glob("*/plan.json"))])
+    agent_runs([load(p) | dict(job=job_of(p)) for p in sorted(EVID.glob("**/plan.json"))])
     if (EVID / "rules_v2.json").exists():
         rules_v2(load(EVID / "rules_v2.json"))
 
