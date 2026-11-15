@@ -11,6 +11,7 @@ export function present(v) {
     () => show('pc', ...CARDS.map((t, k) => el('div', { textContent: t, style: `animation-delay: ${k * 0.12}s` }))),
     () => { hide('pc'); v.go('hype'); },
     () => v.set({ mode: 'flow' }),
+    () => v.go('o'),
     () => show('pf', el('img', { src: 'assets/formulas.png' })),
     () => {
       hide('pf');
@@ -23,13 +24,27 @@ export function present(v) {
     () => { hide('pa'); v.set({ play: true }); },
     () => v.go('O'),
     () => { hide('pl'); v.go(2); v.set({ mode: 'cars' }); },
+    () => v.set({ mode: 'flow' }),
     () => { v.go(0); v.set({ mode: 'heat', split: true, pair: ['rl', 'gpt-6.1'], cut: 0.2635 }); },
     () => { v.go(1); v.slide(0.7955); },
-    () => show('pp', el('img', { src: 'assets/paper.jpg' })),
+    () => {
+      const col = el('div', {}, ...Array.from({ length: pages }, (_, k) => el('img', { src: `assets/paper/${k + 1}.jpg` }))), box = show('pp', col), t0 = performance.now() + 1000;
+      let y = 0, speed = 0, last = t0;
+      const step = now => {
+        if (!box.isConnected) return;
+        const top = 0.97 * innerHeight / v.paper(), end = col.offsetHeight - innerHeight, dt = Math.min(Math.max(now - last, 0), 50) / 1000;
+        last = Math.max(now, t0);
+        speed = Math.min(speed + top * dt / 0.8, top);
+        y = Math.min(y + speed * dt, end);
+        col.style.transform = `translateY(${-y}px)`;
+        if (y < end) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    },
     () => { hide('pp'); v.go('far'); g.show(); setTimeout(() => n > 0 && v.hold(true), 950); }
   ];
-  let n = -1, taps = [], g, ready = false, skip = false;
-  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp', 'pl', 'pw', 'pi'].forEach(hide); g?.hide(); v.hold(false); v.free(); ready = skip = false; if (on) { g ||= globe(); show('pi', 'p'); show('pw', 'Preloading'); v.warm(() => skip || n < 0).then(() => { hide('pw'); ready = n >= 0; }); for (const f of ['formulas.png', 'paper.jpg']) new Image().src = `assets/${f}`; } };
+  let n = -1, taps = [], g, ready = false, skip = false, pages = 1;
+  const mode = on => { n = on ? 0 : -1; ['pf', 'pa', 'pc', 'pp', 'pl', 'pw', 'pi'].forEach(hide); g?.hide(); v.hold(false); v.free(); ready = skip = false; if (on) { g ||= globe(); show('pi', 'p'); show('pw', 'Preloading'); v.warm(() => skip || n < 0).then(() => { hide('pw'); ready = n >= 0; }); new Image().src = 'assets/formulas.png'; fetch('assets/paper/pages.json').then(r => r.json()).then(j => { pages = j.n; for (let k = 1; k <= pages; k++) new Image().src = `assets/paper/${k}.jpg`; }); } };
   addEventListener('keydown', e => {
     if (e.key === 'ArrowRight' && n >= 0 && ready) n < steps.length ? steps[n++]() : mode(false);
     if (e.key !== 'p') return;

@@ -13,7 +13,7 @@ const STATIONS = [['Kivenlahti', -1201, 1072], ['Espoonlahti', -205, 361], ['Sou
   ['Matinkylä', 4518, 1343], ['Niittykumpu', 5884, 2487], ['Urheilupuisto', 6902, 2920], ['Tapiola', 8165, 2929], ['Aalto-yliopisto', 9295, 3944], ['Keilaniemi', 9590, 2952]];
 const SKY = '#2b2e31', FLOW = { 1: 2, 2: 5, 3: 7.5, 4: 10, 5: 12 }, TILT = Math.tan(15 * Math.PI / 180);
 const q = new URLSearchParams(location.search);
-const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 0.47, dz: 1 }, flowOpt = {};
+const opt = { gd: 1, heat: 0.3, flow: 0.07, tl: 0.47, dz: 1, paper: 2.5 }, flowOpt = {};
 const state = { mode: q.get('mode') || 'cars', who: q.get('run'), f: +(q.get('year') || 0), play: false, run: null, ref: null, speed: 1, flow: 3, split: q.has('cut'), pair: [], shown: [], cut: +(q.get('cut') || 0.5) };
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: q.has('shot') });
@@ -468,12 +468,13 @@ fm.onclick = e => { if (e.target === fm) fm.hidden = true; };
 addEventListener('keydown', e => { if (e.key === 'Escape') fm.hidden = true; });
 
 present({
+  paper: () => opt.paper,
   hold: on => { held = on; },
   warm: async stop => {
     const idle = () => new Promise(done => { let n = 0; const t = setInterval(() => { n = city.busy || near.ground.busy || detail.busy ? 0 : n + 1; if (n > 5 || stop()) { clearInterval(t); done(); } }, 150); });
     const at = (k, o) => { fly = null; aim(new THREE.Vector3(VIEWS[k][0], 0, -VIEWS[k][1]), VIEWS[k][2], HOME); Object.assign(state, o); loadRun(); apply(); return idle(); };
     await Promise.all(state.list.map(get));
-    for (const [k, o] of [['o', { mode: 'cars' }], [2, {}], ['O', { mode: 'heat' }], [0, { split: true }], ['hype', { mode: 'flow', split: false }], ['hype', { mode: 'cars' }]]) if (!stop()) await at(k, o);
+    for (const [k, o] of [['o', { mode: 'cars' }], [2, {}], [2, { mode: 'flow' }], ['o', {}], ['O', { mode: 'heat' }], [0, { split: true }], ['hype', { mode: 'flow', split: false }], ['hype', { mode: 'cars' }]]) if (!stop()) await at(k, o);
     Object.assign(state, { mode: 'cars', split: false });
     loadRun();
     apply();
@@ -513,6 +514,7 @@ settings([
   knob('hb', 'heat background', 'range', [0.05, 1, 0.05], 0.2, v => { opt.heat = v; apply(); }),
   knob('fb', 'flow background', 'range', [0.02, 1, 0.01], 0.2, v => { opt.flow = v; apply(); }),
   knob('sy', 'seconds per year', 'range', [0.1, 5, 0.01], 0.47, v => { opt.tl = v; }),
+  knob('pp', 'seconds per paper page', 'range', [0.5, 10, 0.1], 2.5, v => { opt.paper = v; }),
   knob('fps', 'fps', 'toggle', 0, false, v => { fps.hidden = !v; })
 ]);
 frame();
