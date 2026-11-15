@@ -317,30 +317,38 @@ def paired(a, b):
     return int((d > 0).sum()), d.size, sign, wil
 
 
-def tag(p):
-    return "".join(w.title() for w in p.replace(":", " m").replace("1", " one").replace("5", " five").replace("2", " two").split())
+def pf(p):
+    if p >= 0.001:
+        return f"{p:.2g}"
+    m, e = f"{p:.1e}".split("e")
+    return f"${m}\\times 10^{{{int(e)}}}$"
+
+
+TESTKEY = {"deploy": "Rl", "planner": "Planner", "reactive:2": "Reactive", "reactive": "ReactiveMOne", "greedy1:2": "GreedyOne", "greedy1": "GreedyOneMOne",
+           "greedy5:2": "GreedyFive", "greedy5": "GreedyFiveMOne", "random": "Random", "nothing": "Nothing"}
 
 
 def test_tables(d):
-    for part in ("validation", "test"):
-        if part not in d:
-            continue
-        rows, pol = [], d[part]["policies"]
-        ref = pol.get("deploy")
+    for part, pre in (("validation", "val"), ("test", "test")):
+        pol = d[part]["policies"]
+        ref, rows = pol["deploy"], []
         for p, v in pol.items():
-            seeds = sorted(v, key=int)
+            seeds, k = sorted(v, key=int), pre + TESTKEY.get(p, p)
             sf = [v[s]["saved_frac"] for s in seeds]
             m, lo, hi = boot(sf)
-            t = f"{part}{tag(p)}"
-            M.update({f"{t}Saved": f"{100 * m:.1f}", f"{t}SavedLo": f"{100 * lo:.1f}", f"{t}SavedHi": f"{100 * hi:.1f}", f"{t}Worst": f"{100 * min(sf):.1f}"})
-            cells = [NAME.get({"deploy": "rl"}.get(p, p).split(":")[0], p) + (f" ($m{{=}}{p.split(':')[1]}$)" if ":" in p else ""), f"{100 * m:.1f}", f"[{100 * lo:.1f}, {100 * hi:.1f}]", f"{100 * min(sf):.1f}"]
-            if ref and p != "deploy":
-                w, n, sp, wp = paired([ref[s]["saved_frac"] for s in seeds], sf)
-                M.update({f"{t}Wins": str(w), f"{t}N": str(n), f"{t}SignP": f"{sp:.2g}", f"{t}WilcoxonP": f"{wp:.2g}"})
-                cells += [f"{w}/{n}", f"{sp:.2g}", f"{wp:.2g}"]
-            else:
+            M.update({k: f"{100 * m:.1f}", f"{k}Lo": f"{100 * lo:.1f}", f"{k}Hi": f"{100 * hi:.1f}", f"{k}Worst": neg(100 * min(sf), "{:.1f}")})
+            sc = [v[s]["score"] for s in seeds]
+            if None not in sc:
+                M.update({f"{k}Score": f"{np.mean(sc):.3f}", f"{k}ScoreClip": f"{np.mean(np.clip(sc, 0, 1)):.3f}"})
+            cells = [NAME.get({"deploy": "rl"}.get(p, p).split(":")[0], p) + (f" ($m{{=}}{p.split(':')[1]}$)" if ":" in p else ""), f"{100 * m:.1f}", f"[{100 * lo:.1f}, {100 * hi:.1f}]", neg(100 * min(sf), "{:.1f}")]
+            if p == "deploy":
                 cells += ["--"] * 3
+            else:
+                w, n, sp, wp = paired([ref[s]["saved_frac"] for s in seeds], sf)
+                M.update({f"{pre}RlWins{TESTKEY.get(p, p)}": str(w), f"{pre}N": str(n), f"{k}SignP": pf(sp), f"{k}WilcoxonP": pf(wp)})
+                cells += [f"{w}/{n}", pf(sp), pf(wp)]
             rows.append(" & ".join(cells) + " \\\\")
+        M.update({f"{pre}SignP": M[f"{pre}PlannerSignP"], f"{pre}WilcoxonP": M[f"{pre}PlannerWilcoxonP"]})
         (HERE / f"{part}.tex").write_text("\n".join(rows) + "\n")
 
 
