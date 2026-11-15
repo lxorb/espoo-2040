@@ -9,10 +9,9 @@ Viewer: https://espoo.evinu.de. Paper: `paper/main.pdf`.
 ## Judge quickstart
 
 Needs Docker and Harbor 0.25.
-- `SEED=0 harbor run -y -p task -a oracle`: reward 1.0, 2 minutes on first build.
-- `SEED=0 harbor run -y -p task -a nop`: reward 0.0, 1 minute.
+- `SEED=0 harbor run -y -p task -a oracle` (or `-a nop`): reward 1.0 (0.0), 2 minutes on first build.
 - `SEED=0 harbor run -y -p task -a opencode -m openai/gpt-6.1-sol`: needs `OPENAI_API_KEY`.
-- `SEED=0 ./eval.sh`: reference, three agent runs, do nothing, early stop.
+- `SEED=0 ./eval.sh`: reference, three serial agent runs (6 GB each; `N=3` parallel), do nothing, early stop.
 
 ## Task
 
@@ -33,7 +32,7 @@ Seeds 2 to 4 are close (0.03 to 0.06); five runs are few.
 
 Seeds 0 to 15: learned policy 0.97, rule planner 0.84, Gemma 3 270M after GRPO 0.83 (from 0.19; two of three runs end on one fixed plan, one reacts to one area), reactive rule 0.56, random 0.15.
 
-The reference (`rl/policy.npz`, 83k parameters, no forecasts) learned from expert plans, then PPO; checkpoint picked on seeds 0 to 15. On 32 unseen scenarios it saves 34.3% of the do-nothing delay (rule planner 31.1%). Norms for 16 to 47 (`tools/norms.py`) are stricter than for 0 to 15, so scores are not comparable; seeds 48 and up have none.
+The reference (`rl/policy.npz`, 83k parameters, no forecasts) learned from expert plans, then PPO; checkpoint picked on seeds 0 to 15. On 32 unseen scenarios it saves 34.3% of do-nothing delay (rule planner 31.1%). Norms for 16 to 47 (`tools/norms.py`) are stricter than for 0 to 15, so not comparable. Seeds 48 and up, or non-default YEARS/RUNOUT, fall back to saving/nothing (verifier warns).
 
 Under stricter cash rules (`tools/v2.py`: emergency rebuilds only when cash allows), the reference, not retrained, falls below the rule planner (0.68 against 0.85); with maintenance 2 it scores 0.87.
 
@@ -48,4 +47,4 @@ By year 2 it names all 15 growing areas, yet never upgrades 11. Its plans barely
 - After a stop, no new projects start. Stopping the reference after 3 years scores 0.15, after 5 years 0.76.
 - Rejected actions do nothing.
 - Scores are clipped to [0, 1].
-- Replays are bit-identical on one CPU type; AMD and Intel differ by at most 0.008.
+- Replays are bit-identical per CPU type; AMD and Intel differ by at most 0.008.
