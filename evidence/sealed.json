@@ -1,0 +1,90 @@
+{
+ "local": {
+  "meta": {
+   "script": "tools/sealed.py",
+   "command": "OPENCODE=1 python3 tools/sealed.py",
+   "seeds": [
+    0
+   ],
+   "date": "2026-11-15",
+   "machine": "nib AMD EPYC-Rome Processor",
+   "probe": [
+    "https://github.com",
+    "https://raw.githubusercontent.com",
+    "https://pypi.org/simple/numpy/",
+    "https://registry.npmjs.org",
+    "http://1.1.1.1",
+    "http://mcp-server:8000/mcp"
+   ]
+  },
+  "oracle": {
+   "reward": 1.0,
+   "error": null
+  },
+  "nop": {
+   "reward": 0.0001041654233385066,
+   "error": null
+  },
+  "probe": {
+   "reward": 1.0,
+   "error": null,
+   "hosts": {
+    "https://github.com": "000",
+    "https://raw.githubusercontent.com": "000",
+    "https://pypi.org/simple/numpy/": "000",
+    "https://registry.npmjs.org": "000",
+    "http://1.1.1.1": "000",
+    "http://mcp-server:8000/mcp": "406"
+   }
+  },
+  "opencode": {
+   "error": "AgentAuthenticationError",
+   "installed": true,
+   "reached_api": true
+  }
+ },
+ "espoo-ci": {
+  "meta": {
+   "script": "tools/sealed.py",
+   "command": "OPENCODE=1 python3 tools/sealed.py",
+   "seeds": [
+    0
+   ],
+   "date": "2026-11-15",
+   "machine": "espoo-ci INTEL(R) XEON(R) PLATINUM 8573C",
+   "probe": [
+    "https://github.com",
+    "https://raw.githubusercontent.com",
+    "https://pypi.org/simple/numpy/",
+    "https://registry.npmjs.org",
+    "http://1.1.1.1",
+    "http://mcp-server:8000/mcp"
+   ]
+  },
+  "oracle": {
+   "reward": 1.0,
+   "error": null
+  },
+  "nop": {
+   "reward": 0.0,
+   "error": null
+  },
+  "probe": {
+   "reward": 1.0,
+   "error": null,
+   "hosts": {
+    "https://github.com": "000",
+    "https://raw.githubusercontent.com": "000",
+    "https://pypi.org/simple/numpy/": "000",
+    "https://registry.npmjs.org": "000",
+    "http://1.1.1.1": "000",
+    "http://mcp-server:8000/mcp": "406"
+   }
+  },
+  "opencode": {
+   "error": "AgentAuthenticationError",
+   "installed": true,
+   "reached_api": true
+  }
+ }
+}
