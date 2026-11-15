@@ -1,0 +1,1411 @@
+{
+"meta": {
+"script": "tools/norms.py",
+"command": "python tools/norms.py --seeds 16-47 --jobs 29",
+"seeds": [
+0,
+1,
+2,
+3,
+4,
+5,
+6,
+7,
+8,
+9,
+10,
+11,
+12,
+13,
+14,
+15,
+16,
+17,
+18,
+19,
+20,
+21,
+22,
+23,
+24,
+25,
+26,
+27,
+28,
+29,
+30,
+31,
+32,
+33,
+34,
+35,
+36,
+37,
+38,
+39,
+40,
+41,
+42,
+43,
+44,
+45,
+46,
+47
+],
+"date": "2026-11-15",
+"machine": "espoo-vm, Intel Xeon Platinum 8573C",
+"cpu_seconds_16_47": 70916,
+"frozen_procedure": "seeds 0-15: D_nothing = do-nothing (maintenance 1). D_best = minimum over: single-value orderings (6 truncations x maintenance 1/2), random/greedy/greedy5/reactive x maintenance 1/2, reference planner versions, learned-policy deploy logs and harbor runs replayed, then 2+1 rounds of local search; seeds 2, 7, 13 take a loss reconstructed from a 3-decimal score (replay of that plan in 'replay')",
+"new_procedure": "tools/norms.py: same candidate families with the current reference planner (late False/True) and the current deployed rl/policy.py, 3 rounds of local search with rng [1, seed]",
+"check": "seeds 0-2 recomputed with tools/norms.py: D_nothing bit-identical; D_best differs (see recomputed)"
+},
+"seeds": {
+"0": {
+"nothing": 172693245.76250768,
+"best": 82361721.84000106,
+"source": "learned policy (deploy log replay)",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+6,
+"kiviruukki-access"
+]
+],
+"maint": 1,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)",
+"recomputed": {
+"nothing": 172693245.76250768,
+"best": 82045980.6971493,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"olari-link"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+6,
+"kiviruukki-access"
+]
+],
+"maint": 1
+}
+},
+"1": {
+"nothing": 139697184.13227642,
+"best": 83619417.99287271,
+"source": "single-value order",
+"plan": [
+[
+2,
+"kera-access"
+],
+[
+5,
+"kiviruukki-access"
+]
+],
+"maint": 1,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)",
+"recomputed": {
+"nothing": 139697184.13227642,
+"best": 82005639.26251625,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"keha2-turunvayla-junction"
+],
+[
+3,
+"kera-access"
+],
+[
+6,
+"kiviruukki-access"
+]
+],
+"maint": 1
+}
+},
+"2": {
+"nothing": 92876552.51071389,
+"best": 70937440.48593712,
+"source": "reference planner, first version (plan/planner.py, maintenance 2); loss reconstructed from a score rounded to 3 decimals",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"vermo-access"
+],
+[
+8,
+"espoon-access"
+]
+],
+"maint": 2,
+"replay": 70943045.8416171,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)",
+"recomputed": {
+"nothing": 92876552.51071389,
+"best": 71955527.94397382,
+"source": "local search",
+"plan": [
+[
+0,
+"keha2-turunvayla-junction"
+],
+[
+1,
+"mankkaa-link"
+],
+[
+1,
+"olari-link"
+],
+[
+3,
+"leppavaara-access"
+],
+[
+7,
+"espoon-access"
+]
+],
+"maint": 2
+}
+},
+"3": {
+"nothing": 121915412.299389,
+"best": 82720111.67756042,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"keha2-turunvayla-junction"
+],
+[
+3,
+"kera-access"
+],
+[
+6,
+"otaniemi-access"
+]
+],
+"maint": 1,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"4": {
+"nothing": 141516293.49809262,
+"best": 69079841.48494405,
+"source": "local search",
+"plan": [
+[
+1,
+"mankkaa-link"
+],
+[
+2,
+"otaniemi-access"
+],
+[
+6,
+"espoon-access"
+],
+[
+8,
+"espoonvayla-2x2"
+]
+],
+"maint": 2,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"5": {
+"nothing": 91941525.91890106,
+"best": 72986225.18134154,
+"source": "single-value order",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+7,
+"finnoo-access"
+]
+],
+"maint": 2,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"6": {
+"nothing": 88601223.62373453,
+"best": 64783739.362659924,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"mankkaa-link"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+7,
+"espoon-access"
+]
+],
+"maint": 2,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"7": {
+"nothing": 124936988.12371625,
+"best": 79703234.96832964,
+"source": "reference planner, first version (plan/planner.py, maintenance 2); loss reconstructed from a score rounded to 3 decimals",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"kiviruukki-access"
+],
+[
+8,
+"finnoo-access"
+]
+],
+"maint": 2,
+"replay": 79709741.9153163,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"8": {
+"nothing": 184458417.0518657,
+"best": 90491517.77563888,
+"source": "local search",
+"plan": [
+[
+0,
+"keha2-turunvayla-junction"
+],
+[
+1,
+"olari-link"
+],
+[
+2,
+"mankkaa-link"
+],
+[
+3,
+"kiviruukki-access"
+],
+[
+7,
+"kera-access"
+]
+],
+"maint": 2,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"9": {
+"nothing": 85658790.7554073,
+"best": 71212582.4670548,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"olari-link"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+6,
+"espoonlahti-access"
+]
+],
+"maint": 1,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"10": {
+"nothing": 90277267.04766078,
+"best": 71751876.35327125,
+"source": "single-value order",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"finnoo-access"
+],
+[
+8,
+"otaniemi-access"
+]
+],
+"maint": 2,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"11": {
+"nothing": 186838912.06943354,
+"best": 73107283.53211798,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+5,
+"mankkaa-link"
+],
+[
+7,
+"espoonlahti-access"
+]
+],
+"maint": 2,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"12": {
+"nothing": 132266835.12170187,
+"best": 77158260.72916034,
+"source": "local search",
+"plan": [
+[
+2,
+"kera-access"
+],
+[
+5,
+"kiviruukki-access"
+],
+[
+6,
+"kivenlahti-bridge"
+]
+],
+"maint": 1,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"13": {
+"nothing": 173237824.46313605,
+"best": 87597314.91989669,
+"source": "reference planner, first version (plan/planner.py, maintenance 2); loss reconstructed from a score rounded to 3 decimals",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"kiviruukki-access"
+],
+[
+8,
+"finnoo-access"
+]
+],
+"maint": 2,
+"replay": 87599542.56090525,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"14": {
+"nothing": 158061264.46402964,
+"best": 76522992.534633,
+"source": "local search",
+"plan": [
+[
+0,
+"mankkaa-link"
+],
+[
+2,
+"otaniemi-access"
+],
+[
+5,
+"kera-access"
+]
+],
+"maint": 1,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"15": {
+"nothing": 143064453.71695697,
+"best": 79581689.76538335,
+"source": "learned policy (deploy log replay)",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"kera-access"
+],
+[
+7,
+"finnoo-access"
+]
+],
+"maint": 2,
+"frozen": true,
+"procedure": "frozen 2026-11-14 (ad hoc candidate pool, see meta.frozen_procedure)"
+},
+"16": {
+"nothing": 76967363.48710999,
+"best": 64788615.29243767,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"otaniemi-access"
+],
+[
+8,
+"kera-access"
+]
+],
+"maint": 2,
+"candidates": 147,
+"seconds": 2437,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"17": {
+"nothing": 154887184.67269903,
+"best": 78927074.64462847,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"keha2-turunvayla-junction"
+],
+[
+3,
+"kera-access"
+],
+[
+6,
+"kiviruukki-access"
+]
+],
+"maint": 1,
+"candidates": 143,
+"seconds": 2359,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"18": {
+"nothing": 85292680.3950477,
+"best": 68644067.43515864,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+7,
+"leppavaara-access"
+]
+],
+"maint": 2,
+"candidates": 128,
+"seconds": 2221,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"19": {
+"nothing": 108696122.70365213,
+"best": 65354434.12419083,
+"source": "single-value order",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+7,
+"kiviruukki-access"
+]
+],
+"maint": 2,
+"candidates": 128,
+"seconds": 2339,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"20": {
+"nothing": 91055497.31023712,
+"best": 68697196.78209092,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+5,
+"olari-link"
+],
+[
+7,
+"kiviruukki-access"
+]
+],
+"maint": 2,
+"candidates": 144,
+"seconds": 2393,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"21": {
+"nothing": 82013669.19844313,
+"best": 66864626.31482149,
+"source": "single-value order",
+"plan": [
+[
+0,
+"kauklahdenvayla-2x2"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+7,
+"leppavaara-access"
+]
+],
+"maint": 2,
+"candidates": 128,
+"seconds": 2174,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"22": {
+"nothing": 202254374.03650174,
+"best": 111582136.822499,
+"source": "single-value order",
+"plan": [
+[
+0,
+"keha2-turunvayla-junction"
+],
+[
+2,
+"kera-access"
+],
+[
+5,
+"kiviruukki-access"
+]
+],
+"maint": 1,
+"candidates": 128,
+"seconds": 2374,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"23": {
+"nothing": 144158388.91207224,
+"best": 79686985.13912906,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"kiviruukki-access"
+],
+[
+6,
+"mankkaa-link"
+],
+[
+8,
+"leppavaara-access"
+]
+],
+"maint": 2,
+"candidates": 143,
+"seconds": 2006,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"24": {
+"nothing": 152259748.19614795,
+"best": 82741350.11604317,
+"source": "learned policy",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"kera-access"
+],
+[
+6,
+"kiviruukki-access"
+]
+],
+"maint": 1,
+"candidates": 128,
+"seconds": 1896,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"25": {
+"nothing": 126757047.91315317,
+"best": 71317848.76192248,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"keha2-turunvayla-junction"
+],
+[
+3,
+"kera-access"
+],
+[
+6,
+"otaniemi-access"
+]
+],
+"maint": 1,
+"candidates": 138,
+"seconds": 2441,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"26": {
+"nothing": 214952309.81612486,
+"best": 83336394.78319547,
+"source": "local search",
+"plan": [
+[
+0,
+"keha2-turunvayla-junction"
+],
+[
+2,
+"otaniemi-access"
+],
+[
+5,
+"kera-access"
+]
+],
+"maint": 1,
+"candidates": 122,
+"seconds": 2354,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"27": {
+"nothing": 206293082.9090324,
+"best": 82865853.80633879,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"olari-link"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+6,
+"kiviruukki-access"
+]
+],
+"maint": 1,
+"candidates": 135,
+"seconds": 2165,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"28": {
+"nothing": 161593341.73534155,
+"best": 74299046.17550221,
+"source": "local search",
+"plan": [
+[
+0,
+"olari-link"
+],
+[
+2,
+"otaniemi-access"
+],
+[
+5,
+"kera-access"
+]
+],
+"maint": 1,
+"candidates": 110,
+"seconds": 2153,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"29": {
+"nothing": 88698453.757884,
+"best": 66883949.53596216,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"otaniemi-access"
+],
+[
+8,
+"espoonlahti-access"
+]
+],
+"maint": 2,
+"candidates": 147,
+"seconds": 2394,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"30": {
+"nothing": 81663551.90697365,
+"best": 62270316.84800822,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+2,
+"mankkaa-link"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+6,
+"leppavaara-access"
+]
+],
+"maint": 1,
+"candidates": 144,
+"seconds": 2419,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"31": {
+"nothing": 83775201.59013644,
+"best": 62742532.84807879,
+"source": "learned policy",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+6,
+"leppavaara-access"
+]
+],
+"maint": 1,
+"candidates": 128,
+"seconds": 2363,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"32": {
+"nothing": 105270103.98893067,
+"best": 70143320.35724497,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"mankkaa-link"
+],
+[
+3,
+"kera-access"
+],
+[
+6,
+"otaniemi-access"
+]
+],
+"maint": 1,
+"candidates": 136,
+"seconds": 2355,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"33": {
+"nothing": 84110335.51598303,
+"best": 67562177.47162648,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"otaniemi-access"
+],
+[
+6,
+"olari-link"
+],
+[
+8,
+"finnoo-access"
+]
+],
+"maint": 2,
+"candidates": 160,
+"seconds": 2461,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"34": {
+"nothing": 130579568.10500537,
+"best": 70356166.0837325,
+"source": "local search",
+"plan": [
+[
+0,
+"kauklahdenvayla-2x2"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+5,
+"olari-link"
+],
+[
+7,
+"leppavaara-access"
+]
+],
+"maint": 2,
+"candidates": 144,
+"seconds": 2450,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"35": {
+"nothing": 252321303.8800688,
+"best": 89031537.02744906,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"olari-link"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+6,
+"kiviruukki-access"
+]
+],
+"maint": 1,
+"candidates": 141,
+"seconds": 2331,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"36": {
+"nothing": 91584488.67636018,
+"best": 71879653.33772896,
+"source": "local search",
+"plan": [
+[
+0,
+"keha2-turunvayla-junction"
+],
+[
+0,
+"olari-link"
+],
+[
+1,
+"mankkaa-link"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+7,
+"espoon-access"
+]
+],
+"maint": 2,
+"candidates": 158,
+"seconds": 2523,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"37": {
+"nothing": 111010109.27118683,
+"best": 76697517.99267606,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"kera-access"
+],
+[
+5,
+"keha2-turunvayla-junction"
+],
+[
+7,
+"leppavaara-access"
+]
+],
+"maint": 2,
+"candidates": 136,
+"seconds": 2332,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"38": {
+"nothing": 78490483.65234807,
+"best": 65098027.62088797,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"mankkaa-link"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+7,
+"leppavaara-access"
+]
+],
+"maint": 2,
+"candidates": 128,
+"seconds": 2266,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"39": {
+"nothing": 84208569.88861461,
+"best": 69162650.29279482,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"otaniemi-access"
+],
+[
+6,
+"mankkaa-link"
+],
+[
+8,
+"espoonlahti-access"
+]
+],
+"maint": 2,
+"candidates": 151,
+"seconds": 2428,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"40": {
+"nothing": 149745352.9667508,
+"best": 74480794.039755,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"mankkaa-link"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+7,
+"leppavaara-access"
+]
+],
+"maint": 2,
+"candidates": 135,
+"seconds": 2344,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"41": {
+"nothing": 162858693.34502482,
+"best": 98124663.9687384,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"keha2-turunvayla-junction"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+6,
+"kiviruukki-access"
+]
+],
+"maint": 1,
+"candidates": 136,
+"seconds": 2315,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"42": {
+"nothing": 110897158.54206897,
+"best": 78447830.04926546,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"mankkaa-link"
+],
+[
+3,
+"kera-access"
+],
+[
+6,
+"kiviruukki-access"
+]
+],
+"maint": 1,
+"candidates": 138,
+"seconds": 2287,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"43": {
+"nothing": 94344781.95168422,
+"best": 73134696.31372535,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"finnoo-access"
+],
+[
+8,
+"otaniemi-access"
+]
+],
+"maint": 2,
+"candidates": 148,
+"seconds": 2360,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"44": {
+"nothing": 107473779.99444854,
+"best": 77967296.28257783,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+0,
+"kauklahdenvayla-2x2"
+],
+[
+4,
+"finnoo-access"
+],
+[
+6,
+"keha2-turunvayla-junction"
+],
+[
+8,
+"espoonlahti-access"
+]
+],
+"maint": 2,
+"candidates": 161,
+"seconds": 2361,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"45": {
+"nothing": 121701654.91699506,
+"best": 70555690.57606609,
+"source": "local search",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+1,
+"keha2-turunvayla-junction"
+],
+[
+3,
+"kera-access"
+],
+[
+6,
+"otaniemi-access"
+]
+],
+"maint": 1,
+"candidates": 135,
+"seconds": 1336,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"46": {
+"nothing": 178708770.02563402,
+"best": 76808402.91317932,
+"source": "local search",
+"plan": [
+[
+0,
+"keha2-turunvayla-junction"
+],
+[
+2,
+"otaniemi-access"
+],
+[
+5,
+"kera-access"
+]
+],
+"maint": 1,
+"candidates": 124,
+"seconds": 1146,
+"frozen": false,
+"procedure": "tools/norms.py"
+},
+"47": {
+"nothing": 81414328.65481062,
+"best": 63717508.44324492,
+"source": "single-value order",
+"plan": [
+[
+0,
+"espoonvayla-2x2"
+],
+[
+3,
+"otaniemi-access"
+],
+[
+7,
+"kera-access"
+]
+],
+"maint": 2,
+"candidates": 128,
+"seconds": 1133,
+"frozen": false,
+"procedure": "tools/norms.py"
+}
+}
+}
