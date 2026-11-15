@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import matplotlib
@@ -481,6 +482,74 @@ def norms_evidence(d):
              normsSrcSingle=src("single-value order"), normsSrcLearned=src("learned policy"))
 
 
+def letters(x):
+    return "".join(w.title() for w in re.split("[^a-zA-Z]+", str(x)) if w)
+
+
+def agent_summary(runs, ref, sfx):
+    sc = [r["score"] for r in runs]
+    m, lo, hi = boot(sc)
+    paired_runs = [(ref[str(r["seed"])], r["score"]) for r in runs if str(r["seed"]) in ref]
+    by_seed = {}
+    for r in runs:
+        by_seed.setdefault(str(r["seed"]), []).append(r["score"])
+    seeds = sorted((s for s in by_seed if s in ref), key=int)
+    w, n, sp, wp = paired([ref[s] for s in seeds], [np.mean(by_seed[s]) for s in seeds]) if seeds else (0, 0, 1.0, 1.0)
+    M.update({f"agentRuns{sfx}": str(len(sc)), f"agentMeanAll{sfx}": f"{m:.3f}", f"agentCIAll{sfx}": f"{lo:.3f}--{hi:.3f}",
+              f"agentWorstRun{sfx}": f"{min(sc):.3f}", f"agentBestRun{sfx}": f"{max(sc):.3f}",
+              f"refWinsRuns{sfx}": f"{sum(a > b for a, b in paired_runs)}/{len(paired_runs)}", f"refWinsSeeds{sfx}": f"{w}/{n}", f"agentSignPAll{sfx}": pf(sp)})
+    return f"{len(sc)} & {m:.3f} [{lo:.3f}, {hi:.3f}] & {min(sc):.3f} & {max(sc):.3f} & {sum(a > b for a, b in paired_runs)}/{len(paired_runs)} & {w}/{n} & {pf(sp)}"
+
+
+def agent_runs(rows):
+    if not rows:
+        return
+    (HERE / "agent.tex").write_text("".join(f"{r['who']} & {r['seed']} & {r['delay'] / 1e6:.1f} & {r['score']:.3f} \\\\\n" for r in rows))
+    ref = {str(r["seed"]): r["score"] for r in rows if r["who"] == "reference"}
+    groups = {}
+    for r in rows:
+        if r["who"] != "reference":
+            groups.setdefault((r.get("model", r["who"]), r.get("variant", "base")), []).append(r)
+    base = [r for (m, v), g in groups.items() if v == "base" for r in g]
+    out = []
+    if base:
+        agent_summary(base, ref, "")
+    for (m, v), g in sorted(groups.items()):
+        sfx = letters(m) + ("" if v == "base" else letters(v))
+        out.append(f"\\texttt{{{m}}} & {v} & " + agent_summary(g, ref, sfx) + " \\\\")
+    (HERE / "agentruns.tex").write_text("\n".join(out) + "\n")
+    ab = [(k, g) for k, g in groups.items() if k[1] not in ("base",) and not k[1].startswith("redteam")]
+    if ab:
+        b = {}
+        for (m, v), g in groups.items():
+            if v == "base":
+                b[m] = np.mean([r["score"] for r in g])
+        lines = []
+        for (m, v), g in sorted(ab):
+            mm, lo, hi = boot([r["score"] for r in g])
+            d = mm - b[m] if m in b else None
+            lines.append(f"\\texttt{{{m}}} & {v} & {len(g)} & {mm:.3f} [{lo:.3f}, {hi:.3f}] & {neg(d) if d is not None else '--'} \\\\")
+            M[f"ablation{letters(m)}{letters(v)}"] = f"{mm:.3f}"
+        (HERE / "ablations.tex").write_text("\n".join(lines) + "\n")
+    red = [r for (m, v), g in groups.items() if v.startswith("redteam") for r in g]
+    if red:
+        sc = [r.get("harbor_reward", r["score"]) for r in red]
+        M.update(redteamMean=f"{np.mean(sc):.3f}", redteamBest=f"{max(sc):.3f}", redteamRuns=str(len(sc)))
+        (HERE / "redteam.tex").write_text("".join(f"{r['job']} & {r['seed']} & {r['score']:.3f} & {r.get('harbor_reward', float('nan')):.3f} \\\\\n" for r in red))
+
+
+def rules_v2(d):
+    rows = []
+    for name, v in d.get("methods", {}).items():
+        sc = v.get("score") or v.get("values") or []
+        if sc:
+            m, lo, hi = boot(sc)
+            rows.append(f"{name} & {m:.3f} [{lo:.3f}, {hi:.3f}] \\\\")
+            M[f"rulesV{letters(name)}"] = f"{m:.3f}"
+    if rows:
+        (HERE / "rules_v2.tex").write_text("\n".join(rows) + "\n")
+
+
 def evidence():
     f = EVID / "test.json"
     if f.exists():
@@ -494,10 +563,9 @@ def evidence():
     for name in ("test", "exploits", "failures", "counterfactual", "grpo", "norms"):
         if not (EVID / f"{name}.json").exists():
             print("missing", f"evidence/{name}.json")
-    agents = sorted(EVID.glob("*/plan.json"))
-    if agents:
-        rows = [load(p) for p in agents]
-        (HERE / "agent.tex").write_text("".join(f"{r['who']} & {r['seed']} & {r['delay'] / 1e6:.1f} & {r['score']:.3f} \\\\\n" for r in rows))
+    agent_runs([load(p) | dict(job=p.parent.name) for p in sorted(EVID.glob("*/plan.json"))])
+    if (EVID / "rules_v2.json").exists():
+        rules_v2(load(EVID / "rules_v2.json"))
 
 
 def main():
