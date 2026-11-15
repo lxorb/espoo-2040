@@ -391,11 +391,40 @@ def counterfactual(d):
     (HERE / "counterfactual.tex").write_text("\n".join(rows) + "\n")
 
 
+def exploits(d):
+    st, r = d["strategies"], d["strategies"]["reference"]
+    sm = lambda k: np.mean(st[k]["score"])
+    w = st["reference-maintain-0"]["wins_over_ref"]
+    n = len(st["reference-maintain-0"]["score"])
+    best = max((v["mean"], k) for k, v in st.items() if not k.startswith(("reference", "stop", "runout", "forecast", "agent")))
+    M.update(ExploitRefMean=f"{r['mean']:.3f}", ExploitRefCI=f"{r['ci'][0]:.3f}--{r['ci'][1]:.3f}",
+             ExploitPlanDoneYear=str(int(np.median(list(d["plan_complete_year"].values())))),
+             ExploitFirstNegative=str(int(np.median(r["first_negative"])) + 1), ExploitNothingFirstNegative=str(int(np.median(st["nothing"]["first_negative"])) + 1),
+             ExploitStopSevenGap="0" if st["stop-7"]["mean"] == r["mean"] else neg(st["stop-7"]["mean"] - r["mean"]), ExploitStopThree=f"{st['stop-3']['mean']:.3f}", ExploitStopFive=f"{st['stop-5']['mean']:.3f}",
+             ExploitMaintZeroWins=str(w), ExploitMaintZeroN=str(n), ExploitMaintZeroGap=neg(sm("reference-maintain-0") - sm("reference"), "{:.4f}"),
+             ExploitMaintZeroP=f"{binomtest(w, n, 0.5, alternative='greater').pvalue:.3f}", ExploitMaintTwoGap=("+" if sm("reference-maintain-2") > sm("reference") else "") + neg(sm("reference-maintain-2") - sm("reference"), "{:.4f}"),
+             ExploitRefDebt=neg(np.mean(r["end_cash"]), "{:.1f}"), ExploitNothingDebt=neg(np.mean(st["nothing"]["end_cash"]), "{:.1f}"),
+             ExploitBlindAccess=f"{st['blind-access-m0']['mean']:.3f}", ExploitBoomAccess=f"{st['boom-access-m0']['mean']:.3f}", ExploitBestNonRef=f"{best[0]:.3f}",
+             ExploitRefOverOne=str(sum(x > 1 for x in r["score"])), ExploitAcceptedBad=str(len({a for v in st.values() for a in v["accepted_bad"]})))
+    rows, keys = [], list(st)
+    i = 0
+    while i < len(keys):
+        k = keys[i]
+        j = i
+        while k.startswith("stop-") and j + 1 < len(keys) and keys[j + 1].startswith("stop-") and st[keys[j + 1]]["mean"] == st[k]["mean"]:
+            j += 1
+        name = f"stop after {k[5:]}" + (f" to {keys[j][5:]}" if j > i else "") + " years" if k.startswith("stop-") else k
+        v = st[k]
+        rows.append(f"\\texttt{{{name}}} & {v['mean']:.3f} & {v['max']:.3f} & {v['guard'] or '--'} \\\\")
+        i = j + 1
+    (HERE / "exploits.tex").write_text("\n".join(rows) + "\n")
+
+
 def evidence():
     f = EVID / "test.json"
     if f.exists():
         test_tables(load(f))
-    for name, fn in (("failures", failures), ("counterfactual", counterfactual)):
+    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits)):
         if (EVID / f"{name}.json").exists():
             fn(load(EVID / f"{name}.json"))
     if (EVID / "failures.json").exists():

@@ -12,11 +12,11 @@ Needs Docker, Harbor 0.25 and `OPENAI_API_KEY`.
 SEED=0 ./eval.sh
 ```
 
-It runs the reference, three agent runs (`MODEL`), do nothing and an early stop.
+It runs the reference, three agent runs, do nothing and an early stop.
 
 ## Task
 
-Each year the agent starts up to two of 22 road projects and picks maintenance 0, 1 or 2, with 40 MEUR income. Two or three of ten areas grow fast; which ones shows only in `get_state`. Four MCP tools: `get_state`, `list_projects`, `forecast` (4 per year, 3 years ahead), `commit_year`. Score: total delay over 20 years, do nothing 0, best known plan 1. Rules: `task/instruction.md`, `sim/`.
+Each year the agent starts up to two of 22 road projects and picks maintenance 0, 1 or 2, with 40 MEUR income. Two or three of ten areas grow fast, visible only in `get_state`. Four MCP tools: `get_state`, `list_projects`, `forecast` (4 per year, 3 years ahead), `commit_year`. Score: total delay over 20 years, do nothing 0, best known plan 1. Rules: `task/instruction.md`, `sim/`.
 
 `data/catalogue.json` is hand-made; its old generator could not rebuild it and was removed (`f45ca44`). Twelve projects follow real Espoo plans; only one has a source (Kehä II and Turunväylä junction, espoo.oncloudos.com/kokous/20231048-15.PDF). Costs come from road length. The ten access upgrades are made up.
 
@@ -29,7 +29,7 @@ One agent run per seed, scored on Intel (`evidence/failures.json`):
 | Reference | 1.00 | 1.00 | 0.91 | 0.99 | 0.98 | 0.97 |
 | gpt-6.1-sol | 0.52 | 0.60 | 0.87 | 0.93 | 0.92 | 0.77 |
 
-On seeds 2 to 4 the lead is small (0.03 to 0.06); five runs is few.
+On seeds 2 to 4 the lead is small (0.03 to 0.06); five runs are few.
 
 Seeds 0 to 15: learned policy 0.97, rule planner 0.84, Gemma 3 270M after GRPO 0.83 (from 0.19, but one plan for all scenarios), reactive rule 0.56, random 0.15.
 
@@ -43,9 +43,9 @@ By year 2 it names all 15 growing areas, yet never upgrades 11. Its plans barely
 
 - A separate verifier replays the plan and scores it (`task/tests/test.sh`). It logs `replay_off`, the gap to the live run, outside the reward.
 - Do nothing scores 0.
-- After a stop, the remaining years get no new projects.
-- Rejected actions cost nothing and do nothing.
-- Scores are clipped to 0 to 1.
+- After a stop, the remaining years get no new projects. Stopping the reference after 3 years scores 0.15, after 5 years 0.76.
+- Rejected actions do nothing.
+- Scores are clipped to [0, 1].
 - Replays are bit-identical on one CPU type; AMD and Intel scores differ by at most 0.008.
 
 ## Layout
