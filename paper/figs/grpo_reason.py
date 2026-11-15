@@ -18,7 +18,8 @@ TRACE_SEEDS = [0, 1]  # fixed before looking at any output
 RATE_EUR_H = 1.70  # assumed Verda on-demand price for 1x RTX PRO 6000 (EUR per GPU hour); replace with the invoice rate
 RUNS_ORDER = [("1b-think-anon", "ThinkAnon", "1B think + anon"), ("1b-think-named", "ThinkNamed", "1B think + named"),
               ("1b-nothink-anon", "NothinkAnon", "1B no-think + anon"), ("1b-nothink-named", "NothinkNamed", "1B no-think + named"),
-              ("1b-think-anon-long", "ThinkAnonLong", "1B think + anon, 100 steps"), ("4b-think-anon", "FourThinkAnon", "4B think + anon")]
+              ("1b-think-anon-long", "ThinkAnonLong", "1B think + anon, 100 steps"), ("4b-think-anon", "FourThinkAnon", "4B think + anon"),
+              ("4b-think-anon-s1", "FourThinkAnonSeedOne", "4B think + anon, seed 1")]
 KEEP = ("score", "frac", "sampled_score", "sampled_frac", "valid", "sampled_valid", "boom_hit", "boom_rank", "entropy", "sample_reward_std", "distinct",
         "n_access", "ntok", "sens_shuffle", "sens_zero", "sens_swap", "faithful", "swap_plan_new", "swap_think_new", "recall", "precision",
         "arith_share", "arith_correct", "plan_in_think", "think_in_plan")
@@ -98,7 +99,7 @@ def build(M):
     runs = {n: D["runs"][n] for n, _, _ in RUNS_ORDER if n in D["runs"]}
     tag = {n: t for n, t, _ in RUNS_ORDER}
     lab = {n: l for n, _, l in RUNS_ORDER}
-    col = {"1b-think-anon": "#c2185b", "1b-think-named": "#f48fb1", "1b-nothink-anon": "#1565c0", "1b-nothink-named": "#90caf9", "1b-think-anon-long": "#6a1b9a", "4b-think-anon": "#2e7d32"}
+    col = {"1b-think-anon": "#c2185b", "1b-think-named": "#f48fb1", "1b-nothink-anon": "#1565c0", "1b-nothink-named": "#90caf9", "1b-think-anon-long": "#6a1b9a", "4b-think-anon": "#2e7d32", "4b-think-anon-s1": "#81c784"}
     grd = json.loads((HERE / "data" / "grpo.json").read_text())
     norms = json.loads((ROOT / "sim" / "norms.json").read_text())
 
@@ -106,7 +107,7 @@ def build(M):
         return max(r["evals"], key=lambda e: (e["score"], e["step"]))
 
     # --- macros per run
-    hours_total = 0.0
+    hours_total, RES = 0.0, {}
     for n, r in runs.items():
         t, z, e0, b = tag[n], r["evals"][-1], r["evals"][0], best(r)
         sc = boot([s["score"] for s in z["seeds"]])
@@ -127,12 +128,15 @@ def build(M):
             M.update({f"grpo{t}SwapNew": fmt(z["swap_new"]), f"grpo{t}SwapOld": fmt(z["swap_old"]),
                       f"grpo{t}SwapNewZero": fmt(e0.get("swap_new")), f"grpo{t}SwapOldZero": fmt(e0.get("swap_old"))})
         ref = D["refs"].get("random-" + ("anon" if r["args"]["anon"] else "named"))
-        te = D["test"].get(f"{n}|final|{z['step']}")
-        if ref and te:
-            from scipy.stats import binomtest
-            d_ = np.array([s["frac"] - ref[str(s["seed"])]["frac"] for s in te["seeds"]])
-            w, l = int((d_ > 0).sum()), int((d_ < 0).sum())
-            M.update({f"grpo{t}WinsRandomTest": f"{w}/{len(d_)}", f"grpo{t}SignPRandomTest": f"{binomtest(w, w + l, alternative='greater').pvalue:.2g}" if w + l else "1"})
+        for k, e in (("", z), ("Best", b)):
+            te = D["test"].get(f"{n}|{'final' if not k else 'best'}|{e['step']}")
+            if ref and te:
+                from scipy.stats import binomtest
+                d_ = np.array([s["frac"] - ref[str(s["seed"])]["frac"] for s in te["seeds"]])
+                w, l = int((d_ > 0).sum()), int((d_ < 0).sum())
+                pv = binomtest(w, w + l, alternative="greater").pvalue if w + l else 1.0
+                M.update({f"grpo{t}WinsRandomTest{k}": f"{w}/{len(d_)}", f"grpo{t}SignPRandomTest{k}": f"{pv:.2g}"})
+                RES.setdefault(n, {})[k or "Final"] = dict(frac=float(np.mean([s["frac"] for s in te["seeds"]])), p=pv, val=e["score"], step=e["step"])
         for k, e in (("Final", z), ("Best", b)):
             te = D["test"].get(f"{n}|{k.lower()}|{e['step']}")
             if te:
@@ -159,6 +163,16 @@ def build(M):
         if v.get("recall") is not None:
             M[nm + "Recall"] = fmt(v["recall"])
     M["grpoReasonGpuHours"] = fmt(hours_total, 1)
+    # 4B: two training seeds, pre-registered criterion (best-validation checkpoint beats random-anon lists on test, sign p < 0.05)
+    four = [RES[n] for n in ("4b-think-anon", "4b-think-anon-s1") if n in RES and "Best" in RES[n]]
+    if four:
+        for k in ("Best", "Final"):
+            v = [100 * x[k]["frac"] for x in four if k in x]
+            vs = [x[k]["val"] for x in four if k in x]
+            M.update({f"grpoFourTest{k}Mean": fmt(float(np.mean(v)), 1), f"grpoFourTest{k}Std": fmt(float(np.std(v, ddof=1)), 1) if len(v) > 1 else "--",
+                      f"grpoFourVal{k}Mean": fmt(float(np.mean(vs))), f"grpoFourVal{k}Std": fmt(float(np.std(vs, ddof=1))) if len(vs) > 1 else "--"})
+        M["grpoFourSeeds"] = str(len(four))
+        M["grpoFourCriterionPass"] = f"{sum(x['Best']['p'] < 0.05 for x in four)}/{len(four)}"
     M["grpoGpuRate"] = f"{RATE_EUR_H:.2f}"
     # run A aliases asked for by the experiment plan
     for a, b in (("grpoConst", "grpoConstVal"), ("grpoSensWarm", "grpoSensWarmShuffle"), ("grpoSensFinal", "grpoSensFinalShuffle")):
