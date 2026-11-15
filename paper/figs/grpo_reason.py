@@ -18,7 +18,7 @@ TRACE_SEEDS = [0, 1]  # fixed before looking at any output
 RATE_EUR_H = 1.70  # assumed Verda on-demand price for 1x RTX PRO 6000 (EUR per GPU hour); replace with the invoice rate
 RUNS_ORDER = [("1b-think-anon", "ThinkAnon", "1B think + anon"), ("1b-think-named", "ThinkNamed", "1B think + named"),
               ("1b-nothink-anon", "NothinkAnon", "1B no-think + anon"), ("1b-nothink-named", "NothinkNamed", "1B no-think + named"),
-              ("4b-think-anon", "FourThinkAnon", "4B think + anon")]
+              ("1b-think-anon-long", "ThinkAnonLong", "1B think + anon, 100 steps")]
 KEEP = ("score", "frac", "sampled_score", "sampled_frac", "valid", "sampled_valid", "boom_hit", "boom_rank", "entropy", "sample_reward_std", "distinct",
         "n_access", "ntok", "sens_shuffle", "sens_zero", "sens_swap", "faithful", "swap_plan_new", "swap_think_new", "recall", "precision",
         "arith_share", "arith_correct", "plan_in_think", "think_in_plan")
@@ -76,7 +76,7 @@ def build(M):
     runs = {n: D["runs"][n] for n, _, _ in RUNS_ORDER if n in D["runs"]}
     tag = {n: t for n, t, _ in RUNS_ORDER}
     lab = {n: l for n, _, l in RUNS_ORDER}
-    col = {"1b-think-anon": "#c2185b", "1b-think-named": "#f48fb1", "1b-nothink-anon": "#1565c0", "1b-nothink-named": "#90caf9", "4b-think-anon": "#6a1b9a"}
+    col = {"1b-think-anon": "#c2185b", "1b-think-named": "#f48fb1", "1b-nothink-anon": "#1565c0", "1b-nothink-named": "#90caf9", "1b-think-anon-long": "#6a1b9a"}
     grd = json.loads((HERE / "data" / "grpo.json").read_text())
     norms = json.loads((ROOT / "sim" / "norms.json").read_text())
 
