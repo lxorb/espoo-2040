@@ -11,9 +11,10 @@ from pathlib import Path
 import numpy as np
 from scipy.stats import binomtest, wilcoxon
 from sim import City
+from sim import params as P
 
 from .core import Net
-from .policy import Policy, decode, jmask, joints
+from .policy import Policy, decode, forward, jmask, joint, joints, obs
 from .train import OUT, ROOT, play, version
 
 
@@ -33,7 +34,7 @@ def baseline(name, seed, npz, maint):
     sys.path.insert(0, str(ROOT / "task" / "solution"))
     import plan
     c, rng = City(seed), np.random.default_rng(seed)
-    menu, pol = list(c.menu), Policy(npz) if name == "deploy" else None
+    menu, pol = list(c.menu), Policy(npz) if name in ("deploy", "rlcheck") else None
     proj = [dict(id=k, **{f: c.cat[k].get(f, 0) for f in ("kind", "cost", "years", "opex")}) for k in menu]
     foot = [footprint(c, c.cat[k]) for k in menu] if name == "reactive" else []
     while not c.done:
@@ -42,6 +43,11 @@ def baseline(name, seed, npz, maint):
             m, jam = np.array(c.mask(), bool), {q["id"]: q["jam"] for q in c.catalogue()}
             if name == "random":
                 acts = decode(joints(len(menu)), menu, int(rng.choice(np.flatnonzero(jmask(joints(len(menu)), m)))))
+            elif name == "rlcheck":
+                J, (A, C, _, B) = joints(len(menu)), forward(pol.W, *obs(st, [dict(q, jam=jam.get(q["id"], 0.0)) for q in proj]))
+                h = min(P.FORECAST_YEARS, c.years + c.runout - st["step"])
+                top = np.argsort(-np.where(jmask(J, m), joint(J, A, C, B), -np.inf))[:P.FORECASTS]
+                acts = decode(J, menu, min(top, key=lambda i: round(sum(r["delay"] for r in c.forecast({0: decode(J, menu, i)}, h)) / 1000)))
             elif name == "deploy":
                 acts = pol(st, [dict(q, jam=jam.get(q["id"], 0.0)) for q in proj], m)
             elif name == "planner":
@@ -54,7 +60,8 @@ def baseline(name, seed, npz, maint):
             else:
                 la, gain = 0 if name == "greedy1" else 5, []
                 for k in (k for k, v in zip(menu, m) if v):
-                    ref, d = ([r["delay"] for r in c.forecast(p, c.cat[k]["years"] + 1 + la)] for p in ({}, {0: [{"build": k}]}))
+                    h, mt = c.cat[k]["years"] + 1 + la, [] if maint is None else [{"maintain": maint}]
+                    ref, d = ([r["delay"] for r in c.forecast({y: p.get(y, []) + mt for y in range(h)}, h)] for p in ({}, {0: [{"build": k}]}))
                     gain.append(((ref[-1] - d[-1] if la == 0 else sum(ref) - sum(d)) / max(c.cat[k]["cost"], 0.1), k))
                 for g, k in sorted(gain)[::-1]:
                     if g > 0 and len(acts) < 2 and not any(c.check(acts + [{"build": k}])):
