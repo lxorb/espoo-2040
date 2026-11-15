@@ -565,7 +565,26 @@ def rules_v2(d):
     if "learned-m2" not in keys:
         rows.insert(2, f"Learned policy, maintenance 2 & {ci(ex1) if ex1 else '--'} & {lm2[0]:.3f} & {lm2[1]:.3f} & -- & -- \\\\")
     if have("v2", "learned-retrained"):
-        M.update(vTwoRetrained=f"{np.mean(per('v2', 'learned-retrained')):.3f}", vTwoRetrainedWins=str(paired(per("v2", "learned-retrained"), per("v2", "planner"))[0]))
+        for v, t in (("v1", "One"), ("v2", "Two"), ("v2e", "Twoe")):
+            if have(v, "learned-retrained"):
+                M.update({f"v{t}Retrained": f"{np.mean(per(v, 'learned-retrained')):.3f}", f"v{t}RetrainedMin": f"{min(per(v, 'learned-retrained')):.3f}",
+                          f"v{t}RetrainedWinsPlanner": str(paired(per(v, "learned-retrained"), per(v, "planner"))[0])})
+        M["vTwoRefSeedsZeroFour"] = f"{np.mean(per('v2', 'learned')[:5]):.3f}"
+    if "test" in d:
+        te = d["test"]["v2"]
+        sv = lambda k: [te[s][k]["saved"] for s in sorted(te, key=int)]
+        M.update(vTwoTestRetrainedSaved=f"{np.mean(sv('retrained')):.3f}", vTwoTestPlannerSaved=f"{np.mean(sv('planner')):.3f}",
+                 vTwoTestLearnedSaved=f"{np.mean(sv('learned')):.3f}" if all("learned" in te[s] for s in te) else "--",
+                 vTwoTestRetrainedWinsPlanner=str(paired(sv("retrained"), sv("planner"))[0]), vTwoTestN=str(len(te)))
+    if "agents" in d:
+        ag = {v: [r for r in d["agents"][v] if r.get("valid", True)] for v in d["agents"]}
+        label = lambda r: f"{r['run'].split('-s')[0]}, seed {r['seed']}"
+        by = {v: {label(r): r["score"] for r in ag[v]} for v in ag}
+        (HERE / "rules_v2_agents.tex").write_text("".join(f"{k} & " + " & ".join(neg(by[v][k]) if k in by[v] else "--" for v in ("v1", "v2", "v2e")) + " \\\\\n" for k in by["v2"]))
+        for job, t in (("gate4", "Gate"), ("a1", "Aone")):
+            sc = [r["score"] for r in ag["v2"] if r["run"].startswith(job + "-")]
+            if sc:
+                M[f"vTwoAgent{t}"] = f"{np.mean(sc):.3f}"
     (HERE / "rules_v2.tex").write_text("\n".join(rows) + "\n")
     mean = lambda v, k: np.mean(per(v, k))
     cash = lambda v: min(var[v][s]["learned"]["min_cash"] for s in var[v])

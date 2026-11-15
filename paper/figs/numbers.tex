@@ -19,32 +19,38 @@
 \newcommand{\ExploitStopFive}{0.757}
 \newcommand{\ExploitStopSevenGap}{0}
 \newcommand{\ExploitStopThree}{0.149}
-\newcommand{\agentBestRun}{0.926}
+\newcommand{\agentBestRun}{0.965}
 \newcommand{\agentBestRunGptSol}{0.926}
+\newcommand{\agentBestRunOpenaiGptSol}{0.965}
 \newcommand{\agentBoomEarly}{2}
 \newcommand{\agentBoomHits}{4}
-\newcommand{\agentCIAll}{0.616--0.915}
+\newcommand{\agentCIAll}{0.562--0.819}
 \newcommand{\agentCIAllGptSol}{0.616--0.915}
+\newcommand{\agentCIAllOpenaiGptSol}{0.440--0.809}
 \newcommand{\agentForecastMax}{38}
 \newcommand{\agentForecastMin}{28}
 \newcommand{\agentGetStateMax}{8}
 \newcommand{\agentGetStateMin}{7}
 \newcommand{\agentLostC}{73.5}
-\newcommand{\agentMeanAll}{0.770}
+\newcommand{\agentMeanAll}{0.695}
 \newcommand{\agentMeanAllGptSol}{0.770}
+\newcommand{\agentMeanAllOpenaiGptSol}{0.619}
 \newcommand{\agentMinMax}{7}
 \newcommand{\agentMinMin}{6}
 \newcommand{\agentN}{5}
-\newcommand{\agentRuns}{5}
+\newcommand{\agentRuns}{10}
 \newcommand{\agentRunsGptSol}{5}
+\newcommand{\agentRunsOpenaiGptSol}{5}
 \newcommand{\agentScoreMean}{0.77}
 \newcommand{\agentSeeds}{0 to 4}
 \newcommand{\agentSignPAll}{0.031}
 \newcommand{\agentSignPAllGptSol}{0.031}
+\newcommand{\agentSignPAllOpenaiGptSol}{0.031}
 \newcommand{\agentUsdMax}{0.43}
 \newcommand{\agentUsdMin}{0.33}
-\newcommand{\agentWorstRun}{0.519}
+\newcommand{\agentWorstRun}{0.321}
 \newcommand{\agentWorstRunGptSol}{0.519}
+\newcommand{\agentWorstRunOpenaiGptSol}{0.321}
 \newcommand{\bestPctMax}{64.7}
 \newcommand{\bestPctMin}{15.8}
 \newcommand{\cfAccessAccepted}{1/5}
@@ -280,10 +286,12 @@
 \newcommand{\nothingRatioMin}{2.0}
 \newcommand{\reactiveMOne}{0.55}
 \newcommand{\reactiveMTwo}{0.56}
-\newcommand{\refWinsRuns}{5/5}
+\newcommand{\refWinsRuns}{10/10}
 \newcommand{\refWinsRunsGptSol}{5/5}
+\newcommand{\refWinsRunsOpenaiGptSol}{5/5}
 \newcommand{\refWinsSeeds}{5/5}
 \newcommand{\refWinsSeedsGptSol}{5/5}
+\newcommand{\refWinsSeedsOpenaiGptSol}{5/5}
 \newcommand{\refoldLostC}{76.0}
 \newcommand{\refrlGap}{0.00}
 \newcommand{\refrlN}{5}
@@ -432,14 +440,33 @@
 \newcommand{\testRlWinsRandom}{32}
 \newcommand{\testRlWinsReactive}{32}
 \newcommand{\testRlWinsReactiveMOne}{32}
+\newcommand{\testRlWinsrlcheck}{32}
 \newcommand{\testRlWorst}{14.9}
 \newcommand{\testSignP}{$7.7\times 10^{-9}$}
 \newcommand{\testWilcoxonP}{$8.6\times 10^{-8}$}
+\newcommand{\testrlcheck}{10.4}
+\newcommand{\testrlcheckHi}{13.2}
+\newcommand{\testrlcheckLo}{7.9}
+\newcommand{\testrlcheckScore}{0.339}
+\newcommand{\testrlcheckScoreClip}{0.339}
+\newcommand{\testrlcheckScoreHi}{0.418}
+\newcommand{\testrlcheckScoreLo}{0.261}
+\newcommand{\testrlcheckScoreMax}{0.817}
+\newcommand{\testrlcheckScoreMin}{0.034}
+\newcommand{\testrlcheckScoreMinSeed}{23}
+\newcommand{\testrlcheckSignP}{$2.3\times 10^{-10}$}
+\newcommand{\testrlcheckWilcoxonP}{$2.3\times 10^{-10}$}
+\newcommand{\testrlcheckWorst}{1.5}
 \newcommand{\vOneLearned}{0.971}
 \newcommand{\vOneLearnedMTwoWinsPlanner}{16}
 \newcommand{\vOneLearnedWins}{16}
 \newcommand{\vOneMinCash}{$-$949}
 \newcommand{\vOnePlanner}{0.837}
+\newcommand{\vOneRetrained}{0.883}
+\newcommand{\vOneRetrainedMin}{0.524}
+\newcommand{\vOneRetrainedWinsPlanner}{11}
+\newcommand{\vTwoAgentAone}{0.550}
+\newcommand{\vTwoAgentGate}{0.735}
 \newcommand{\vTwoLearned}{0.676}
 \newcommand{\vTwoLearnedMTwo}{0.869}
 \newcommand{\vTwoLearnedMTwoWins}{16}
@@ -448,13 +475,25 @@
 \newcommand{\vTwoMinCash}{$-$11.5}
 \newcommand{\vTwoPlanner}{0.853}
 \newcommand{\vTwoPlannerWins}{13}
+\newcommand{\vTwoRefSeedsZeroFour}{0.732}
+\newcommand{\vTwoRetrained}{0.898}
+\newcommand{\vTwoRetrainedMin}{0.457}
+\newcommand{\vTwoRetrainedWinsPlanner}{10}
 \newcommand{\vTwoStopSeven}{0.744}
 \newcommand{\vTwoStopSevenWins}{11}
+\newcommand{\vTwoTestLearnedSaved}{0.274}
+\newcommand{\vTwoTestN}{32}
+\newcommand{\vTwoTestPlannerSaved}{0.327}
+\newcommand{\vTwoTestRetrainedSaved}{0.357}
+\newcommand{\vTwoTestRetrainedWinsPlanner}{25}
 \newcommand{\vTwoeLearned}{0.662}
 \newcommand{\vTwoeLearnedMTwo}{0.824}
 \newcommand{\vTwoeLearnedMTwoWinsPlanner}{7}
 \newcommand{\vTwoePlanner}{0.844}
 \newcommand{\vTwoePlannerWins}{13}
+\newcommand{\vTwoeRetrained}{0.859}
+\newcommand{\vTwoeRetrainedMin}{0.342}
+\newcommand{\vTwoeRetrainedWinsPlanner}{9}
 \newcommand{\vTwoeStopSeven}{0.740}
 \newcommand{\vTwoeStopSevenWins}{13}
 \newcommand{\valGreedyFive}{16.7}
@@ -594,6 +633,20 @@
 \newcommand{\valRlWinsRandom}{16}
 \newcommand{\valRlWinsReactive}{16}
 \newcommand{\valRlWinsReactiveMOne}{16}
+\newcommand{\valRlWinsrlcheck}{16}
 \newcommand{\valRlWorst}{16.5}
 \newcommand{\valSignP}{$1.5\times 10^{-5}$}
 \newcommand{\valWilcoxonP}{$1.5\times 10^{-5}$}
+\newcommand{\valrlcheck}{13.2}
+\newcommand{\valrlcheckHi}{17.3}
+\newcommand{\valrlcheckLo}{9.4}
+\newcommand{\valrlcheckScore}{0.396}
+\newcommand{\valrlcheckScoreClip}{0.396}
+\newcommand{\valrlcheckScoreHi}{0.519}
+\newcommand{\valrlcheckScoreLo}{0.276}
+\newcommand{\valrlcheckScoreMax}{0.853}
+\newcommand{\valrlcheckScoreMin}{0.041}
+\newcommand{\valrlcheckScoreMinSeed}{11}
+\newcommand{\valrlcheckSignP}{$1.5\times 10^{-5}$}
+\newcommand{\valrlcheckWilcoxonP}{$1.5\times 10^{-5}$}
+\newcommand{\valrlcheckWorst}{2.5}
