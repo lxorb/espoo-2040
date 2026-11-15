@@ -182,6 +182,9 @@ def analyse(r, rep, tr):
     fc = [c for c in calls if c.get("function_name") == "espoo_forecast"]
     fa = [sorted({x["build"] for v in (c.get("arguments") or {}).get("plan", {}).values() for x in v if isinstance(x, dict) and str(x.get("build", "")).endswith("-access")}) for c in fc]
     fa = [x for x in fa if x]
+    hz = [c["arguments"]["years"] for c in fc if isinstance((c.get("arguments") or {}).get("years"), int)]
+    by = sorted(P.Y0 + rep["started"][acc(a)] for a in boom if acc(a) in rep["started"])
+    fst = min(((y, k) for k, y in rep["started"].items() if k.endswith("-access")), default=None)
     return dict(job=r["job"], seed=r["seed"], who=r["who"], role=r["role"], score=rep["score"], replay_off=None if r["stored"] is None else abs(rep["delay"] - r["stored"]) / r["stored"],
                 builds=sorted(builds), boom=boom, fastest=tr["fastest"],
                 sees_acts=see, boom_upgraded=sum(s["first_upgrade"] is not None for s in see), boom_upgraded_by_2031=sum((s["first_upgrade"] or 9999) <= 2031 for s in see),
@@ -189,7 +192,12 @@ def analyse(r, rep, tr):
                 maint2_spend=m2, total_spend=total, maint2_share=m2 / total if total else None, maint_spend=sum(v["maint_spend"] for v in rep["years"]),
                 rebuild_spend=sum(v["rebuild"] for v in rep["years"]), cash_end=rep["cash_end"], split_off=rep["split_off"],
                 forecasts_with_access=len(fa) if r["steps"] else None, forecasts_access_never_started=sum(not set(x) & builds for x in fa) if r["steps"] else None,
-                calls={k: sum(c.get("function_name") == f"espoo_{k}" for c in calls) for k in ("get_state", "list_projects", "forecast", "commit_year")} if r["steps"] else None)
+                calls={k: sum(c.get("function_name") == f"espoo_{k}" for c in calls) for k in ("get_state", "list_projects", "forecast", "commit_year")} if r["steps"] else None,
+                schedule=sorted([P.Y0 + y, k] for k, y in rep["started"].items()), maint=[v["maint"] for v in plan_years],
+                first_access=None if fst is None else fst[1], first_access_year=None if fst is None else P.Y0 + fst[0],
+                first_boom_year=by[0] if by else None, second_boom_year=by[1] if len(by) > 1 else None, two_boom=int(len(by) > 1),
+                boom_in_window=sum(2028 <= y <= 2035 for y in by), forecast_horizon_mean=float(np.mean(hz)) if hz else None, forecast_horizon_max=max(hz) if hz else None,
+                forecasts=len(fc) if r["steps"] else None)
 
 
 def jaccard(rows):
@@ -213,7 +221,8 @@ def main():
     rows = [analyse(r, rep, trs[r["seed"]]) for r, rep in zip(rs, reps)]
     jac = jaccard(rows)
     keys = ["score", "jaccard_other_seeds", "boom_upgraded", "boom_upgraded_by_2031", "cash_lock_years", "cash_lock_years_no_upgrade", "boom_access_blocked_years", "boom_access_skipped_years", "maint2_years", "maint2_share", "maint2_spend", "maint_spend", "rebuild_spend", "total_spend", "cash_end",
-            "forecasts_with_access", "forecasts_access_never_started"]
+            "forecasts_with_access", "forecasts_access_never_started", "two_boom", "boom_in_window", "first_access_year", "first_boom_year", "second_boom_year",
+            "forecasts", "forecast_horizon_mean", "forecast_horizon_max"]
     summ = {"jaccard_pairs": jac}
     for role in groups(rows) + ["reference"]:
         rr = [r for r in rows if r["role"] == role]
@@ -227,6 +236,11 @@ def main():
         ag = by_seed([r for r in rows if r["role"] == g], lambda r: r["score"])
         common = sorted(set(ag) & set(rf))
         summ[f"reference_vs_{g}_score"] = paired([rf[s] for s in common], [ag[s] for s in common])
+        if g != "a1":
+            base = by_seed([r for r in rows if r["role"] == "a1"], lambda r: r["score"])
+            cm = sorted(set(ag) & set(base))
+            summ[f"{g}_vs_a1_score"] = dict(paired([ag[s] for s in cm], [base[s] for s in cm]), seeds=cm, mean=float(np.mean([ag[s] for s in cm])) if cm else None,
+                                            a1_mean=float(np.mean([base[s] for s in cm])) if cm else None, reference_mean=float(np.mean([rf[s] for s in cm])) if cm else None)
         for k in ("boom_access_blocked_years", "maint2_share", "jaccard_other_seeds"):
             a, b = (by_seed([r for r in rows if r["role"] == x], lambda r: r[k]) for x in (g, "reference"))
             summ[f"{g}_gt_reference_{k}"] = paired([a[s] for s in common], [b[s] for s in common])

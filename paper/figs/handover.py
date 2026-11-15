@@ -26,7 +26,7 @@ def runs():
     out = []
     for p in sorted(EV.glob("*/plan.json")) + sorted(EV.glob("*/*/plan.json")):
         d = load(p)
-        if d["who"] != "reference" and d.get("valid") is not False:
+        if d["who"] != "reference" and d.get("valid") is not False and str(p.parent.relative_to(EV)).split("-s")[0] in ("a1", "gate4"):
             out.append(dict(job=str(p.parent.relative_to(EV)), seed=int(d["seed"]), plan=[strip(a) for _, a in d["plan"]][:15]))
     return out
 
@@ -87,6 +87,10 @@ def plot(rows):
     make.save(fig, "handover")
 
 
+def sm(rr, f):
+    return float(np.mean([np.mean([f(r) for r in rr if r["seed"] == s]) for s in {r["seed"] for r in rr}]))
+
+
 def summary(rows):
     out = {}
     for g in sorted({r["job"].split("-s")[0] for r in rows}):
@@ -94,10 +98,9 @@ def summary(rows):
         big = [r for r in rr if r["gap"] >= 0.3]
         out[g] = dict(runs=len(rr), big=len(big), break_years=sorted(r["break_year"] for r in big if r["break_year"]),
                       recover=[r["agent"][r["break_agent"] - 1] for r in big if r["break_agent"]], after=[r["agent"][r["break_agent"]] for r in big if r["break_agent"]],
-                      **{f"agent_first_k{k}": float(np.mean([r["agent"][k] for r in rr])) for k in (1, 3, 5)},
+                      **{f"agent_first_k{k}": sm(rr, lambda r: r["agent"][k]) for k in (1, 3, 5)},
                       **{f"agent_first_k{k}_big": float(np.mean([r["agent"][k] for r in big])) if big else None for k in (1, 3, 5)},
-                      reverse_years=[r["break_reference"] for r in rr], reference_alone=float(np.mean([r["reference_alone"] for r in rr])),
-                      agent_alone=float(np.mean([r["agent_alone"] for r in rr])),
+                      reverse_years=[r["break_reference"] for r in rr], reference_alone=sm(rr, lambda r: r["reference_alone"]), agent_alone=sm(rr, lambda r: r["agent_alone"]),
                       mix_worse=sum(min(r["agent"] + r["reference"]) < min(r["agent_alone"], r["reference_alone"]) - 0.02 for r in rr))
     return out
 

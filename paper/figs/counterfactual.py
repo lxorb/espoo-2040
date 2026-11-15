@@ -37,7 +37,7 @@ def summary(grp, rs, rows, base, ref):
 
 
 def main():
-    rs = runs()
+    rs = [r for r in runs() if r["role"] in ("a1", "gate4", "reference")]
     seeds = sorted({r["seed"] for r in rs})
     with Pool(16) as p:
         tr = dict(zip(seeds, p.map(truth, seeds)))
