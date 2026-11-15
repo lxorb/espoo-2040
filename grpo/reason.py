@@ -139,8 +139,11 @@ def play(seed, ids, k, anon, fast):
                 score=(base - r["delay"]) / (base - best) if best else None)
 
 
-def reward(r, pen):
-    return float(np.clip(r["frac"] / 0.3 - pen, -0.5, 1.5)) if r else -0.5
+def reward(r, pen, strict=False):
+    """strict: any format error (pen > 0) gives the unreadable reward -0.5 (format gate)."""
+    if not r or (strict and pen > 0):
+        return -0.5
+    return float(np.clip(r["frac"] / 0.3 - pen, -0.5, 1.5))
 
 
 class Pool:
@@ -344,6 +347,7 @@ def main():
     ap.add_argument("--workers", type=int, default=7)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--maxtok", type=int, default=0)
+    ap.add_argument("--strict", action="store_true", help="format gate: any format error -> reward -0.5")
     a = ap.parse_args()
     import torch
     from peft import LoraConfig, PeftModel, get_peft_model
@@ -406,7 +410,7 @@ def main():
             RS = pool.run([(i["seed"], p[0], p[1]) for i, ps in zip(batch, PS) for p in ps], a.anon, True)
             for k, (i, o) in enumerate(zip(batch, out)):
                 ps, rs = PS[k], RS[k * a.g:(k + 1) * a.g]
-                R = np.array([reward(r, p[2]) for r, p in zip(rs, ps)])
+                R = np.array([reward(r, p[2], a.strict) for r, p in zip(rs, ps)])
                 if R.std() < 1e-6:
                     skipped += 1
                     continue
