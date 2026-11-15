@@ -433,23 +433,45 @@ def exploits(d):
 
 
 def grpo_evidence(d):
-    ms, ts = d["methods"], d["tests"]
+    ms, ts, sens = d["methods"], d["tests"], d["sensitivity"]
+    run = lambda tag: next(k for k in ms if k.endswith(tag))
+    one, two = run("-s1/runs/grpo/ckpt-90"), run("-s2/runs/grpo/ckpt-90")
+    ci = lambda x, f="{:.3f}", m=1: f"{f.format(m * x['mean'])} [{f.format(m * x['ci'][0])}, {f.format(m * x['ci'][1])}]"
     keys = (("runs/grpo/ckpt-0", "Warm", "Gemma after format warm-up"), ("random", "Random", "Random valid plans"),
-            ("runs/grpo/ckpt-90", "Final", "Gemma after GRPO (step 90)"), ("const", "Const", "Constant plan " + ", ".join(f"\\texttt{{{q}}}" for q in d["meta"]["const_plan"]["plan"])))
+            ("runs/grpo/ckpt-90", "Final", "Gemma after GRPO, run A"), (one, "SeedOne", "Gemma after GRPO, seed 1"), (two, "SeedTwo", "Gemma after GRPO, seed 2"),
+            ("const", "Const", "Constant plan " + ", ".join(f"\\texttt{{{q}}}" for q in d["meta"]["const_plan"]["plan"])))
     rows = []
     for k, t, name in keys:
-        v, te = ms[k]["val"]["score"], ms[k]["test"]["frac"]
-        M.update({f"grpo{t}Val": f"{v['mean']:.3f}", f"grpo{t}Test": f"{100 * te['mean']:.1f}"})
-        rows.append(f"{name} & {v['mean']:.3f} [{v['ci'][0]:.3f}, {v['ci'][1]:.3f}] & {100 * te['mean']:.1f} [{100 * te['ci'][0]:.1f}, {100 * te['ci'][1]:.1f}] \\\\")
+        v, te = ms[k]["val"], ms[k]["test"]
+        M.update({f"grpo{t}Val": f"{v['score']['mean']:.3f}", f"grpo{t}ValLo": f"{v['score']['ci'][0]:.3f}", f"grpo{t}ValHi": f"{v['score']['ci'][1]:.3f}",
+                  f"grpo{t}ValClip": f"{v['score_clip']['mean']:.3f}", f"grpo{t}Test": f"{100 * te['frac']['mean']:.1f}",
+                  f"grpo{t}TestScore": f"{te['score']['mean']:.3f}", f"grpo{t}TestScoreLo": f"{te['score']['ci'][0]:.3f}", f"grpo{t}TestScoreHi": f"{te['score']['ci'][1]:.3f}",
+                  f"grpo{t}TestScoreClip": f"{te['score_clip']['mean']:.3f}"})
+        rows.append(f"{name} & {ci(v['score'])} & {ci(te['score'])} & {ci(te['frac'], '{:.1f}', 100)} \\\\")
     (HERE / "grpo.tex").write_text("\n".join(rows) + "\n")
+    n = {p: len(d["meta"]["seeds"][p]) for p in ("val", "test")}
     for other, t in (("runs/grpo/ckpt-0", "Warm"), ("random", "Random"), ("const", "Const")):
         for part, pt in (("val", "Val"), ("test", "Test")):
             x = ts[f"runs/grpo/ckpt-90 vs {other} {part}"]
-            M.update({f"grpoFinalWins{t}{pt}": f"{x['wins']}/{len(d['meta']['seeds'][part])}", f"grpoFinalSignP{t}{pt}": pf(x["sign_p"])})
-    for k, t in (("runs/grpo/ckpt-0", "Warm"), ("runs/grpo/ckpt-90", "Final")):
-        sv = d["sensitivity"][k]
-        M.update({f"grpoSens{t}Shuffle": f"{sv['shuffle']:.3f}", f"grpoSens{t}Zero": f"{sv['zero']['changed']:.3f}"})
-    M["grpoSameAsConst"] = str(sum(ms["runs/grpo/ckpt-90"]["plans"][s] == ms["const"]["plans"][s] for s in ms["const"]["plans"]))
+            M.update({f"grpoFinalWins{t}{pt}": f"{x['wins']}/{n[part]}", f"grpoFinalSignP{t}{pt}": pf(x["sign_p"])})
+    for k, t in ((one, "SeedOne"), (two, "SeedTwo")):
+        for part, pt in (("val", "Val"), ("test", "Test")):
+            x = ts[f"{k} vs const {part}"]
+            M.update({f"grpo{t}WinsConst{pt}": f"{x['wins']}/{n[part]}", f"grpo{t}SignPConst{pt}": pf(x["sign_p"])})
+    for k, t in (("runs/grpo/ckpt-0", "Warm"), ("runs/grpo/ckpt-90", "Final"), (one, "SeedOne"), (two, "SeedTwo")):
+        f = "{:.3f}" if t in ("Warm", "Final") else "{:.2f}"
+        name = f"grpoSens{t}" if t in ("Warm", "Final") else f"grpo{t}Sens"
+        M.update({f"{name}Shuffle": f.format(sens[k]["shuffle"]), f"{name}Zero": f.format(sens[k]["zero"]["changed"])})
+    first = lambda k, s: ms[k]["plans"][s][0]["plan"][0] if isinstance(ms[k]["plans"][s], list) else ms[k]["plans"][s]["plan"][0]
+    kivi = [s for s in ms[one]["plans"] if "Kiviruukki" in booms[s]]
+    rest = [s for s in ms[one]["plans"] if s not in kivi]
+    M.update(grpoSeedOneKiviFirst=f"{sum(first(one, s) == 'kiviruukki-access' for s in kivi)}/{len(kivi)}",
+             grpoSeedOneOtaFirst=f"{sum(first(one, s) == 'otaniemi-access' for s in rest)}/{len(rest)}",
+             grpoSameAsConst=str(sum(ms["runs/grpo/ckpt-90"]["plans"][s] == ms["const"]["plans"][s] for s in ms["const"]["plans"])))
+    sr = d["seed_runs"]
+    for part, pt in (("val", "Val"), ("test", "Test")):
+        x = sr[part]["score"]
+        M.update({f"grpoSeedMean{pt}": f"{x['mean']:.3f}", f"grpoSeedStd{pt}": f"{x['std']:.3f}"})
 
 
 def norms_evidence(d):

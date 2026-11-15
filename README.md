@@ -31,9 +31,9 @@ One agent run per seed, Intel scores (`evidence/failures.json`):
 
 On seeds 2 to 4 the lead is small (0.03 to 0.06); five runs are few.
 
-Seeds 0 to 15: learned policy 0.97, rule planner 0.84, Gemma 3 270M after GRPO 0.83 (from 0.19, but one plan for all scenarios), reactive rule 0.56, random 0.15.
+Seeds 0 to 15: learned policy 0.97, rule planner 0.84, Gemma 3 270M after GRPO 0.83 (from 0.19; of three runs, two end on one fixed plan, one reacts to one area), reactive rule 0.56, random 0.15.
 
-The reference (`rl/policy.npz`) has 83k parameters and uses no forecasts. It learned from expert plans, then PPO; the checkpoint was chosen on seeds 0 to 15. On 32 unseen scenarios it saves 34.3% of the do-nothing delay (rule planner 31.1%). Seeds 48 and up have no norms and fall back to this share. Norms for 16 to 47 (`tools/norms.py`) are a bit stricter than for 0 to 15, so their scores are not directly comparable.
+The reference (`rl/policy.npz`) has 83k parameters and uses no forecasts. It learned from expert plans, then PPO; the checkpoint was picked on seeds 0 to 15. On 32 unseen scenarios it saves 34.3% of the do-nothing delay (rule planner 31.1%). Seeds 48 and up lack norms and use this share. Norms for 16 to 47 (`tools/norms.py`) are a bit stricter than for 0 to 15, so their scores are not directly comparable.
 
 ## Why the agent fails
 
@@ -43,11 +43,11 @@ By year 2 it names all 15 growing areas, yet never upgrades 11. Its plans barely
 
 - A separate verifier replays the plan and scores it (`task/tests/test.sh`). It logs `replay_off`, the gap to the live run, outside the reward.
 - Do nothing scores 0.
-- After a stop, the remaining years get no new projects. Stopping the reference after 3 years scores 0.15, after 5 years 0.76.
+- After a stop, no new projects start. Stopping the reference after 3 years scores 0.15, after 5 years 0.76.
 - Rejected actions do nothing.
 - Scores are clipped to [0, 1].
 - Replays are bit-identical on one CPU type; AMD and Intel scores differ by at most 0.008.
 
 ## Layout
 
-`sim` simulator, `task` Harbor task and verifier, `rl` reference policy, `grpo` Gemma training, `data` network and demand, `viz` viewer, `paper` paper.
+`sim` simulator, `task` Harbor task and verifier, `rl` reference, `grpo` Gemma, `data` network and demand, `viz` viewer, `paper` paper.
