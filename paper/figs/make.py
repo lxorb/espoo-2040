@@ -12,7 +12,6 @@ HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
 DATA = HERE / "data"
 EVID = ROOT / "evidence"
-RLDIR = ROOT / "runs" / "rl" / "vm" / "6fae939a" / "runs" / "rl"
 Y0 = 2026
 
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Times", "Nimbus Roman", "DejaVu Serif"], "font.size": 8, "axes.titlesize": 8,
@@ -30,6 +29,7 @@ KEYS = list(NAME)
 
 load = lambda p: json.loads(Path(p).read_text())
 norms, runs, growth, booms = load(ROOT / "sim" / "norms.json"), load(DATA / "runs.json"), load(DATA / "growth.json"), load(DATA / "booms.json")
+RLD, GRD = load(DATA / "rl.json"), load(DATA / "grpo.json")
 ASEEDS = sorted(runs["agent"], key=int)
 LEVEL, M = {}, {}
 key = lambda n: n.split()[0].lower().replace("ä", "a")
@@ -57,7 +57,7 @@ def rescore():
 
 
 def grpo_curve():
-    g = load(ROOT / "runs" / "grpo" / "curve.json")
+    g = GRD
     for e in g["evals"]:
         for x in e["seeds"]:
             x["score"] = clip(x["greedy"]["saving"] * 1e6 / (norms[str(x["seed"])][0] - norms[str(x["seed"])][1])) if x.get("greedy") else 0.0
@@ -153,7 +153,7 @@ def fig_curves(ev, zs):
             a.text(0.02, y + 0.01, NAME[k], transform=a.get_yaxis_transform(), fontsize=8, color=COL[k], ha="left", va="bottom")
         a.set_ylim(-0.05, 1.05)
     for n, c, lab in (("ppocold2", "#86b6ef", "PPO from scratch"), ("gz2", "#6250d6", "Gumbel self-play from scratch")):
-        x, y = zip(*[(r.get("episodes", r["it"]), r["mean_net"]) for r in load(RLDIR / f"{n}-6fae939a.json") if "mean_net" in r])
+        x, y = zip(*[(r.get("episodes", r["it"]), r["mean_net"]) for r in RLD["curves"][n]])
         ax[0].plot(x, y, color=c, lw=1.4, marker="o", ms=2.5, label=lab)
     ax[0].legend(loc="lower right")
     ax[0].set(xlabel="training episodes", ylabel="mean score, 16 seeds", title="(a) Learning without expert plans")
@@ -199,8 +199,7 @@ def fig_evolution(rl, gs):
 
 
 def strategy():
-    rl = load(ROOT / "runs" / "rl" / "strategy.json")
-    gs = [r for r in load(ROOT / "runs" / "grpo" / "strategy.json") if r.get("run", "A") == "A" and r["step"] >= 0]
+    rl, gs = RLD["strategy"], GRD["strategy"]
     for k, t in (("ppocold2", "Cold"), ("gz2", "Gumbel"), ("ppobc1s", "Bc")):
         rows, z, one = rl[k], rl[k][-1], rl[k][1]
         acc = next((r for r in rows if r["access_share"] > 0), None)
@@ -231,7 +230,7 @@ def strategy():
 
 def ablation():
     by = {}
-    for r in load(ROOT / "runs" / "rl" / "ablation-jam.json")["rows"]:
+    for r in RLD["ablation"]:
         sc = [clip(x) for x in r["scores"]]
         by.setdefault(r["experts"], {})[r["jam"]] = (np.mean(sc), min(sc))
     es = sorted(by)
@@ -242,7 +241,7 @@ def ablation():
 
 
 def heldout():
-    h = {(r["policy"], r["part"]): r for r in load(ROOT / "runs" / "rl" / "heldout.json")}
+    h = {(r["policy"], r["part"]): r for r in RLD["heldout"]}
     ks = ("rl", "planner", "reactive", "greedy5", "greedy1")
     pct = lambda x: f"{100 * x:.1f}"
     (HERE / "heldout.tex").write_text("".join(f"{NAME[k]} & {pct(h[k, 'heldout']['mean'])} & {pct(min(h[k, 'heldout']['saved_frac']))} & {pct(h[k, 'eval']['mean'])} \\\\\n" for k in ks))
@@ -361,7 +360,7 @@ def evidence():
 def main():
     rescore()
     ev, zs, final = grpo_curve()
-    d = load(ROOT / "runs" / "rl" / "search-eval.json")
+    d = RLD["search"]
     search = {str(s): clip(x) for s, x in zip(d["seeds"], d["scores"])}
     vals = {k: [runs[k][s]["score"] for s in sorted(runs[k], key=int)] for k in KEYS if k in runs}
     vals.update(best=[1.0] * len(norms), grpo=final, rlsearch=list(search.values()))

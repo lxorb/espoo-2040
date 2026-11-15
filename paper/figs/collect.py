@@ -7,6 +7,8 @@ from pathlib import Path
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
 OUT = HERE / "data" / "runs.json"
+RL, CUT = ROOT / "runs" / "rl", 5280
+pick = lambda d, ks: {k: d[k] for k in ks if k in d}
 load = lambda p: json.loads(Path(p).read_text())
 
 
@@ -42,6 +44,18 @@ def main(*srcs):
             out.setdefault(f"{name}@{tag}", {})[seed] = summary(load(f))
     out.update(agent=harbor("gate4"), refrl=harbor("ref3"), refold=harbor("refrl"), viz=dict(best=summary(load(ROOT / "viz" / "data" / "runs" / "best.json"))))
     OUT.write_text(json.dumps(out))
+    st = load(RL / "strategy.json")
+    curve = lambda n: [pick(r, ("it", "episodes", "mean_net")) for r in load(RL / "vm" / "6fae939a" / "runs" / "rl" / f"{n}-6fae939a.json") if "mean_net" in r and r.get("episodes", 0) <= CUT]
+    keys = ("episodes", "score", "maintain", "access_share", "boom_hit", "entropy", "distinct", "freq", "first_access_year", "builds")
+    (HERE / "data" / "rl.json").write_text(json.dumps(dict(
+        strategy={k: [pick(r, keys) for r in v if r["episodes"] <= CUT] for k, v in st.items()}, curves={n: curve(n) for n in ("ppocold2", "gz2")},
+        search=pick(load(RL / "search-eval.json"), ("seeds", "scores")), ablation=[pick(r, ("experts", "jam", "scores")) for r in load(RL / "ablation-jam.json")["rows"]],
+        heldout=[pick(r, ("policy", "part", "seeds", "saved_frac", "mean")) for r in load(RL / "heldout.json")])))
+    g = load(ROOT / "runs" / "grpo" / "curve.json")
+    gkeys = ("step", "score", "sample_distinct", "maintain", "boom_hit", "boom_share", "train_std", "valid", "freq", "scores")
+    (HERE / "data" / "grpo.json").write_text(json.dumps(dict(
+        evals=[dict(pick(e, ("step", "score", "valid")), seeds=[dict(seed=x["seed"], greedy=pick(x.get("greedy") or {}, ("saving", "plan", "maintain"))) for x in e["seeds"]]) for e in g["evals"]],
+        strategy=[pick(r, gkeys) for r in load(ROOT / "runs" / "grpo" / "strategy.json") if r.get("run", "A") == "A" and r["step"] >= 0])))
 
 
 if __name__ == "__main__":

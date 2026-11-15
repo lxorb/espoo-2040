@@ -4,6 +4,19 @@ Every number in the paper is a macro in `paper/figs/numbers.tex` or a row in a `
 
 Score: `(D_nothing - D) / (D_nothing - D_best)` with `sim/norms.json` (frozen at commit `d24719a`), clipped to [0, 1] unless a row says raw. Saved share: `1 - D / D_nothing` on the same seed. Delay `D`: total person-hours over 2026 to 2045.
 
+## Rebuild
+
+`paper/build.sh` needs only committed files: `sim/norms.json`, `data/catalogue.json`, `evidence/`, and the summaries in `paper/figs/data/`:
+
+| File | Content | Made by |
+|---|---|---|
+| `runs.json` | per-seed delays, spend, builds, maintenance of all simulated and Harbor runs | `collect.py` from scratch run folders and `jobs/` |
+| `rl.json` | RL strategy rows (up to `CUT` = 5280 episodes for PPO from scratch), PPO and Gumbel curves, search, `jam` ablation, unseen-seed results | `collect.py` from `runs/rl/` |
+| `grpo.json` | GRPO evaluation per step (greedy plan and saving per seed) and run A strategy rows | `collect.py` from `runs/grpo/` |
+| `growth.json`, `booms.json` | seed 1 area growth; growing areas of seeds 0 to 15 | `prep.py` |
+
+When `runs/` and `jobs/` exist, `build.sh` first runs `collect.py` to refresh these summaries. Tested on a fresh `git clone` (with the pending changes to `paper/figs/` and `paper/build.sh` copied in): the build gives the same `numbers.tex`, tables and figures as the working copy, and 10 pages.
+
 ## Data split
 
 | Split | Seeds | Use |
@@ -56,6 +69,6 @@ Statistics helpers in `make.py`: `boot` (mean and 95% bootstrap CI, 10,000 resam
 
 1. Most table numbers were computed on the local AMD machine, not on the Intel VMs. Across CPU types the score can differ by up to 0.008. They should be replaced by `rl/eval.py` output from an Intel VM (`evidence/test.json`).
 2. Learned policy, forecast check and rule planner numbers come from scratch `drive.py`, and maintenance-forced baselines from scratch `bl2.py`. Neither script is in the repository. `rl/eval.py` now covers the same policies (`deploy`, `planner`, `reactive:2`, ...) but not `rlcheck`.
-3. The RL strategy file keeps growing while PPO from scratch runs. `evoColdEps` and `evoColdScore` are 5280 and 0.71 in the committed `numbers.tex`; the same build now gives 20640 and 0.65. The text that says "last checkpoint" must be re-read after the file is frozen.
+3. PPO from scratch kept training after the paper text was written. `collect.py` freezes its strategy rows and its curve at 5280 episodes (`CUT`), which gives the values the text was written with (`evoColdEps` 5280, `evoColdScore` 0.71). The live file now reaches 20640 episodes with score 0.65; commit fff88a6 holds those live values in `numbers.tex`.
 4. `curves.pdf` (a) and the Gumbel numbers come from stored runs; the Gumbel training path is no longer in the code.
-5. `runs/`, `jobs/` and `viz/data/` are gitignored, so a fresh clone cannot rebuild the figures yet.
+5. The raw run files (`runs/`, `jobs/`, `viz/data/`) are gitignored. Their small summaries are committed in `paper/figs/data/` (see Rebuild), so the figures rebuild from a fresh clone, but the summaries themselves can only be regenerated on a machine that has the raw files.
