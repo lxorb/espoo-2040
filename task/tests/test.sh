@@ -30,4 +30,5 @@ if log:
     json.dump(log, open("/logs/verifier/run.json", "w"))
 print(f"reward {r}")
 json.dump({"reward": r}, open("/logs/verifier/reward.json", "w"))
+open("/logs/verifier/reward.txt", "w").write(str(r))
 PY

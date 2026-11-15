@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import matplotlib
@@ -433,23 +434,45 @@ def exploits(d):
 
 
 def grpo_evidence(d):
-    ms, ts = d["methods"], d["tests"]
+    ms, ts, sens = d["methods"], d["tests"], d["sensitivity"]
+    run = lambda tag: next(k for k in ms if k.endswith(tag))
+    one, two = run("-s1/runs/grpo/ckpt-90"), run("-s2/runs/grpo/ckpt-90")
+    ci = lambda x, f="{:.3f}", m=1: f"{f.format(m * x['mean'])} [{f.format(m * x['ci'][0])}, {f.format(m * x['ci'][1])}]"
     keys = (("runs/grpo/ckpt-0", "Warm", "Gemma after format warm-up"), ("random", "Random", "Random valid plans"),
-            ("runs/grpo/ckpt-90", "Final", "Gemma after GRPO (step 90)"), ("const", "Const", "Constant plan " + ", ".join(f"\\texttt{{{q}}}" for q in d["meta"]["const_plan"]["plan"])))
+            ("runs/grpo/ckpt-90", "Final", "Gemma after GRPO, run A"), (one, "SeedOne", "Gemma after GRPO, seed 1"), (two, "SeedTwo", "Gemma after GRPO, seed 2"),
+            ("const", "Const", "Constant plan " + ", ".join(f"\\texttt{{{q}}}" for q in d["meta"]["const_plan"]["plan"])))
     rows = []
     for k, t, name in keys:
-        v, te = ms[k]["val"]["score"], ms[k]["test"]["frac"]
-        M.update({f"grpo{t}Val": f"{v['mean']:.3f}", f"grpo{t}Test": f"{100 * te['mean']:.1f}"})
-        rows.append(f"{name} & {v['mean']:.3f} [{v['ci'][0]:.3f}, {v['ci'][1]:.3f}] & {100 * te['mean']:.1f} [{100 * te['ci'][0]:.1f}, {100 * te['ci'][1]:.1f}] \\\\")
+        v, te = ms[k]["val"], ms[k]["test"]
+        M.update({f"grpo{t}Val": f"{v['score']['mean']:.3f}", f"grpo{t}ValLo": f"{v['score']['ci'][0]:.3f}", f"grpo{t}ValHi": f"{v['score']['ci'][1]:.3f}",
+                  f"grpo{t}ValClip": f"{v['score_clip']['mean']:.3f}", f"grpo{t}Test": f"{100 * te['frac']['mean']:.1f}",
+                  f"grpo{t}TestScore": f"{te['score']['mean']:.3f}", f"grpo{t}TestScoreLo": f"{te['score']['ci'][0]:.3f}", f"grpo{t}TestScoreHi": f"{te['score']['ci'][1]:.3f}",
+                  f"grpo{t}TestScoreClip": f"{te['score_clip']['mean']:.3f}"})
+        rows.append(f"{name} & {ci(v['score'])} & {ci(te['score'])} & {ci(te['frac'], '{:.1f}', 100)} \\\\")
     (HERE / "grpo.tex").write_text("\n".join(rows) + "\n")
+    n = {p: len(d["meta"]["seeds"][p]) for p in ("val", "test")}
     for other, t in (("runs/grpo/ckpt-0", "Warm"), ("random", "Random"), ("const", "Const")):
         for part, pt in (("val", "Val"), ("test", "Test")):
             x = ts[f"runs/grpo/ckpt-90 vs {other} {part}"]
-            M.update({f"grpoFinalWins{t}{pt}": f"{x['wins']}/{len(d['meta']['seeds'][part])}", f"grpoFinalSignP{t}{pt}": pf(x["sign_p"])})
-    for k, t in (("runs/grpo/ckpt-0", "Warm"), ("runs/grpo/ckpt-90", "Final")):
-        sv = d["sensitivity"][k]
-        M.update({f"grpoSens{t}Shuffle": f"{sv['shuffle']:.3f}", f"grpoSens{t}Zero": f"{sv['zero']['changed']:.3f}"})
-    M["grpoSameAsConst"] = str(sum(ms["runs/grpo/ckpt-90"]["plans"][s] == ms["const"]["plans"][s] for s in ms["const"]["plans"]))
+            M.update({f"grpoFinalWins{t}{pt}": f"{x['wins']}/{n[part]}", f"grpoFinalSignP{t}{pt}": pf(x["sign_p"])})
+    for k, t in ((one, "SeedOne"), (two, "SeedTwo")):
+        for part, pt in (("val", "Val"), ("test", "Test")):
+            x = ts[f"{k} vs const {part}"]
+            M.update({f"grpo{t}WinsConst{pt}": f"{x['wins']}/{n[part]}", f"grpo{t}SignPConst{pt}": pf(x["sign_p"])})
+    for k, t in (("runs/grpo/ckpt-0", "Warm"), ("runs/grpo/ckpt-90", "Final"), (one, "SeedOne"), (two, "SeedTwo")):
+        f = "{:.3f}" if t in ("Warm", "Final") else "{:.2f}"
+        name = f"grpoSens{t}" if t in ("Warm", "Final") else f"grpo{t}Sens"
+        M.update({f"{name}Shuffle": f.format(sens[k]["shuffle"]), f"{name}Zero": f.format(sens[k]["zero"]["changed"])})
+    first = lambda k, s: ms[k]["plans"][s][0]["plan"][0] if isinstance(ms[k]["plans"][s], list) else ms[k]["plans"][s]["plan"][0]
+    kivi = [s for s in ms[one]["plans"] if "Kiviruukki" in booms[s]]
+    rest = [s for s in ms[one]["plans"] if s not in kivi]
+    M.update(grpoSeedOneKiviFirst=f"{sum(first(one, s) == 'kiviruukki-access' for s in kivi)}/{len(kivi)}",
+             grpoSeedOneOtaFirst=f"{sum(first(one, s) == 'otaniemi-access' for s in rest)}/{len(rest)}",
+             grpoSameAsConst=str(sum(ms["runs/grpo/ckpt-90"]["plans"][s] == ms["const"]["plans"][s] for s in ms["const"]["plans"])))
+    sr = d["seed_runs"]
+    for part, pt in (("val", "Val"), ("test", "Test")):
+        x = sr[part]["score"]
+        M.update({f"grpoSeedMean{pt}": f"{x['mean']:.3f}", f"grpoSeedStd{pt}": f"{x['std']:.3f}"})
 
 
 def norms_evidence(d):
@@ -457,6 +480,74 @@ def norms_evidence(d):
     src = lambda name: str(sum(v["source"] == name for v in new))
     M.update(normsTestSeeds=str(len(new)), normsCpuHours=f"{d['meta']['cpu_seconds_16_47'] / 3600:.1f}", normsSrcLocal=src("local search"),
              normsSrcSingle=src("single-value order"), normsSrcLearned=src("learned policy"))
+
+
+def letters(x):
+    return "".join(w.title() for w in re.split("[^a-zA-Z]+", str(x)) if w)
+
+
+def agent_summary(runs, ref, sfx):
+    sc = [r["score"] for r in runs]
+    m, lo, hi = boot(sc)
+    paired_runs = [(ref[str(r["seed"])], r["score"]) for r in runs if str(r["seed"]) in ref]
+    by_seed = {}
+    for r in runs:
+        by_seed.setdefault(str(r["seed"]), []).append(r["score"])
+    seeds = sorted((s for s in by_seed if s in ref), key=int)
+    w, n, sp, wp = paired([ref[s] for s in seeds], [np.mean(by_seed[s]) for s in seeds]) if seeds else (0, 0, 1.0, 1.0)
+    M.update({f"agentRuns{sfx}": str(len(sc)), f"agentMeanAll{sfx}": f"{m:.3f}", f"agentCIAll{sfx}": f"{lo:.3f}--{hi:.3f}",
+              f"agentWorstRun{sfx}": f"{min(sc):.3f}", f"agentBestRun{sfx}": f"{max(sc):.3f}",
+              f"refWinsRuns{sfx}": f"{sum(a > b for a, b in paired_runs)}/{len(paired_runs)}", f"refWinsSeeds{sfx}": f"{w}/{n}", f"agentSignPAll{sfx}": pf(sp)})
+    return f"{len(sc)} & {m:.3f} [{lo:.3f}, {hi:.3f}] & {min(sc):.3f} & {max(sc):.3f} & {sum(a > b for a, b in paired_runs)}/{len(paired_runs)} & {w}/{n} & {pf(sp)}"
+
+
+def agent_runs(rows):
+    if not rows:
+        return
+    (HERE / "agent.tex").write_text("".join(f"{r['who']} & {r['seed']} & {r['delay'] / 1e6:.1f} & {r['score']:.3f} \\\\\n" for r in rows))
+    ref = {str(r["seed"]): r["score"] for r in rows if r["who"] == "reference"}
+    groups = {}
+    for r in rows:
+        if r["who"] != "reference":
+            groups.setdefault((r.get("model", r["who"]), r.get("variant", "base")), []).append(r)
+    base = [r for (m, v), g in groups.items() if v == "base" for r in g]
+    out = []
+    if base:
+        agent_summary(base, ref, "")
+    for (m, v), g in sorted(groups.items()):
+        sfx = letters(m) + ("" if v == "base" else letters(v))
+        out.append(f"\\texttt{{{m}}} & {v} & " + agent_summary(g, ref, sfx) + " \\\\")
+    (HERE / "agentruns.tex").write_text("\n".join(out) + "\n")
+    ab = [(k, g) for k, g in groups.items() if k[1] not in ("base",) and not k[1].startswith("redteam")]
+    if ab:
+        b = {}
+        for (m, v), g in groups.items():
+            if v == "base":
+                b[m] = np.mean([r["score"] for r in g])
+        lines = []
+        for (m, v), g in sorted(ab):
+            mm, lo, hi = boot([r["score"] for r in g])
+            d = mm - b[m] if m in b else None
+            lines.append(f"\\texttt{{{m}}} & {v} & {len(g)} & {mm:.3f} [{lo:.3f}, {hi:.3f}] & {neg(d) if d is not None else '--'} \\\\")
+            M[f"ablation{letters(m)}{letters(v)}"] = f"{mm:.3f}"
+        (HERE / "ablations.tex").write_text("\n".join(lines) + "\n")
+    red = [r for (m, v), g in groups.items() if v.startswith("redteam") for r in g]
+    if red:
+        sc = [r.get("harbor_reward", r["score"]) for r in red]
+        M.update(redteamMean=f"{np.mean(sc):.3f}", redteamBest=f"{max(sc):.3f}", redteamRuns=str(len(sc)))
+        (HERE / "redteam.tex").write_text("".join(f"{r['job']} & {r['seed']} & {r['score']:.3f} & {r.get('harbor_reward', float('nan')):.3f} \\\\\n" for r in red))
+
+
+def rules_v2(d):
+    rows = []
+    for name, v in d.get("methods", {}).items():
+        sc = v.get("score") or v.get("values") or []
+        if sc:
+            m, lo, hi = boot(sc)
+            rows.append(f"{name} & {m:.3f} [{lo:.3f}, {hi:.3f}] \\\\")
+            M[f"rulesV{letters(name)}"] = f"{m:.3f}"
+    if rows:
+        (HERE / "rules_v2.tex").write_text("\n".join(rows) + "\n")
 
 
 def evidence():
@@ -472,10 +563,9 @@ def evidence():
     for name in ("test", "exploits", "failures", "counterfactual", "grpo", "norms"):
         if not (EVID / f"{name}.json").exists():
             print("missing", f"evidence/{name}.json")
-    agents = sorted(EVID.glob("*/plan.json"))
-    if agents:
-        rows = [load(p) for p in agents]
-        (HERE / "agent.tex").write_text("".join(f"{r['who']} & {r['seed']} & {r['delay'] / 1e6:.1f} & {r['score']:.3f} \\\\\n" for r in rows))
+    agent_runs([load(p) | dict(job=p.parent.name) for p in sorted(EVID.glob("*/plan.json"))])
+    if (EVID / "rules_v2.json").exists():
+        rules_v2(load(EVID / "rules_v2.json"))
 
 
 def main():

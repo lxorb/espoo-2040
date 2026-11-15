@@ -6,15 +6,7 @@ jobs/
 __pycache__/
 *.pyc
 node_modules/
-task/environment/server/sim/
-task/environment/server/data/
-task/environment/server/test.sh
 *.pkl
-task/tests/sim/
-task/tests/data/
-task/solution/policy.py
-task/solution/policy.npz
-task/solution/places.json
 paper/main.aux
 paper/main.bbl
 paper/main.blg
@@ -23,3 +15,4 @@ paper/main.fls
 paper/main.log
 paper/main.out
 paper/textonly.pdf
+task-*/

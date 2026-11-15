@@ -13,7 +13,7 @@ while not c.done:
     rows.append({a["name"]: (a["pop"] + a["jobs"]) / (a["pop0"] + a["jobs0"]) for a in c.state()["areas"]})
 (out / "growth.json").write_text(json.dumps({"1": dict(index=rows, rate={n: float(c.rp[m].mean()) for n, m in c.areas})}))
 booms = {}
-for seed in range(16):
+for seed in range(48):
     c = City(seed)
     booms[seed] = [n for n, m in c.areas if c.rp[m].mean() > 0.01]
 (out / "booms.json").write_text(json.dumps(booms))

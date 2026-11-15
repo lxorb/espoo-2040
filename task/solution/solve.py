@@ -30,7 +30,9 @@ def learned(st, projects):
 
 
 sys.path.insert(0, str(Path(__file__).parent))
-POLICY = __import__("policy").Policy() if os.environ.get("REF") == "rl" and Path(__file__).with_name("policy.npz").exists() else None
+if os.environ.get("REF") == "rl" and not Path(__file__).with_name("policy.npz").exists():
+    sys.exit("REF=rl needs task/solution/policy.npz; run ./eval.sh sync")
+POLICY = __import__("policy").Policy() if os.environ.get("REF") == "rl" else None
 DECIDE = __import__("plan").decide
 rpc("initialize", {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "oracle", "version": "0"}})
 stop = 3 if os.environ.get("MODE") == "early" else None
