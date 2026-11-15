@@ -80,10 +80,11 @@ Validation seeds 0 to 15, one agent run per seed (`paper/figs/results.tex`):
 - Seven runs where we told the agent to attack the reward found no exploit (mean 0.70).
 - On 32 unseen test scenarios the reference saves 34.3% of the do-nothing delay, and the rule planner 31.1%.
 
-GRPO (details in the paper, section 7):
-- Gemma 3 270M, real project names: 0.19 to 0.83, but it learns one fixed plan for every city.
-- Gemma 3 1B, with room to reason and hidden names: it starts to react to growth, but it is not better than random plans.
-- Gemma 3 4B, same setup, two training seeds: on test seeds it saves 18.0% against 9.1% for random plans. It beats them on 25 and 27 of 32 seeds (p = 0.001 and p < 0.0001; we wrote this test down before we saw the results). A good fixed plan still does better (28.2%).
+GRPO on Gemma 3 4B (details in the paper, section 7):
+- The model writes a short `<think>` block and then a plan. Project names are random labels in every scenario, so it cannot memorise a list. The reward looks only at the result.
+- Two training seeds, about one GPU hour each. On 32 unseen test seeds it saves 18.0% of the delay, against 10.4% before training and 9.1% for random plans.
+- It beats random plans on 25 and 27 of 32 seeds (p = 0.001 and p < 0.0001). We wrote this test down before we saw the results.
+- It does not do budget math yet, and a good fixed plan still does better (28.2%). We expect larger models to close this gap.
 
 ## Why the agent fails
 
@@ -117,7 +118,7 @@ We prefer to say these ourselves:
 | `sim/` | traffic model, scoring, norms |
 | `data/` | the data pipeline and its outputs |
 | `rl/` | the learned policy (BC then PPO) |
-| `grpo/` | GRPO for Gemma (270M, 1B, 4B) |
+| `grpo/` | GRPO for Gemma (`grpo/reason.py` for the 4B runs) |
 | `tools/` | baselines, exploits, norms, stricter rule variants |
 | `evidence/` | raw results of every run |
 | `paper/` | paper source; `paper/build.sh` rebuilds it |
