@@ -38,13 +38,13 @@ Under stricter cash rules (`tools/v2.py`: emergency rebuilds only when cash allo
 
 ## Why the agent fails
 
-Its plan barely varies (overlap 0.72; reference 0.44). It always opens with two cheap links and maintenance 2; the reference opens with `espoonvayla-2x2` and maintenance 1. Both start their first access upgrade around 2029, but the agent mostly picks Otaniemi, which booms in only two of its five scenarios. It names the growing areas by year 2. No single fix closes the gap: replays with the reference's first move (0.69) or the right targets (0.63) score lower, because the pieces of a plan interact through the budget (`paper/figs/review.py`). The fixed plan GRPO learned (0.82 on these seeds) also beats the agent.
+Its plan barely varies (overlap 0.72; reference 0.44). It always opens with two cheap links and maintenance 2; the reference opens with `espoonvayla-2x2` and maintenance 1. The budget allows about three starts: the reference uses one widening and two access upgrades, the agent four cheaper projects before any access upgrade. On seed 0 it names the growing areas in 2028 and could afford an access upgrade, but starts two widenings instead. No single fix closes the gap: replays with the reference's first move (0.69) or the right targets (0.63) score lower, because the pieces of a plan interact through the budget (`paper/figs/review.py`). The fixed plan GRPO learned (0.82 on these seeds) also beats the agent.
 
 ## Why the reward is hard to cheat
 
 - A separate verifier replays and scores the plan (`task/tests/test.sh`); its `replay_off` log is not part of the reward.
 - Do nothing scores 0.
-- After a stop, no new projects start. Stopping the reference after 3 years scores 0.15, after 5 years 0.76.
+- After a stop, no new projects start. Stopping the reference after 1 to 3 years scores 0.15, after 4 to 6 years 0.76, after 7 or more the full score (its plan is done by then).
 - Rejected actions do nothing.
 - Scores are clipped to [0, 1].
 - Replays are bit-identical on one CPU type; AMD and Intel differ by at most 0.008.
