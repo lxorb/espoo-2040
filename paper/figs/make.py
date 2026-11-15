@@ -606,7 +606,9 @@ def agent_runs(rows):
     red = [r for (m, v), g in groups.items() if v.startswith("redteam") for r in g]
     if red:
         sc = [r.get("harbor_reward", r["score"]) for r in red]
-        M.update(redteamMean=f"{np.mean(sc):.3f}", redteamBest=f"{max(sc):.3f}", redteamRuns=str(len(sc)))
+        M.update(redteamMean=f"{np.mean(sc):.3f}", redteamBest=f"{max(sc):.3f}", redteamRuns=str(len(sc)),
+                 redteamBeatsRef=str(sum(r["score"] > ref[str(r["seed"])] for r in red if str(r["seed"]) in ref)),
+                 redteamCostUsd=f"{sum(r.get('cost_usd', 0) or 0 for r in red):.2f}")
         (HERE / "redteam.tex").write_text("".join(f"{r['job']} & {r['seed']} & {r['score']:.3f} & {r.get('harbor_reward', float('nan')):.3f} \\\\\n" for r in red))
 
 
@@ -691,11 +693,20 @@ def seed4(d):
              sFourBottSeeds=str(sum(v["top_osm"] == bn["4"]["top_osm"] and v["way_share"] >= 0.1 for v in bn.values())))
 
 
+def norms_v1(d):
+    S = d["seeds"].values()
+    over = lambda key: sum((v["nothing"] - (v["nothing"] - v["score_new"][key] * (v["nothing"] - v["best"]))) / (v["nothing"] - v["frozen"][1]) > 1 + 1e-9 for v in S)
+    mean = lambda key: np.mean([v["score_new"][key] for v in S])
+    M.update(normsVoneMaxDrop=f"{max(-v['diff'] / v['frozen'][1] * 100 for v in S):.1f}", normsVoneSeedsLower=str(sum(v["diff"] < 0 for v in S)),
+             normsVoneSeedsHigher=str(sum(v["diff"] > 0 for v in S)), normsVoneLearnedMean=f"{mean('learned policy'):.3f}", normsVonePlannerMean=f"{mean('planner'):.3f}",
+             normsVoneConstMean=f"{mean('grpo constant plan'):.3f}", normsVzeroOverOneLearned=str(over("learned policy")), normsVzeroOverOneConst=str(over("grpo constant plan")))
+
+
 def evidence():
     f = EVID / "test.json"
     if f.exists():
         test_tables(load(f))
-    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits), ("grpo", grpo_evidence), ("norms", norms_evidence), ("handover", handover), ("seed4", seed4)):
+    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits), ("grpo", grpo_evidence), ("norms", norms_evidence), ("handover", handover), ("seed4", seed4), ("norms_v1", norms_v1)):
         if (EVID / f"{name}.json").exists():
             fn(load(EVID / f"{name}.json"))
     for name in ("test", "exploits", "failures", "counterfactual", "grpo", "norms"):
