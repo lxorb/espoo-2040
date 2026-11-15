@@ -9,7 +9,7 @@ Viewer: https://espoo.evinu.de. Paper: `paper/main.pdf`.
 ## Judge quickstart
 
 Needs Docker and Harbor 0.25.
-- `SEED=0 harbor run -y -p task -a oracle`: reward 1.0, 5 minutes on first build.
+- `SEED=0 harbor run -y -p task -a oracle`: reward 1.0, 2 minutes on first build.
 - `SEED=0 harbor run -y -p task -a nop`: reward 0.0, 1 minute.
 - `SEED=0 harbor run -y -p task -a opencode -m openai/gpt-6.1-sol`: needs `OPENAI_API_KEY`.
 - `SEED=0 ./eval.sh`: reference, three agent runs, do nothing, early stop.
