@@ -41,7 +41,7 @@ def clean(s):
     return SECRET.sub("[redacted]", s)
 
 
-def collect(job):
+def collect(job, variant, model):
     sys.path.insert(0, str(ROOT))
     from sim import City
     for r in done(job):
@@ -59,6 +59,7 @@ def collect(job):
             c.step()
         out.mkdir(parents=True, exist_ok=True)
         (out / "plan.json").write_text(json.dumps(dict(seed=st["seed"], who=res["config"]["agent"]["model_name"] or res["config"]["agent"]["name"],
+                                                       model=model, variant=variant, cost_usd=(res.get("agent_result") or {}).get("cost_usd"),
                                                        delay=sum(x["delay"] for x in c.recs), score=c.score(),
                                                        harbor_reward=res["verifier_result"]["rewards"]["reward"], plan=plan)))
         if (t / "agent" / "trajectory.json").exists():
@@ -78,13 +79,14 @@ def main():
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--concurrent", type=int, default=8)
     ap.add_argument("--ak", action="append", default=[])
+    ap.add_argument("--variant", default="base")
     a = ap.parse_args()
     ss = seeds(a.seeds)
     if a.cmd == "run":
         with ThreadPoolExecutor(max(1, a.concurrent // a.runs)) as pool:
             list(pool.map(lambda s: run(a, s), ss))
     for s in ss:
-        collect(f"{a.job}-s{s}")
+        collect(f"{a.job}-s{s}", a.variant, a.model)
 
 
 if __name__ == "__main__":

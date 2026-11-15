@@ -75,16 +75,16 @@ def one(a):
     sys.path[:0] = [str(ROOT / "tools")]
     import norms as N
     f = {"nothing": (lambda c: [], None), "planner": (N.planner(False), None), "learned": (N.learned(N.Policy()), None), "reactive": (N.reactive(), 1),
-         "learned-m2": (lambda c, f=N.learned(N.Policy()): [a for a in f(c) if "maintain" not in a], 2), "maintain-0": (lambda c: [], 0), "maintain-2": (lambda c: [], 2)}[who]
+         "learned-m2": (lambda c, f=N.learned(N.Policy()): [a for a in f(c) if "maintain" not in a], 2), "maintain-0": (lambda c: [], 0), "maintain-2": (lambda c: [], 2),
+         "retrained": (N.learned(N.Policy(Path(os.environ.get("RT", ROOT / "rl/policy.npz")))), None)}[who]
     loss, plan, c = N.play(seed, *f)
     cash = [r["budget"] for r in c.recs]
     return dict(seed=seed, who=who, loss=loss, plan=plan, min_cash=min(cash), first_negative=next((i for i, x in enumerate(cash) if x < 0), None),
                 deferred=sum(e.endswith("rebuild deferred") for r in c.recs for e in r["events"]), rebuilds=sum(e.endswith("emergency rebuild") for r in c.recs for e in r["events"]),
-                score=c.score())
+                score=c.score(), maint=[a["maintain"] for r in c.recs[:c.years] for a in r["actions"] if "maintain" in a and a["ok"]])
 
 
-def measure(seeds):
-    whos = ["nothing", "planner", "learned", "learned-m2", "reactive", "maintain-0", "maintain-2"]
+def measure(seeds, whos, name):
     with mp.get_context("spawn").Pool(min(32, len(seeds) * len(whos))) as pool:
         res = pool.map(one, [(s, w) for s in seeds for w in whos], chunksize=1)
     out = {}
@@ -94,12 +94,20 @@ def measure(seeds):
         for v in d.values():
             v["saved"] = 1 - v["loss"] / d["nothing"]["loss"]
     (ROOT / "runs").mkdir(exist_ok=True)
-    (ROOT / "runs/v2measure.json").write_text(json.dumps(out))
+    (ROOT / f"runs/{name}.json").write_text(json.dumps(out))
     return out
 
 
 def collect(names):
     res = {n: json.loads((ROOT / ("" if n == "v1" else f"task-{n}/") / "runs/v2measure.json").read_text()) for n in names}
+    test = {}
+    for n in names:
+        p = ROOT / ("" if n == "v1" else f"task-{n}/") / "runs/v2rt.json"
+        for s, d in (json.loads(p.read_text()) if p.exists() else {}).items():
+            if s in res[n]:
+                res[n][s]["learned-retrained"] = d["retrained"]
+            else:
+                test.setdefault(n, {})[s] = d
     meta = dict(script="tools/v2.py", command=" ".join(["python", "tools/v2.py"] + sys.argv[1:]), seeds=sorted(map(int, res["v1"])), date=time.strftime("%Y-%m-%d"),
                 machine="Intel Xeon Platinum 8573C (espoo-vm3)", rules=dict(v2="emergency rebuild only if cash covers it, else deferred: the segment keeps decaying and keeps the 0.8 capacity cut; no debt from rebuilds",
                                                                                  v2e="v2 plus a second growth wave: in a year drawn from 6-9 one or two non-boom areas start growing at a boom rate (seed stream 2), hidden from forecasts until it starts"))
@@ -118,7 +126,7 @@ def collect(names):
         if ex.exists():
             meta[f"exploits_{n}"] = {k: {f: v[f] for f in ("seeds", "score", "mean", "score_mean", "wins_over_ref", "ties_with_ref", "min_cash", "replay_off")} for k, v in json.loads(ex.read_text())["strategies"].items()}
     tmp = ROOT / "evidence/rules_v2.json.tmp"
-    tmp.write_text(json.dumps(dict(meta=meta, variants=res)))
+    tmp.write_text(json.dumps(dict(meta=meta, variants=res, test=test)))
     os.replace(tmp, ROOT / "evidence/rules_v2.json")
 
 
@@ -128,6 +136,7 @@ if __name__ == "__main__":
         gen("task-v2", False)
         gen("task-v2e", True)
     elif cmd == "measure":
-        measure(list(range(16)))
+        lo, hi = map(int, (sys.argv[2:3] or ["0-15"])[0].split("-"))
+        measure(list(range(lo, hi + 1)), (sys.argv[3:4] or ["nothing,planner,learned,learned-m2,reactive,maintain-0,maintain-2"])[0].split(","), (sys.argv[4:5] or ["v2measure"])[0])
     else:
         collect(["v1", "v2", "v2e"])
