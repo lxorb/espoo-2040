@@ -595,16 +595,27 @@ def agent_runs(rows):
     (HERE / "agentruns.tex").write_text("\n".join(out) + "\n")
     ab = [(k, g) for k, g in groups.items() if not k[1].startswith(("base", "redteam"))]
     if ab:
-        b = {}
-        for (m, v), g in groups.items():
-            if v == "base":
-                b[m] = np.mean([r["score"] for r in g])
+        base = {m: {str(r["seed"]): r["score"] for r in g} for (m, v), g in groups.items() if v == "base"}
         lines = []
-        for (m, v), g in sorted(ab):
-            mm, lo, hi = boot([r["score"] for r in g])
-            d = mm - b[m] if m in b else None
-            lines.append(f"\\texttt{{{m}}} & {v} & {len(g)} & {mm:.3f} [{lo:.3f}, {hi:.3f}] & {neg(d) if d is not None else '--'} \\\\")
-            M[f"ablation{letters(m)}{letters(v)}"] = f"{mm:.3f}"
+        for (m, v), g in sorted(ab, key=lambda kg: ["longforecast", "max", "hint", "notes"].index(kg[0][1]) if kg[0][1] in ("longforecast", "max", "hint", "notes") else 9):
+            g = sorted(g, key=lambda r: int(r["seed"]))
+            seeds = [str(r["seed"]) for r in g]
+            sc = [r["score"] for r in g]
+            mm, lo, hi = boot(sc)
+            bs = [base[m][s] for s in seeds] if m in base and all(s in base[m] for s in seeds) else None
+            rs = [ref[s] for s in seeds]
+            db, dr = (np.mean(sc) - np.mean(bs) if bs else None), np.mean(sc) - np.mean(rs)
+            wins = sum(a > b for a, b in zip(sc, rs))
+            first = [next((x["build"] for _, acts in r["plan"] for x in acts if x.get("ok") and x.get("build", "").endswith("-access")), None) for r in g]
+            M[f"abl{letters(v)}OtaFirst"] = f"{sum(f == 'otaniemi-access' for f in first)}/{len(g)}"
+            t = letters(v)
+            M.update({f"ablation{letters(m)}{t}": f"{mm:.3f}", f"abl{t}": f"{mm:.3f}", f"abl{t}Lo": f"{lo:.3f}", f"abl{t}Hi": f"{hi:.3f}", f"abl{t}Runs": str(len(g)),
+                      f"abl{t}VsBase": neg(db) if bs else "--", f"abl{t}VsRef": neg(dr), f"abl{t}WinsRef": f"{wins}/{len(g)}",
+                      f"abl{t}Min": f"{min(sc):.3f}", f"abl{t}Max": f"{max(sc):.3f}", f"abl{t}CostUsd": f"{sum(r.get('cost_usd', 0) or 0 for r in g):.2f}"})
+            if bs:
+                M[f"abl{t}GapShare"] = f"{(np.mean(sc) - np.mean(bs)) / (np.mean(rs) - np.mean(bs)):.2f}"
+                M.update(ablBase=f"{np.mean(bs):.3f}", ablRef=f"{np.mean(rs):.3f}", ablSeeds=f"{min(map(int, seeds))} to {max(map(int, seeds))}")
+            lines.append(f"\\texttt{{{m}}} & {v} & {len(g)} & {mm:.3f} [{lo:.3f}, {hi:.3f}] & {neg(db) if bs else '--'} & {neg(dr)} & {wins}/{len(g)} \\\\")
         (HERE / "ablations.tex").write_text("\n".join(lines) + "\n")
     red = [r for (m, v), g in groups.items() if v.startswith("redteam") for r in g]
     if red:
