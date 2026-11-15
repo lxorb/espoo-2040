@@ -1,24 +1,24 @@
 # Espoo 2040
 
-An agent plans the roads of Espoo, Finland, for 15 years. A small learned policy beats it in every tested scenario (a scenario is the city with one seed).
+[![CI](https://github.com/lxorb/espoo-2040/actions/workflows/ci.yml/badge.svg)](https://github.com/lxorb/espoo-2040/actions/workflows/ci.yml)
+
+An agent plans the roads of Espoo, Finland, for 15 years. A small learned policy beats it in every tested scenario (the city with one seed).
 
 Viewer: https://espoo.evinu.de. Paper: `paper/main.pdf`.
 
-## Run
+## Judge quickstart
 
-Needs Docker, Harbor 0.25 and `OPENAI_API_KEY`.
-
-```
-SEED=0 ./eval.sh
-```
-
-It runs the reference, three agent runs, do nothing and an early stop.
+Needs Docker and Harbor 0.25.
+- `SEED=0 harbor run -y -p task -a oracle`: reward 1.0, 5 minutes on first build.
+- `SEED=0 harbor run -y -p task -a nop`: reward 0.0, 1 minute.
+- `SEED=0 harbor run -y -p task -a opencode -m openai/gpt-6.1-sol`: needs `OPENAI_API_KEY`.
+- `SEED=0 ./eval.sh`: reference, three agent runs, do nothing, early stop.
 
 ## Task
 
 Each year the agent starts up to two of 22 road projects and picks maintenance 0, 1 or 2 (income 40 MEUR). Two or three of ten areas grow fast, visible only in `get_state`. Four MCP tools: `get_state`, `list_projects`, `forecast` (4 per year, 3 years ahead), `commit_year`. Score: total delay over 20 years; do nothing 0, best known plan 1. Rules: `task/instruction.md`.
 
-`data/catalogue.json` is hand-made; its outdated generator was removed (`f45ca44`). Twelve projects follow real Espoo plans; only one has a source (Kehä II and Turunväylä junction, espoo.oncloudos.com/kokous/20231048-15.PDF). Costs follow road length; the ten access upgrades are made up.
+`data/catalogue.json` is hand-made. Twelve projects follow real Espoo plans; one has a source (espoo.oncloudos.com/kokous/20231048-15.PDF). Costs follow road length; the ten access upgrades are made up.
 
 ## Results
 
@@ -41,13 +41,9 @@ By year 2 it names all 15 growing areas, yet never upgrades 11. Its plans barely
 
 ## Why the reward is hard to cheat
 
-- A separate verifier replays the plan and scores it (`task/tests/test.sh`). It logs `replay_off`, the gap to the live run, outside the reward.
+- A separate verifier replays the plan and scores it (`task/tests/test.sh`). It logs `replay_off` (gap to the live run) outside the reward.
 - Do nothing scores 0.
 - After a stop, no new projects start. Stopping the reference after 3 years scores 0.15, after 5 years 0.76.
 - Rejected actions do nothing.
 - Scores are clipped to [0, 1].
-- Replays are bit-identical on one CPU type; AMD and Intel scores differ by at most 0.008.
-
-## Layout
-
-`sim` simulator, `task` Harbor task and verifier, `rl` reference, `grpo` Gemma, `data` network and demand, `viz` viewer, `paper` paper.
+- Replays are bit-identical on one CPU type; AMD and Intel differ by at most 0.008.

@@ -10,13 +10,14 @@ dependencies = [
     "shapely",
     "osmium",
     "requests",
-    "mcp",
+    "mcp>=1.30,<2",
     "pyshp>=3.1.8",
     "trimesh>=5.2.1",
     "pillow>=13.0.0",
 ]
 
 [dependency-groups]
+dev = ["pytest>=8", "hypothesis>=6"]
 grpo = [
     "peft>=0.21.3",
     "torch>=2.15.0",

@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run --with mcp==1.30.0 pytest -q tests
+  harbor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv tool install harbor==0.25.0
+      - run: SEED=0 harbor run -y -p task -a oracle --job-name ci-oracle
+      - run: SEED=0 harbor run -y -p task -a nop --job-name ci-nop
+      - run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for name, want in (("oracle", 1.0), ("nop", 0.0)):
+              r = json.loads(next(Path("jobs").glob(f"ci-{name}/*/result.json")).read_text())
+              got = (r.get("verifier_result") or {}).get("rewards", {}).get("reward")
+              print(name, got, next(Path("jobs").glob(f"ci-{name}/*/verifier/test-stdout.txt")).read_text())
+              assert got is not None and abs(got - want) <= 0.01, (name, got)
+          PY
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jobs
+          path: jobs/*/*/verifier/test-stdout.txt
