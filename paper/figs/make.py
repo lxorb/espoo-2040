@@ -270,8 +270,8 @@ def table_rows():
     for p in EVID.glob(f"{MAIN_JOB}-s*/*/plan.json"):
         r = load(p)
         if r.get("valid", True):
-            ag[str(r["seed"])] = dict(score=r["score"], delay=r["delay"], saved=1 - r["delay"] / norms[str(r["seed"])][0])
-    out["agent"] = ag
+            ag.setdefault(str(r["seed"]), []).append(r)
+    out["agent"] = {k: dict(score=np.mean([r["score"] for r in v]), delay=np.mean([r["delay"] for r in v]), saved=np.mean([1 - r["delay"] / norms[k][0] for r in v])) for k, v in ag.items()}
     g = load(EVID / "grpo.json")["methods"]["runs/grpo/ckpt-90"]["seeds"]
     out["grpo"] = {s: dict(score=x["score"], delay=x["delay"] * 1e6, saved=x["frac"]) for s, x in g.items() if int(s) < 16}
     se = RLD["search"]
@@ -310,7 +310,7 @@ def results(T):
         seeds = sorted(v, key=int)
         sc = [v[s]["score"] for s in seeds]
         m, lo, hi = boot(sc)
-        name = NAME[k] + (f" ($m{{=}}{TLEVEL[k]}$)" if k in TLEVEL and k != "nothing" else "")
+        name = "Frontier LLM agent (3 runs per seed)" if k == "agent" else NAME[k] + (f" ($m{{=}}{TLEVEL[k]}$)" if k in TLEVEL and k != "nothing" else "")
         dl = [v[s]["delay"] for s in seeds]
         dcell = f"{np.mean(dl) / 1e6:.1f}" if None not in dl else "--"
         scell = f"{100 * np.mean([v[s]['saved'] for s in seeds]):.1f}" if None not in dl else "--"
@@ -554,16 +554,19 @@ def job_of(p):
 def agent_summary(runs, ref, sfx):
     runs = sorted(runs, key=lambda r: int(r["seed"]))
     sc = [r["score"] for r in runs]
-    m, lo, hi = boot(sc)
-    paired_runs = [(ref[str(r["seed"])], r["score"]) for r in runs if str(r["seed"]) in ref]
     by_seed = {}
     for r in runs:
         by_seed.setdefault(str(r["seed"]), []).append(r["score"])
+    means = [np.mean(v) for v in by_seed.values()]
+    m, lo, hi = boot(means)
+    paired_runs = [(ref[str(r["seed"])], r["score"]) for r in runs if str(r["seed"]) in ref]
     seeds = sorted((s for s in by_seed if s in ref), key=int)
     w, n, sp, wp = paired([ref[s] for s in seeds], [np.mean(by_seed[s]) for s in seeds]) if seeds else (0, 0, 1.0, 1.0)
     M.update({f"agentRuns{sfx}": str(len(sc)), f"agentMeanAll{sfx}": f"{m:.3f}", f"agentCIAll{sfx}": f"{lo:.3f}--{hi:.3f}",
               f"agentWorstRun{sfx}": f"{min(sc):.3f}", f"agentBestRun{sfx}": f"{max(sc):.3f}",
-              f"refWinsRuns{sfx}": f"{sum(a > b for a, b in paired_runs)}/{len(paired_runs)}", f"refWinsSeeds{sfx}": f"{w}/{n}", f"agentSignPAll{sfx}": pf(sp)})
+              f"refWinsRuns{sfx}": f"{sum(a > b for a, b in paired_runs)}/{len(paired_runs)}", f"refWinsSeeds{sfx}": f"{w}/{n}", f"agentSignPAll{sfx}": pf(sp),
+              f"agentWilcoxonPAll{sfx}": pf(wp), f"agentSeedStd{sfx}": f"{np.mean([np.std(v) for v in by_seed.values()]):.3f}",
+              f"refWinsBestRun{sfx}": f"{sum(ref[s] > max(by_seed[s]) for s in seeds)}/{len(seeds)}", f"agentSeedCount{sfx}": str(len(by_seed))})
     return f"{len(sc)} & {m:.3f} [{lo:.3f}, {hi:.3f}] & {min(sc):.3f} & {max(sc):.3f} & {sum(a > b for a, b in paired_runs)}/{len(paired_runs)} & {w}/{n} & {pf(sp)}"
 
 
@@ -588,6 +591,10 @@ def agent_runs(rows):
     main = [r for (m, v), g in groups.items() if v == "base" for r in g]
     if main:
         agent_summary(main, ref, "")
+        by = {}
+        for r in sorted(main, key=lambda r: int(r["seed"])):
+            by.setdefault(str(r["seed"]), []).append(r["score"])
+        (HERE / "agent_seeds.tex").write_text("".join(f"{k} & " + " & ".join(f"{x:.3f}" for x in v) + f" & {np.mean(v):.3f} & {np.std(v):.3f} & {ref[k]:.3f} \\\\\n" for k, v in by.items()))
         M.update(agentCostUsd=f"{cost:.2f}", agentSeedsAll=f"{min(r['seed'] for r in main)} to {max(r['seed'] for r in main)}")
     for (m, v), g in sorted(groups.items()):
         sfx = letters(m) + ("" if v.startswith("base") else letters(v))
@@ -595,7 +602,12 @@ def agent_runs(rows):
     (HERE / "agentruns.tex").write_text("\n".join(out) + "\n")
     ab = [(k, g) for k, g in groups.items() if not k[1].startswith(("base", "redteam"))]
     if ab:
-        base = {m: {str(r["seed"]): r["score"] for r in g} for (m, v), g in groups.items() if v == "base"}
+        base, base3 = {}, {}
+        for (m, v), g in groups.items():
+            if v == "base":
+                for r in sorted(g, key=lambda r: r["batch"], reverse=True):
+                    base.setdefault(m, {})[str(r["seed"])] = r["score"]
+                    base3.setdefault(m, {}).setdefault(str(r["seed"]), []).append(r["score"])
         lines = []
         for (m, v), g in sorted(ab, key=lambda kg: ["longforecast", "max", "hint", "notes"].index(kg[0][1]) if kg[0][1] in ("longforecast", "max", "hint", "notes") else 9):
             g = sorted(g, key=lambda r: int(r["seed"]))
@@ -614,6 +626,7 @@ def agent_runs(rows):
                       f"abl{t}Min": f"{min(sc):.3f}", f"abl{t}Max": f"{max(sc):.3f}", f"abl{t}CostUsd": f"{sum(r.get('cost_usd', 0) or 0 for r in g):.2f}"})
             if bs:
                 M[f"abl{t}GapShare"] = f"{(np.mean(sc) - np.mean(bs)) / (np.mean(rs) - np.mean(bs)):.2f}"
+                M["ablBaseMean"] = f"{np.mean([np.mean(base3[m][s]) for s in seeds]):.3f}"
                 M.update(ablBase=f"{np.mean(bs):.3f}", ablRef=f"{np.mean(rs):.3f}", ablSeeds=f"{min(map(int, seeds))} to {max(map(int, seeds))}")
             lines.append(f"\\texttt{{{m}}} & {v} & {len(g)} & {mm:.3f} [{lo:.3f}, {hi:.3f}] & {neg(db) if bs else '--'} & {neg(dr)} & {wins}/{len(g)} \\\\")
         (HERE / "ablations.tex").write_text("\n".join(lines) + "\n")
@@ -730,7 +743,7 @@ def evidence():
     for name in ("test", "exploits", "failures", "counterfactual", "grpo", "norms"):
         if not (EVID / f"{name}.json").exists():
             print("missing", f"evidence/{name}.json")
-    agent_runs([load(p) | dict(job=job_of(p), top=p.parent.parent == EVID) for p in sorted(EVID.glob("**/plan.json"))])
+    agent_runs([load(p) | dict(job=job_of(p), top=p.parent.parent == EVID, batch=int(p.parent.name.split("-")[0]) if p.parent.parent != EVID else 0) for p in sorted(EVID.glob("**/plan.json"))])
     if (EVID / "rules_v2.json").exists():
         rules_v2(load(EVID / "rules_v2.json"))
 
