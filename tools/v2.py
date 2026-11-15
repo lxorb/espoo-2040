@@ -23,11 +23,14 @@ WAVE = [('''        n, L = len(self.nodes), s["L"]
         self.wave = (int(w.integers(*P.WAVE_YEARS)), [(self.areas[i][1], w.uniform(*gr["areas"][i]["pop"])) for i in w.choice(rest, w.integers(1, 3), replace=False)])
         n, L = len(self.nodes), s["L"]
 '''), ('''        if y:
-            s["fp"] *= 1 + self.rp''', '''        if y == self.wave[0] and self.who != "forecast":
-            for m, r in self.wave[1]:
-                self.rp, self.rj = (np.where(np.isin(np.arange(x.size), m), r, x) for x in (self.rp, self.rj))
+            s["fp"] *= 1 + self.rp
+            s["fj"] *= 1 + self.rj''', '''        s["wave"] = s.get("wave") or y == self.wave[0] and self.who != "forecast"
+        rp, rj = self.rp, self.rj
+        for m, r in self.wave[1] if s["wave"] else []:
+            rp, rj = (np.where(np.isin(np.arange(x.size), m), r, x) for x in (rp, rj))
         if y:
-            s["fp"] *= 1 + self.rp''')]
+            s["fp"] *= 1 + rp
+            s["fj"] *= 1 + rj''')]
 TEXT = [(" gets an emergency rebuild that year, at a multiple of its resurfacing cost and with reduced capacity.",
          " gets an emergency rebuild that year, at a multiple of its resurfacing cost and with reduced capacity, if your cash covers it; otherwise the rebuild is deferred, the segment keeps decaying and keeps the reduced capacity until it is rebuilt.")]
 TEXT_WAVE = [(" It shows year by year in `areas` of `get_state` (now against the base year).",
@@ -45,7 +48,7 @@ def sub(p, pairs):
 def gen(name, wave):
     D = ROOT / name
     shutil.rmtree(D, ignore_errors=True)
-    for f in ("sim", "data/out", "data/catalogue.json", "rl/policy.py", "rl/policy.npz", "rl/places.json", "task", "tools/norms.py", "tools/v2.py",
+    for f in ("sim", "data/out", "data/catalogue.json", "rl", "task", "tools/norms.py", "tools/v2.py", "tools/experts.py",
               *[f"evidence/gate4-s{k}" for k in range(5)]):
         (D / f).parent.mkdir(parents=True, exist_ok=True)
         (shutil.copytree if (ROOT / f).is_dir() else shutil.copy)(ROOT / f, D / f, **({"ignore": shutil.ignore_patterns("__pycache__")} if (ROOT / f).is_dir() else {}))
@@ -72,7 +75,7 @@ def one(a):
     sys.path[:0] = [str(ROOT / "tools")]
     import norms as N
     f = {"nothing": (lambda c: [], None), "planner": (N.planner(False), None), "learned": (N.learned(N.Policy()), None), "reactive": (N.reactive(), 1),
-         "maintain-0": (lambda c: [], 0), "maintain-2": (lambda c: [], 2)}[who]
+         "learned-m2": (lambda c, f=N.learned(N.Policy()): [a for a in f(c) if "maintain" not in a], 2), "maintain-0": (lambda c: [], 0), "maintain-2": (lambda c: [], 2)}[who]
     loss, plan, c = N.play(seed, *f)
     cash = [r["budget"] for r in c.recs]
     return dict(seed=seed, who=who, loss=loss, plan=plan, min_cash=min(cash), first_negative=next((i for i, x in enumerate(cash) if x < 0), None),
@@ -81,7 +84,7 @@ def one(a):
 
 
 def measure(seeds):
-    whos = ["nothing", "planner", "learned", "reactive", "maintain-0", "maintain-2"]
+    whos = ["nothing", "planner", "learned", "learned-m2", "reactive", "maintain-0", "maintain-2"]
     with mp.get_context("spawn").Pool(min(32, len(seeds) * len(whos))) as pool:
         res = pool.map(one, [(s, w) for s in seeds for w in whos], chunksize=1)
     out = {}
@@ -113,7 +116,7 @@ def collect(names):
                 meta[f"norms_{n}_source"] = {k: v["source"] for k, v in json.loads(ev.read_text())["seeds"].items()}
         ex = ROOT / f"task-{n}/evidence/exploits.json"
         if ex.exists():
-            meta[f"exploits_{n}"] = {k: {f: v[f] for f in ("mean", "score_mean", "wins_over_ref", "ties_with_ref", "min_cash", "replay_off")} for k, v in json.loads(ex.read_text())["strategies"].items()}
+            meta[f"exploits_{n}"] = {k: {f: v[f] for f in ("seeds", "score", "mean", "score_mean", "wins_over_ref", "ties_with_ref", "min_cash", "replay_off")} for k, v in json.loads(ex.read_text())["strategies"].items()}
     tmp = ROOT / "evidence/rules_v2.json.tmp"
     tmp.write_text(json.dumps(dict(meta=meta, variants=res)))
     os.replace(tmp, ROOT / "evidence/rules_v2.json")
