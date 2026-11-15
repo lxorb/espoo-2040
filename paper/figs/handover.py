@@ -74,19 +74,32 @@ def plot(rows):
     import make
     plt = make.plt
     fig, ax = plt.subplots(1, 2, figsize=(5.5, 2.1), sharey=True)
-    cm = plt.get_cmap("viridis")
-    for r in rows:
-        c, ls = cm(r["seed"] / 5), "-" if r["job"].startswith("gate4") else "--"
+    col = dict(gate4=make.COL["agent"], a1=make.COL["rl"])
+    for g, c in col.items():
+        rr = [r for r in rows if r["job"].startswith(g)]
         for i, d in enumerate(("agent", "reference")):
-            ax[i].plot(KS, r[d], ls, color=c, lw=0.9, label=f"seed {r['seed']}" if ls == "-" and i else None)
-            if r[f"break_{d}"] is not None:
-                ax[i].plot(r[f"break_{d}"], r[d][r[f"break_{d}"]], "o", color=c, ms=3)
+            for r in rr:
+                ax[i].plot(KS, r[d], "-", color=c, lw=0.5, alpha=0.35)
+            ax[i].plot(KS, np.median([r[d] for r in rr], 0), "-", color=c, lw=1.6, label=f"{g} median ({len(rr)} runs)" if i else None)
     ax[0].set(xlabel="$k$ (agent, then learned policy)", ylabel="score", title="(a) agent first", xticks=range(0, 16, 3))
     ax[1].set(xlabel="$k$ (learned policy, then agent)", title="(b) learned policy first", xticks=range(0, 16, 3))
-    ax[1].plot([], [], "-", color=make.MUTED, lw=0.9, label="run 1")
-    ax[1].plot([], [], "--", color=make.MUTED, lw=0.9, label="run 2")
     ax[1].legend(loc="center left", bbox_to_anchor=(1.02, 0.5), handlelength=1.8)
     make.save(fig, "handover")
+
+
+def summary(rows):
+    out = {}
+    for g in sorted({r["job"].split("-s")[0] for r in rows}):
+        rr = [r for r in rows if r["job"].startswith(g)]
+        big = [r for r in rr if r["gap"] >= 0.3]
+        out[g] = dict(runs=len(rr), big=len(big), break_years=sorted(r["break_year"] for r in big if r["break_year"]),
+                      recover=[r["agent"][r["break_agent"] - 1] for r in big if r["break_agent"]], after=[r["agent"][r["break_agent"]] for r in big if r["break_agent"]],
+                      **{f"agent_first_k{k}": float(np.mean([r["agent"][k] for r in rr])) for k in (1, 3, 5)},
+                      **{f"agent_first_k{k}_big": float(np.mean([r["agent"][k] for r in big])) if big else None for k in (1, 3, 5)},
+                      reverse_years=[r["break_reference"] for r in rr], reference_alone=float(np.mean([r["reference_alone"] for r in rr])),
+                      agent_alone=float(np.mean([r["agent_alone"] for r in rr])),
+                      mix_worse=sum(min(r["agent"] + r["reference"]) < min(r["agent_alone"], r["reference_alone"]) - 0.02 for r in rr))
+    return out
 
 
 def main():
@@ -104,10 +117,10 @@ def main():
                          break_agent=fa, break_reference=fb, break_year=None if fa is None else 2026 + fa - 1,
                          decision=None if not fa else dict(agent=a[fa]["years"][fa - 1], reference=a[fa - 1]["years"][fa - 1])))
     cpu = next((l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name")), platform.processor())
-    meta = dict(script="paper/figs/handover.py", command="uv run --with mcp==1.30.0 python paper/figs/handover.py", seeds=sorted({r["seed"] for r in rs}),
+    meta = dict(script="paper/figs/handover.py", command="uv run --with mcp==1.30.0 --with matplotlib python paper/figs/handover.py", seeds=sorted({r["seed"] for r in rs}),
                 date=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), machine=f"{platform.node()} {cpu}", sim=KEY,
                 threshold="midpoint of the score of the reference alone (k=0) and the agent alone (k=15)")
-    (EV / "handover.json").write_text(json.dumps(dict(meta=meta, runs=rows), indent=1))
+    (EV / "handover.json").write_text(json.dumps(dict(meta=meta, summary=summary(rows), runs=rows), indent=1))
     plot(rows)
     for r in rows:
         print(r["job"], r["seed"], "gap", round(r["gap"], 3), "break", r["break_agent"], r["break_year"], "rev", r["break_reference"],

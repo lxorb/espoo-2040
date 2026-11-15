@@ -6,14 +6,15 @@ import platform
 import re
 import sys
 import unicodedata
-from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool, get_context
 from pathlib import Path
 
 import numpy as np
 from scipy import stats
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+sys.path[:0] = [str(ROOT), str(Path(__file__).parent)]
 from sim import City
 from sim import params as P
 
@@ -81,15 +82,29 @@ def play(seed, plan, add=None, maint=None):
     return out
 
 
+def ref_plan(seed):
+    from handover import play as closed
+    return [[{"build": b} for b in y["built"]] + [{"maintain": y["maint"]}] * (y["maint"] is not None) for y in closed(seed, [], 0, "agent")["years"]]
+
+
 def runs():
     out = []
-    for p in sorted(EV.glob("*/plan.json")):
+    for p in sorted(EV.glob("*/plan.json")) + sorted(EV.glob("*/*/plan.json")):
         d = load(p)
-        t = p.with_name("trajectory.json")
-        out.append(dict(job=p.parent.name, seed=int(d["seed"]), who=d["who"], role="reference" if d["who"] == "reference" else "agent",
-                        plan=[[{k: v for k, v in a.items() if k != "ok"} for a in acts] for _, acts in d["plan"]], stored=d.get("delay"),
+        if d.get("valid") is False:
+            continue
+        t, job = p.with_name("trajectory.json"), str(p.parent.relative_to(EV))
+        out.append(dict(job=job, seed=int(d["seed"]), who=d["who"], role="reference" if d["who"] == "reference" else job.split("-s")[0],
+                        plan=[[{k: v for k, v in a.items() if k != "ok"} for a in acts] for _, acts in d["plan"]][:15], stored=d.get("delay"),
                         steps=load(t)["steps"] if t.exists() else None))
+    miss = sorted({r["seed"] for r in out} - {r["seed"] for r in out if r["role"] == "reference"})
+    with ProcessPoolExecutor(max(len(miss), 1), get_context("spawn")) as p:
+        out += [dict(job=f"policy-s{s}", seed=s, who="reference", role="reference", plan=pl, stored=None, steps=None) for s, pl in zip(miss, p.map(ref_plan, miss))]
     return out
+
+
+def groups(rows):
+    return sorted({r["role"] for r in rows} - {"reference"})
 
 
 def ci(v, n=10000):
@@ -119,7 +134,7 @@ def by_seed(rs, f):
 
 def meta(seeds, name):
     cpu = next((l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name")), platform.processor())
-    return dict(script=f"paper/figs/{name}.py", command=f"uv run python paper/figs/{name}.py", seeds=sorted(seeds),
+    return dict(script=f"paper/figs/{name}.py", command=f"uv run --with mcp==1.30.0 python paper/figs/{name}.py", seeds=sorted(seeds),
                 date=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"), machine=f"{platform.node()} {cpu}", sim=files_key())
 
 
@@ -183,7 +198,7 @@ def jaccard(rows):
         r["jaccard_other_seeds"] = float(np.mean(o)) if o else None
     return {role: dict(pairs=ci([len(set(a["builds"]) & set(b["builds"])) / max(len(set(a["builds"]) | set(b["builds"])), 1)
                                 for a, b in itertools.combinations([x for x in rows if x["role"] == role], 2) if a["seed"] != b["seed"]]))
-            for role in ("agent", "reference")}
+            for role in groups(rows) + ["reference"]}
 
 
 def job(r):
@@ -200,19 +215,21 @@ def main():
     keys = ["score", "jaccard_other_seeds", "boom_upgraded", "boom_upgraded_by_2031", "cash_lock_years", "cash_lock_years_no_upgrade", "boom_access_blocked_years", "boom_access_skipped_years", "maint2_years", "maint2_share", "maint2_spend", "maint_spend", "rebuild_spend", "total_spend", "cash_end",
             "forecasts_with_access", "forecasts_access_never_started"]
     summ = {"jaccard_pairs": jac}
-    for role in ("agent", "reference"):
+    for role in groups(rows) + ["reference"]:
         rr = [r for r in rows if r["role"] == role]
         summ[role] = {k: dict(ci(list(by_seed(rr, lambda r: r[k]).values())), per_seed=by_seed(rr, lambda r: r[k])) for k in keys}
         summ[role]["lag"] = ci([s["lag"] for r in rr for s in r["sees_acts"] if s["lag"] is not None])
         summ[role]["never_upgraded_mentioned"] = sum(s["first_upgrade"] is None and s["first_mention"] is not None for r in rr for s in r["sees_acts"])
         summ[role]["boom_total"] = sum(len(r["boom"]) for r in rr)
         summ[role]["calls"] = {k: ci([r["calls"][k] for r in rr if r["calls"]]) for k in ("get_state", "list_projects", "forecast", "commit_year")}
-    ag, rf = (by_seed([r for r in rows if r["role"] == x], lambda r: r["score"]) for x in ("agent", "reference"))
-    common = sorted(set(ag) & set(rf))
-    summ["reference_vs_agent_score"] = paired([rf[s] for s in common], [ag[s] for s in common])
-    for k in ("boom_access_blocked_years", "maint2_share", "jaccard_other_seeds"):
-        a, b = (by_seed([r for r in rows if r["role"] == x], lambda r: r[k]) for x in ("agent", "reference"))
-        summ[f"agent_gt_reference_{k}"] = paired([a[s] for s in common], [b[s] for s in common])
+    rf = by_seed([r for r in rows if r["role"] == "reference"], lambda r: r["score"])
+    for g in groups(rows):
+        ag = by_seed([r for r in rows if r["role"] == g], lambda r: r["score"])
+        common = sorted(set(ag) & set(rf))
+        summ[f"reference_vs_{g}_score"] = paired([rf[s] for s in common], [ag[s] for s in common])
+        for k in ("boom_access_blocked_years", "maint2_share", "jaccard_other_seeds"):
+            a, b = (by_seed([r for r in rows if r["role"] == x], lambda r: r[k]) for x in (g, "reference"))
+            summ[f"{g}_gt_reference_{k}"] = paired([a[s] for s in common], [b[s] for s in common])
     out = dict(meta=meta({r["seed"] for r in rs}, "failures"), runs=rows, summary=summ)
     (EV / "failures.json").write_text(json.dumps(out, indent=1, ensure_ascii=False))
     return out

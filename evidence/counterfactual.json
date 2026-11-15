@@ -1,17 +1,28 @@
 {
  "meta": {
   "script": "paper/figs/counterfactual.py",
-  "command": "uv run python paper/figs/counterfactual.py",
+  "command": "uv run --with mcp==1.30.0 python paper/figs/counterfactual.py",
   "seeds": [
    0,
    1,
    2,
    3,
-   4
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15
   ],
-  "date": "2026-11-15T00:52:10+00:00",
+  "date": "2026-11-15T05:28:47+00:00",
   "machine": "espoo-runner INTEL(R) XEON(R) PLATINUM 8573C",
-  "sim": "5e027888f58d0da4aa178b2131813d7945729857"
+  "sim": "b70d0592cda37f73ab698311dceba3bf1f12d5b2"
  },
  "arms": {
   "a_access": "add the access upgrade of the truly fastest-growing area in 2028 or the first year it is accepted",
@@ -23,7 +34,7 @@
   {
    "job": "gate4-s0",
    "seed": 0,
-   "role": "agent",
+   "role": "gate4",
    "arm": "a_access",
    "add": "kiviruukki-access",
    "added": null,
@@ -45,7 +56,7 @@
   {
    "job": "gate4-s0",
    "seed": 0,
-   "role": "agent",
+   "role": "gate4",
    "arm": "b_maint1",
    "add": null,
    "added": null,
@@ -67,7 +78,7 @@
   {
    "job": "gate4-s0",
    "seed": 0,
-   "role": "agent",
+   "role": "gate4",
    "arm": "c_both",
    "add": "kiviruukki-access",
    "added": 2028,
@@ -87,7 +98,7 @@
   {
    "job": "gate4-s1",
    "seed": 1,
-   "role": "agent",
+   "role": "gate4",
    "arm": "a_access",
    "add": "kiviruukki-access",
    "added": null,
@@ -109,7 +120,7 @@
   {
    "job": "gate4-s1",
    "seed": 1,
-   "role": "agent",
+   "role": "gate4",
    "arm": "b_maint1",
    "add": null,
    "added": null,
@@ -130,7 +141,7 @@
   {
    "job": "gate4-s1",
    "seed": 1,
-   "role": "agent",
+   "role": "gate4",
    "arm": "c_both",
    "add": "kiviruukki-access",
    "added": 2028,
@@ -151,7 +162,7 @@
   {
    "job": "gate4-s2",
    "seed": 2,
-   "role": "agent",
+   "role": "gate4",
    "arm": "a_access",
    "add": "vermo-access",
    "added": null,
@@ -173,7 +184,7 @@
   {
    "job": "gate4-s2",
    "seed": 2,
-   "role": "agent",
+   "role": "gate4",
    "arm": "b_maint1",
    "add": null,
    "added": null,
@@ -194,7 +205,7 @@
   {
    "job": "gate4-s2",
    "seed": 2,
-   "role": "agent",
+   "role": "gate4",
    "arm": "c_both",
    "add": "vermo-access",
    "added": 2028,
@@ -215,7 +226,7 @@
   {
    "job": "gate4-s3",
    "seed": 3,
-   "role": "agent",
+   "role": "gate4",
    "arm": "a_access",
    "add": "finnoo-access",
    "added": null,
@@ -237,7 +248,7 @@
   {
    "job": "gate4-s3",
    "seed": 3,
-   "role": "agent",
+   "role": "gate4",
    "arm": "b_maint1",
    "add": null,
    "added": null,
@@ -258,7 +269,7 @@
   {
    "job": "gate4-s3",
    "seed": 3,
-   "role": "agent",
+   "role": "gate4",
    "arm": "c_both",
    "add": "finnoo-access",
    "added": 2028,
@@ -279,7 +290,7 @@
   {
    "job": "gate4-s4",
    "seed": 4,
-   "role": "agent",
+   "role": "gate4",
    "arm": "a_access",
    "add": "leppavaara-access",
    "added": 2034,
@@ -301,7 +312,7 @@
   {
    "job": "gate4-s4",
    "seed": 4,
-   "role": "agent",
+   "role": "gate4",
    "arm": "b_maint1",
    "add": null,
    "added": null,
@@ -322,7 +333,7 @@
   {
    "job": "gate4-s4",
    "seed": 4,
-   "role": "agent",
+   "role": "gate4",
    "arm": "c_both",
    "add": "leppavaara-access",
    "added": 2029,
@@ -434,165 +445,1669 @@
     "espoonvayla-2x2",
     "otaniemi-access"
    ]
+  },
+  {
+   "job": "a1-s0/0-task__TjDVNZA",
+   "seed": 0,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "kiviruukki-access",
+   "added": 2034,
+   "fastest": "Kiviruukki",
+   "base": 0.5191077667536179,
+   "score": 0.9248630331984525,
+   "diff": 0.4057552664448346,
+   "raw_base": 0.5191077667536179,
+   "raw": 0.9248630331984525,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "kiviruukki-access",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s0/0-task__TjDVNZA",
+   "seed": 0,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Kiviruukki",
+   "base": 0.5191077667536179,
+   "score": 0.5049680556451805,
+   "diff": -0.01413971110843737,
+   "raw_base": 0.5191077667536179,
+   "raw": 0.5049680556451805,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s0/0-task__TjDVNZA",
+   "seed": 0,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "kiviruukki-access",
+   "added": 2028,
+   "fastest": "Kiviruukki",
+   "base": 0.5191077667536179,
+   "score": 0.6290912240800082,
+   "diff": 0.10998345732639025,
+   "raw_base": 0.5191077667536179,
+   "raw": 0.6290912240800082,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "kiviruukki-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s1/0-task__UzEaPSs",
+   "seed": 1,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "kiviruukki-access",
+   "added": null,
+   "fastest": "Kiviruukki",
+   "base": 0.3210584114665318,
+   "score": 0.3210584114665318,
+   "diff": 0.0,
+   "raw_base": 0.3210584114665318,
+   "raw": 0.3210584114665318,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "espoonvayla-mid",
+    "keha2-turunvayla-junction",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s1/0-task__UzEaPSs",
+   "seed": 1,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Kiviruukki",
+   "base": 0.3210584114665318,
+   "score": 0.28911199200555016,
+   "diff": -0.031946419460981645,
+   "raw_base": 0.3210584114665318,
+   "raw": 0.28911199200555016,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "keha2-turunvayla-junction",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s1/0-task__UzEaPSs",
+   "seed": 1,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "kiviruukki-access",
+   "added": null,
+   "fastest": "Kiviruukki",
+   "base": 0.3210584114665318,
+   "score": 0.28911199200555016,
+   "diff": -0.031946419460981645,
+   "raw_base": 0.3210584114665318,
+   "raw": 0.28911199200555016,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "keha2-turunvayla-junction",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s10/0-task__nGyT6GJ",
+   "seed": 10,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "espoonlahti-access",
+   "added": null,
+   "fastest": "Espoonlahti",
+   "base": 0.8057603297744749,
+   "score": 0.8057603297744749,
+   "diff": 0.0,
+   "raw_base": 0.8057603297744749,
+   "raw": 0.8057603297744749,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "kauklahdenvayla-2x2",
+    "keha2-turunvayla-junction",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s10/0-task__nGyT6GJ",
+   "seed": 10,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Espoonlahti",
+   "base": 0.8057603297744749,
+   "score": 0.7589892602475979,
+   "diff": -0.04677106952687693,
+   "raw_base": 0.8057603297744749,
+   "raw": 0.7589892602475979,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "kauklahdenvayla-2x2",
+    "keha2-turunvayla-junction",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s10/0-task__nGyT6GJ",
+   "seed": 10,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "espoonlahti-access",
+   "added": null,
+   "fastest": "Espoonlahti",
+   "base": 0.8057603297744749,
+   "score": 0.7589892602475979,
+   "diff": -0.04677106952687693,
+   "raw_base": 0.8057603297744749,
+   "raw": 0.7589892602475979,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "kauklahdenvayla-2x2",
+    "keha2-turunvayla-junction",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s11/0-task__q9pw2yE",
+   "seed": 11,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "otaniemi-access",
+   "added": null,
+   "fastest": "Otaniemi and Keilaniemi",
+   "base": 0.9652439630344849,
+   "score": 0.9652439630344849,
+   "diff": 0.0,
+   "raw_base": 0.9652439630344849,
+   "raw": 0.9652439630344849,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s11/0-task__q9pw2yE",
+   "seed": 11,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Otaniemi and Keilaniemi",
+   "base": 0.9652439630344849,
+   "score": 0.9549093063463686,
+   "diff": -0.010334656688116284,
+   "raw_base": 0.9652439630344849,
+   "raw": 0.9549093063463686,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s11/0-task__q9pw2yE",
+   "seed": 11,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "otaniemi-access",
+   "added": 2028,
+   "fastest": "Otaniemi and Keilaniemi",
+   "base": 0.9652439630344849,
+   "score": 0.9755849210862066,
+   "diff": 0.01034095805172175,
+   "raw_base": 0.9652439630344849,
+   "raw": 0.9755849210862066,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s12/0-task__rvUU3rC",
+   "seed": 12,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "kera-access",
+   "added": null,
+   "fastest": "Kera",
+   "base": 0.6261871766788917,
+   "score": 0.6261871766788917,
+   "diff": 0.0,
+   "raw_base": 0.6261871766788917,
+   "raw": 0.6261871766788917,
+   "rejected": 0,
+   "started": [
+    "keha2-turunvayla-junction",
+    "kera-access",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s12/0-task__rvUU3rC",
+   "seed": 12,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Kera",
+   "base": 0.6261871766788917,
+   "score": 0.6090747185598734,
+   "diff": -0.017112458119018292,
+   "raw_base": 0.6261871766788917,
+   "raw": 0.6090747185598734,
+   "rejected": 0,
+   "started": [
+    "keha2-turunvayla-junction",
+    "kera-access",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s12/0-task__rvUU3rC",
+   "seed": 12,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "kera-access",
+   "added": 2028,
+   "fastest": "Kera",
+   "base": 0.6261871766788917,
+   "score": 0.6435358897238898,
+   "diff": 0.017348713044998076,
+   "raw_base": 0.6261871766788917,
+   "raw": 0.6435358897238898,
+   "rejected": 2,
+   "started": [
+    "keha2-turunvayla-junction",
+    "kera-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s13/0-task__8QGB7f2",
+   "seed": 13,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "kiviruukki-access",
+   "added": null,
+   "fastest": "Kiviruukki",
+   "base": 0.9920864936002287,
+   "score": 0.9920864936002287,
+   "diff": 0.0,
+   "raw_base": 0.9920864936002287,
+   "raw": 0.9920864936002287,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "finnoo-access",
+    "kiviruukki-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s13/0-task__8QGB7f2",
+   "seed": 13,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Kiviruukki",
+   "base": 0.9920864936002287,
+   "score": 0.9257148456099678,
+   "diff": -0.06637164799026096,
+   "raw_base": 0.9920864936002287,
+   "raw": 0.9257148456099678,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "kiviruukki-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s13/0-task__8QGB7f2",
+   "seed": 13,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "kiviruukki-access",
+   "added": 2028,
+   "fastest": "Kiviruukki",
+   "base": 0.9920864936002287,
+   "score": 0.9461351634892148,
+   "diff": -0.04595133011101393,
+   "raw_base": 0.9920864936002287,
+   "raw": 0.9461351634892148,
+   "rejected": 2,
+   "started": [
+    "espoonvayla-2x2",
+    "kiviruukki-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s14/0-task__rAJjvKf",
+   "seed": 14,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "hista-access",
+   "added": null,
+   "fastest": "Hista",
+   "base": 0.950133011182446,
+   "score": 0.950133011182446,
+   "diff": 0.0,
+   "raw_base": 0.950133011182446,
+   "raw": 0.950133011182446,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "kera-access",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s14/0-task__rAJjvKf",
+   "seed": 14,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Hista",
+   "base": 0.950133011182446,
+   "score": 0.7730996044387516,
+   "diff": -0.1770334067436944,
+   "raw_base": 0.950133011182446,
+   "raw": 0.7730996044387516,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s14/0-task__rAJjvKf",
+   "seed": 14,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "hista-access",
+   "added": 2028,
+   "fastest": "Hista",
+   "base": 0.950133011182446,
+   "score": 0.0758316287170031,
+   "diff": -0.8743013824654429,
+   "raw_base": 0.950133011182446,
+   "raw": 0.0758316287170031,
+   "rejected": 2,
+   "started": [
+    "espoonvayla-2x2",
+    "hista-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s15/0-task__Qno9ZaH",
+   "seed": 15,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "finnoo-access",
+   "added": null,
+   "fastest": "Finnoo",
+   "base": 0.8523393841946856,
+   "score": 0.8523393841946856,
+   "diff": 0.0,
+   "raw_base": 0.8523393841946856,
+   "raw": 0.8523393841946856,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "kera-access",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s15/0-task__Qno9ZaH",
+   "seed": 15,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Finnoo",
+   "base": 0.8523393841946856,
+   "score": 0.20958457389824184,
+   "diff": -0.6427548102964438,
+   "raw_base": 0.8523393841946856,
+   "raw": 0.20958457389824184,
+   "rejected": 2,
+   "started": [
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s15/0-task__Qno9ZaH",
+   "seed": 15,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "finnoo-access",
+   "added": 2028,
+   "fastest": "Finnoo",
+   "base": 0.8523393841946856,
+   "score": 0.8460325609049679,
+   "diff": -0.006306823289717656,
+   "raw_base": 0.8523393841946856,
+   "raw": 0.8460325609049679,
+   "rejected": 2,
+   "started": [
+    "finnoo-access",
+    "kera-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s2/1-task__opSfe8q",
+   "seed": 2,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "vermo-access",
+   "added": null,
+   "fastest": "Vermo",
+   "base": 0.890374966535377,
+   "score": 0.890374966535377,
+   "diff": 0.0,
+   "raw_base": 0.890374966535377,
+   "raw": 0.890374966535377,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access",
+    "vermo-access"
+   ]
+  },
+  {
+   "job": "a1-s2/1-task__opSfe8q",
+   "seed": 2,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Vermo",
+   "base": 0.890374966535377,
+   "score": 0.6732019249715699,
+   "diff": -0.217173041563807,
+   "raw_base": 0.890374966535377,
+   "raw": 0.6732019249715699,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s2/1-task__opSfe8q",
+   "seed": 2,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "vermo-access",
+   "added": null,
+   "fastest": "Vermo",
+   "base": 0.890374966535377,
+   "score": 0.6732019249715699,
+   "diff": -0.217173041563807,
+   "raw_base": 0.890374966535377,
+   "raw": 0.6732019249715699,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s3/0-task__k29TSL6",
+   "seed": 3,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "finnoo-access",
+   "added": 2034,
+   "fastest": "Finnoo",
+   "base": 0.6286725728634683,
+   "score": 0.7998901989575844,
+   "diff": 0.17121762609411606,
+   "raw_base": 0.6286725728634683,
+   "raw": 0.7998901989575844,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "finnoo-access",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s3/0-task__k29TSL6",
+   "seed": 3,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Finnoo",
+   "base": 0.6286725728634683,
+   "score": 0.5978708333506342,
+   "diff": -0.03080173951283416,
+   "raw_base": 0.6286725728634683,
+   "raw": 0.5978708333506342,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s3/0-task__k29TSL6",
+   "seed": 3,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "finnoo-access",
+   "added": 2028,
+   "fastest": "Finnoo",
+   "base": 0.6286725728634683,
+   "score": 0.4267826975429629,
+   "diff": -0.20188987532050545,
+   "raw_base": 0.6286725728634683,
+   "raw": 0.4267826975429629,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "finnoo-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s4/0-task__dGM5N8W",
+   "seed": 4,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "leppavaara-access",
+   "added": 2033,
+   "fastest": "Leppävaara",
+   "base": 0.9649184401488123,
+   "score": 0.9853945596143414,
+   "diff": 0.020476119465529075,
+   "raw_base": 0.9649184401488123,
+   "raw": 0.9853945596143414,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "leppavaara-access",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s4/0-task__dGM5N8W",
+   "seed": 4,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Leppävaara",
+   "base": 0.9649184401488123,
+   "score": 0.9575657259067053,
+   "diff": -0.007352714242107039,
+   "raw_base": 0.9649184401488123,
+   "raw": 0.9575657259067053,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s4/0-task__dGM5N8W",
+   "seed": 4,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "leppavaara-access",
+   "added": null,
+   "fastest": "Leppävaara",
+   "base": 0.9649184401488123,
+   "score": 0.9575657259067053,
+   "diff": -0.007352714242107039,
+   "raw_base": 0.9649184401488123,
+   "raw": 0.9575657259067053,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s5/0-task__UttGrW5",
+   "seed": 5,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "vermo-access",
+   "added": 2034,
+   "fastest": "Vermo",
+   "base": 0.7503587178219981,
+   "score": 0.9051161740901135,
+   "diff": 0.15475745626811532,
+   "raw_base": 0.7503587178219981,
+   "raw": 0.9051161740901135,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access",
+    "vermo-access"
+   ]
+  },
+  {
+   "job": "a1-s5/0-task__UttGrW5",
+   "seed": 5,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Vermo",
+   "base": 0.7503587178219981,
+   "score": 0.6970000761947851,
+   "diff": -0.053358641627213044,
+   "raw_base": 0.7503587178219981,
+   "raw": 0.6970000761947851,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s5/0-task__UttGrW5",
+   "seed": 5,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "vermo-access",
+   "added": 2028,
+   "fastest": "Vermo",
+   "base": 0.7503587178219981,
+   "score": 0.5338357957408096,
+   "diff": -0.2165229220811885,
+   "raw_base": 0.7503587178219981,
+   "raw": 0.5338357957408096,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "vermo-access"
+   ]
+  },
+  {
+   "job": "a1-s6/0-task__xohuxb9",
+   "seed": 6,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "otaniemi-access",
+   "added": null,
+   "fastest": "Otaniemi and Keilaniemi",
+   "base": 0.926801999114166,
+   "score": 0.926801999114166,
+   "diff": 0.0,
+   "raw_base": 0.926801999114166,
+   "raw": 0.926801999114166,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "espoonvayla-mid",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s6/0-task__xohuxb9",
+   "seed": 6,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Otaniemi and Keilaniemi",
+   "base": 0.926801999114166,
+   "score": 0.8814699957746417,
+   "diff": -0.04533200333952436,
+   "raw_base": 0.926801999114166,
+   "raw": 0.8814699957746417,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "espoonvayla-mid",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s6/0-task__xohuxb9",
+   "seed": 6,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "otaniemi-access",
+   "added": 2028,
+   "fastest": "Otaniemi and Keilaniemi",
+   "base": 0.926801999114166,
+   "score": 0.9179956802960174,
+   "diff": -0.00880631881814864,
+   "raw_base": 0.926801999114166,
+   "raw": 0.9179956802960174,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "espoonvayla-mid",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s7/0-task__qF7eHzn",
+   "seed": 7,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "kauklahti-access",
+   "added": 2034,
+   "fastest": "Kauklahti",
+   "base": 0.3460669412586606,
+   "score": 0.36236539543537527,
+   "diff": 0.01629845417671466,
+   "raw_base": 0.3460669412586606,
+   "raw": 0.36236539543537527,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "kauklahti-access",
+    "keha2-turunvayla-junction",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s7/0-task__qF7eHzn",
+   "seed": 7,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Kauklahti",
+   "base": 0.3460669412586606,
+   "score": 0.31896548598615576,
+   "diff": -0.02710145527250485,
+   "raw_base": 0.3460669412586606,
+   "raw": 0.31896548598615576,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "keha2-turunvayla-junction",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s7/0-task__qF7eHzn",
+   "seed": 7,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "kauklahti-access",
+   "added": null,
+   "fastest": "Kauklahti",
+   "base": 0.3460669412586606,
+   "score": 0.31896548598615576,
+   "diff": -0.02710145527250485,
+   "raw_base": 0.3460669412586606,
+   "raw": 0.31896548598615576,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "keha2-turunvayla-junction",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s8/0-task__dEbSN8n",
+   "seed": 8,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "kiviruukki-access",
+   "added": null,
+   "fastest": "Kiviruukki",
+   "base": 0.955429675989718,
+   "score": 0.955429675989718,
+   "diff": 0.0,
+   "raw_base": 0.955429675989718,
+   "raw": 0.955429675989718,
+   "rejected": 0,
+   "started": [
+    "espoonvayla-2x2",
+    "kera-access",
+    "kiviruukki-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s8/0-task__dEbSN8n",
+   "seed": 8,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Kiviruukki",
+   "base": 0.955429675989718,
+   "score": 0.9207097244510982,
+   "diff": -0.03471995153861973,
+   "raw_base": 0.955429675989718,
+   "raw": 0.9207097244510982,
+   "rejected": 1,
+   "started": [
+    "kera-access",
+    "kiviruukki-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s8/0-task__dEbSN8n",
+   "seed": 8,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "kiviruukki-access",
+   "added": 2028,
+   "fastest": "Kiviruukki",
+   "base": 0.955429675989718,
+   "score": 0.7784464233645244,
+   "diff": -0.17698325262519354,
+   "raw_base": 0.955429675989718,
+   "raw": 0.7784464233645244,
+   "rejected": 3,
+   "started": [
+    "kiviruukki-access",
+    "mankkaa-link",
+    "olari-link"
+   ]
+  },
+  {
+   "job": "a1-s9/0-task__ePFtpaq",
+   "seed": 9,
+   "role": "a1",
+   "arm": "a_access",
+   "add": "vermo-access",
+   "added": 2034,
+   "fastest": "Vermo",
+   "base": 0.9676174292985333,
+   "score": 1.0,
+   "diff": 0.03238257070146666,
+   "raw_base": 0.9676174292985333,
+   "raw": 1.0041387725834536,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access",
+    "vermo-access"
+   ]
+  },
+  {
+   "job": "a1-s9/0-task__ePFtpaq",
+   "seed": 9,
+   "role": "a1",
+   "arm": "b_maint1",
+   "add": null,
+   "added": null,
+   "fastest": "Vermo",
+   "base": 0.9676174292985333,
+   "score": 0.6852452798049792,
+   "diff": -0.28237214949355416,
+   "raw_base": 0.9676174292985333,
+   "raw": 0.6852452798049792,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "a1-s9/0-task__ePFtpaq",
+   "seed": 9,
+   "role": "a1",
+   "arm": "c_both",
+   "add": "vermo-access",
+   "added": 2028,
+   "fastest": "Vermo",
+   "base": 0.9676174292985333,
+   "score": 0.6142559667303453,
+   "diff": -0.353361462568188,
+   "raw_base": 0.9676174292985333,
+   "raw": 0.6142559667303453,
+   "rejected": 2,
+   "started": [
+    "espoonvayla-2x2",
+    "mankkaa-link",
+    "olari-link",
+    "vermo-access"
+   ]
+  },
+  {
+   "job": "policy-s5",
+   "seed": 5,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Vermo",
+   "base": 0.87514442629544,
+   "score": 0.7153486574850958,
+   "diff": -0.15979576881034419,
+   "raw_base": 0.87514442629544,
+   "raw": 0.7153486574850958,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "policy-s6",
+   "seed": 6,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Otaniemi and Keilaniemi",
+   "base": 0.9693727860516163,
+   "score": 0.8742076641195685,
+   "diff": -0.09516512193204774,
+   "raw_base": 0.9693727860516163,
+   "raw": 0.8742076641195685,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "policy-s7",
+   "seed": 7,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Kauklahti",
+   "base": 1.0,
+   "score": 0.9200446481870302,
+   "diff": -0.07995535181296975,
+   "raw_base": 1.0297976360432852,
+   "raw": 0.9200446481870302,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "kiviruukki-access"
+   ]
+  },
+  {
+   "job": "policy-s8",
+   "seed": 8,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Kiviruukki",
+   "base": 1.0,
+   "score": 0.802093379407723,
+   "diff": -0.19790662059227704,
+   "raw_base": 1.0346324954439323,
+   "raw": 0.802093379407723,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "kiviruukki-access"
+   ]
+  },
+  {
+   "job": "policy-s9",
+   "seed": 9,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Vermo",
+   "base": 0.9773343392508589,
+   "score": 0.7571867442069881,
+   "diff": -0.22014759504387083,
+   "raw_base": 0.9773343392508589,
+   "raw": 0.7571867442069881,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "policy-s10",
+   "seed": 10,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Espoonlahti",
+   "base": 0.9375496315679497,
+   "score": 0.722578272669036,
+   "diff": -0.21497135889891372,
+   "raw_base": 0.9375496315679497,
+   "raw": 0.722578272669036,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "policy-s11",
+   "seed": 11,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Otaniemi and Keilaniemi",
+   "base": 0.9972415635502383,
+   "score": 0.9641031853630309,
+   "diff": -0.03313837818720744,
+   "raw_base": 0.9972415635502383,
+   "raw": 0.9641031853630309,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "policy-s12",
+   "seed": 12,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Kera",
+   "base": 0.977455931719028,
+   "score": 0.6730726856680894,
+   "diff": -0.3043832460509386,
+   "raw_base": 0.977455931719028,
+   "raw": 0.6730726856680894,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "kera-access"
+   ]
+  },
+  {
+   "job": "policy-s13",
+   "seed": 13,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Kiviruukki",
+   "base": 0.9310986964618249,
+   "score": 0.9293833149217825,
+   "diff": -0.00171538154004236,
+   "raw_base": 0.9310986964618249,
+   "raw": 0.9293833149217825,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "kiviruukki-access"
+   ]
+  },
+  {
+   "job": "policy-s14",
+   "seed": 14,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Hista",
+   "base": 0.9871457362810588,
+   "score": 0.78279875350784,
+   "diff": -0.20434698277321883,
+   "raw_base": 0.9871457362810588,
+   "raw": 0.78279875350784,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "otaniemi-access"
+   ]
+  },
+  {
+   "job": "policy-s15",
+   "seed": 15,
+   "role": "reference",
+   "arm": "d_ref_maint2",
+   "add": null,
+   "added": null,
+   "fastest": "Finnoo",
+   "base": 0.9351164118037519,
+   "score": 0.8505657394844214,
+   "diff": -0.08455067231933056,
+   "raw_base": 0.9351164118037519,
+   "raw": 0.8505657394844214,
+   "rejected": 1,
+   "started": [
+    "espoonvayla-2x2",
+    "kera-access"
+   ]
   }
  ],
  "summary": {
-  "agent": {
-   "mean": 0.7698245850465868,
-   "lo": 0.6158216163405659,
-   "hi": 0.9164225123505698,
-   "n": 5
-  },
-  "reference": {
-   "mean": 0.9747672080513727,
-   "lo": 0.9390925497740259,
-   "hi": 0.9977701331210508,
-   "n": 5
-  },
-  "gap": {
-   "mean": 0.20494262300478566,
-   "lo": 0.04674124938729198,
-   "hi": 0.379750690734091,
-   "n": 5,
-   "per_seed": {
-    "0": 0.481854021106665,
-    "1": 0.3969353983785435,
-    "2": 0.0315265594258235,
-    "3": 0.05625599197191644,
-    "4": 0.05814114414098004
+  "a1": {
+   "agent": {
+    "mean": 0.7788848299822559,
+    "lo": 0.665221463567625,
+    "hi": 0.8778380507056435,
+    "n": 16
+   },
+   "reference": {
+    "mean": 0.9663309727024143,
+    "lo": 0.9469308725210378,
+    "hi": 0.9830650371357106,
+    "n": 16
+   },
+   "gap": {
+    "mean": 0.18744614272015842,
+    "lo": 0.08255707095927936,
+    "hi": 0.3087776194395286,
+    "n": 16,
+    "per_seed": {
+     "0": 0.4808922332463821,
+     "1": 0.6789415885334682,
+     "2": 0.014863720573883521,
+     "3": 0.3601780927417857,
+     "4": 0.014828247393536054,
+     "5": 0.12478570847344184,
+     "6": 0.0425707869374502,
+     "7": 0.6539330587413394,
+     "8": 0.04457032401028205,
+     "9": 0.009716909952325548,
+     "10": 0.1317893017934748,
+     "11": 0.0319976005157534,
+     "12": 0.3512687550401363,
+     "13": -0.060987797138403854,
+     "14": 0.037012725098612864,
+     "15": 0.08277702760906636
+    }
+   },
+   "a_access": {
+    "diff": {
+     "mean": 0.05005546832192352,
+     "lo": 0.006346232190323566,
+     "hi": 0.10945206758956844,
+     "n": 16,
+     "per_seed": {
+      "0": 0.4057552664448346,
+      "1": 0.0,
+      "2": 0.0,
+      "3": 0.17121762609411606,
+      "4": 0.020476119465529075,
+      "5": 0.15475745626811532,
+      "6": 0.0,
+      "7": 0.01629845417671466,
+      "8": 0.0,
+      "9": 0.03238257070146666,
+      "10": 0.0,
+      "11": 0.0,
+      "12": 0.0,
+      "13": 0.0,
+      "14": 0.0,
+      "15": 0.0
+     }
+    },
+    "gap_share_per_seed": {
+     "0": 0.8437550835572519,
+     "1": 0.0,
+     "2": 0.0,
+     "3": 0.47536935073078757,
+     "4": 1.3808860158655734,
+     "5": 1.240185740509318,
+     "6": 0.0,
+     "7": 0.02492373486681524,
+     "8": 0.0,
+     "9": 3.3325996495127077,
+     "10": 0.0,
+     "11": 0.0,
+     "12": 0.0,
+     "13": -0.0,
+     "14": 0.0,
+     "15": 0.0
+    },
+    "gap_share_pooled": 0.2670392017436827,
+    "gap_share_lo": 0.04185075642134119,
+    "gap_share_hi": 0.6050851401857624,
+    "test": {
+     "n": 16,
+     "wins": 6,
+     "ties": 10,
+     "sign_p": 0.015625,
+     "wilcoxon_p": 0.015625
+    },
+    "cf_beats_reference": 4
+   },
+   "b_maint1": {
+    "diff": {
+     "mean": -0.10654224228274962,
+     "lo": -0.19371802460332294,
+     "hi": -0.043014906446627775,
+     "n": 16,
+     "per_seed": {
+      "0": -0.01413971110843737,
+      "1": -0.031946419460981645,
+      "2": -0.217173041563807,
+      "3": -0.03080173951283416,
+      "4": -0.007352714242107039,
+      "5": -0.053358641627213044,
+      "6": -0.04533200333952436,
+      "7": -0.02710145527250485,
+      "8": -0.03471995153861973,
+      "9": -0.28237214949355416,
+      "10": -0.04677106952687693,
+      "11": -0.010334656688116284,
+      "12": -0.017112458119018292,
+      "13": -0.06637164799026096,
+      "14": -0.1770334067436944,
+      "15": -0.6427548102964438
+     }
+    },
+    "gap_share_per_seed": {
+     "0": -0.029403076470966787,
+     "1": -0.04705326643781942,
+     "2": -14.610947540644267,
+     "3": -0.08551808156448913,
+     "4": -0.49585861679865434,
+     "5": -0.427602185217944,
+     "6": -1.0648617655607648,
+     "7": -0.041443776102508864,
+     "8": -0.7789925765540787,
+     "9": -29.059870975337592,
+     "10": -0.3548927636036135,
+     "11": -0.3229822399660317,
+     "12": -0.04871614077108283,
+     "13": 1.0882775096736017,
+     "14": -4.783041677477812,
+     "15": -7.764893580523354
+    },
+    "gap_share_pooled": -0.5683885554359386,
+    "gap_share_lo": -1.730137347332278,
+    "gap_share_hi": -0.16876407916269245,
+    "test": {
+     "n": 16,
+     "wins": 0,
+     "ties": 0,
+     "sign_p": 1.0,
+     "wilcoxon_p": 1.0
+    },
+    "cf_beats_reference": 0
+   },
+   "c_both": {
+    "diff": {
+     "mean": -0.12979968368266037,
+     "lo": -0.25397139303169075,
+     "hi": -0.03709208363895843,
+     "n": 16,
+     "per_seed": {
+      "0": 0.10998345732639025,
+      "1": -0.031946419460981645,
+      "2": -0.217173041563807,
+      "3": -0.20188987532050545,
+      "4": -0.007352714242107039,
+      "5": -0.2165229220811885,
+      "6": -0.00880631881814864,
+      "7": -0.02710145527250485,
+      "8": -0.17698325262519354,
+      "9": -0.353361462568188,
+      "10": -0.04677106952687693,
+      "11": 0.01034095805172175,
+      "12": 0.017348713044998076,
+      "13": -0.04595133011101393,
+      "14": -0.8743013824654429,
+      "15": -0.006306823289717656
+     }
+    },
+    "gap_share_per_seed": {
+     "0": 0.22870707764174042,
+     "1": -0.04705326643781942,
+     "2": -14.610947540644267,
+     "3": -0.5605279149091441,
+     "4": -0.49585861679865434,
+     "5": -1.7351580139264995,
+     "6": -0.20686295583607314,
+     "7": -0.041443776102508864,
+     "8": -3.970876509319627,
+     "9": -36.36562078910879,
+     "10": -0.3548927636036135,
+     "11": 0.3231791723454569,
+     "12": 0.04938871674771016,
+     "13": 0.7534512192124825,
+     "14": -23.621643100745622,
+     "15": -0.07619050202555093
+    },
+    "gap_share_pooled": -0.692463882153289,
+    "gap_share_lo": -2.2368232848436564,
+    "gap_share_hi": -0.15400457559945874,
+    "test": {
+     "n": 16,
+     "wins": 3,
+     "ties": 0,
+     "sign_p": 0.9979095458984375,
+     "wilcoxon_p": 0.996185302734375
+    },
+    "cf_beats_reference": 1
+   },
+   "d_ref_maint2": {
+    "diff": {
+     "mean": -0.1871212755159909,
+     "lo": -0.2523136677253771,
+     "hi": -0.12763868991476054,
+     "n": 16,
+     "per_seed": {
+      "0": -0.4826415920887529,
+      "1": -0.3661455291533007,
+      "2": -0.20619800502496666,
+      "3": -0.3068839081677609,
+      "4": -0.035994895859912335,
+      "5": -0.15979576881034419,
+      "6": -0.09516512193204774,
+      "7": -0.07995535181296975,
+      "8": -0.19790662059227704,
+      "9": -0.22014759504387083,
+      "10": -0.21497135889891372,
+      "11": -0.03313837818720744,
+      "12": -0.3043832460509386,
+      "13": -0.00171538154004236,
+      "14": -0.20434698277321883,
+      "15": -0.08455067231933056
+     }
+    },
+    "gap_share_per_seed": {
+     "0": 1.0036377356950876,
+     "1": 0.5392887036780067,
+     "2": 13.872570060773972,
+     "3": 0.8520337975907053,
+     "4": 2.4274544998219594,
+     "5": 1.280561458240657,
+     "6": 2.2354560199198352,
+     "7": 0.12226840460836186,
+     "8": 4.440322680773455,
+     "9": 22.656132054736485,
+     "10": 1.631174579221858,
+     "11": 1.0356519755564921,
+     "12": 0.8665252507760317,
+     "13": -0.028126635499713577,
+     "14": 5.520992637769252,
+     "15": 1.0214267745713297
+    },
+    "gap_share_pooled": 0.9982668770909171,
+    "gap_share_lo": 0.6297401945428852,
+    "gap_share_hi": 1.893142346746806,
+    "test": {
+     "n": 16,
+     "wins": 16,
+     "ties": 0,
+     "sign_p": 1.52587890625e-05,
+     "wilcoxon_p": 1.52587890625e-05
+    },
+    "cf_beats_reference": null
    }
   },
-  "a_access": {
-   "diff": {
-    "mean": 0.0036034638906419225,
-    "lo": 0.0,
-    "hi": 0.010810391671925768,
+  "gate4": {
+   "agent": {
+    "mean": 0.7698245850465868,
+    "lo": 0.6158216163405659,
+    "hi": 0.9164225123505698,
+    "n": 5
+   },
+   "reference": {
+    "mean": 0.9747672080513727,
+    "lo": 0.9390925497740259,
+    "hi": 0.9977701331210508,
+    "n": 5
+   },
+   "gap": {
+    "mean": 0.20494262300478566,
+    "lo": 0.04674124938729198,
+    "hi": 0.379750690734091,
     "n": 5,
     "per_seed": {
+     "0": 0.481854021106665,
+     "1": 0.3969353983785435,
+     "2": 0.0315265594258235,
+     "3": 0.05625599197191644,
+     "4": 0.05814114414098004
+    }
+   },
+   "a_access": {
+    "diff": {
+     "mean": 0.0036034638906419225,
+     "lo": 0.0,
+     "hi": 0.010810391671925768,
+     "n": 5,
+     "per_seed": {
+      "0": 0.0,
+      "1": 0.0,
+      "2": 0.0,
+      "3": 0.0,
+      "4": 0.018017319453209613
+     }
+    },
+    "gap_share_per_seed": {
      "0": 0.0,
      "1": 0.0,
      "2": 0.0,
      "3": 0.0,
-     "4": 0.018017319453209613
-    }
+     "4": 0.30988931709911666
+    },
+    "gap_share_pooled": 0.017582793846440507,
+    "gap_share_lo": 0.0,
+    "gap_share_hi": 0.1529539662450877,
+    "test": {
+     "n": 5,
+     "wins": 1,
+     "ties": 4,
+     "sign_p": 0.5,
+     "wilcoxon_p": 0.5
+    },
+    "cf_beats_reference": 0
    },
-   "gap_share_per_seed": {
-    "0": 0.0,
-    "1": 0.0,
-    "2": 0.0,
-    "3": 0.0,
-    "4": 0.30988931709911666
+   "b_maint1": {
+    "diff": {
+     "mean": -0.1847586013139469,
+     "lo": -0.31399386786260763,
+     "hi": -0.05502781876775997,
+     "n": 5,
+     "per_seed": {
+      "0": -0.008156327039873457,
+      "1": -0.3332755327437449,
+      "2": -0.23438962835042787,
+      "3": -0.33575311273137576,
+      "4": -0.01221840570431254
+     }
+    },
+    "gap_share_per_seed": {
+     "0": -0.01692696684597749,
+     "1": -0.8396215961215723,
+     "2": -7.4346719914650325,
+     "3": -5.968308458572504,
+     "4": -0.21015076130399976
+    },
+    "gap_share_pooled": -0.9015137925195412,
+    "gap_share_lo": -4.931420973874364,
+    "gap_share_hi": -0.19465190196126947,
+    "test": {
+     "n": 5,
+     "wins": 0,
+     "ties": 0,
+     "sign_p": 1.0,
+     "wilcoxon_p": 1.0
+    },
+    "cf_beats_reference": 0
    },
-   "gap_share_pooled": 0.017582793846440507,
-   "gap_share_lo": 0.0,
-   "gap_share_hi": 0.1529539662450877,
-   "test": {
-    "n": 5,
-    "wins": 1,
-    "ties": 4,
-    "sign_p": 0.5,
-    "wilcoxon_p": 0.5
+   "c_both": {
+    "diff": {
+     "mean": -0.29673128189316456,
+     "lo": -0.5859771800345953,
+     "hi": -0.026790420476415777,
+     "n": 5,
+     "per_seed": {
+      "0": 0.08140896233970663,
+      "1": -0.037067955291823274,
+      "2": -0.2226341164778456,
+      "3": -0.511635977613214,
+      "4": -0.7937273224226464
+     }
+    },
+    "gap_share_per_seed": {
+     "0": 0.16894943027088621,
+     "1": -0.09338536054794702,
+     "2": -7.061795531531593,
+     "3": -9.09478190107514,
+     "4": -13.651732076307695
+    },
+    "gap_share_pooled": -1.447874910268107,
+    "gap_share_lo": -10.884110574529092,
+    "gap_share_hi": -0.0748709955836889,
+    "test": {
+     "n": 5,
+     "wins": 1,
+     "ties": 0,
+     "sign_p": 0.96875,
+     "wilcoxon_p": 0.9375
+    },
+    "cf_beats_reference": 0
    },
-   "cf_beats_reference": 0
-  },
-  "b_maint1": {
-   "diff": {
-    "mean": -0.1847586013139469,
-    "lo": -0.31399386786260763,
-    "hi": -0.05502781876775997,
-    "n": 5,
-    "per_seed": {
-     "0": -0.008156327039873457,
-     "1": -0.3332755327437449,
-     "2": -0.23438962835042787,
-     "3": -0.33575311273137576,
-     "4": -0.01221840570431254
-    }
-   },
-   "gap_share_per_seed": {
-    "0": -0.01692696684597749,
-    "1": -0.8396215961215723,
-    "2": -7.4346719914650325,
-    "3": -5.968308458572504,
-    "4": -0.21015076130399976
-   },
-   "gap_share_pooled": -0.9015137925195412,
-   "gap_share_lo": -4.931420973874364,
-   "gap_share_hi": -0.19465190196126947,
-   "test": {
-    "n": 5,
-    "wins": 0,
-    "ties": 0,
-    "sign_p": 1.0,
-    "wilcoxon_p": 1.0
-   },
-   "cf_beats_reference": 0
-  },
-  "c_both": {
-   "diff": {
-    "mean": -0.29673128189316456,
-    "lo": -0.5859771800345953,
-    "hi": -0.026790420476415777,
-    "n": 5,
-    "per_seed": {
-     "0": 0.08140896233970663,
-     "1": -0.037067955291823274,
-     "2": -0.2226341164778456,
-     "3": -0.511635977613214,
-     "4": -0.7937273224226464
-    }
-   },
-   "gap_share_per_seed": {
-    "0": 0.16894943027088621,
-    "1": -0.09338536054794702,
-    "2": -7.061795531531593,
-    "3": -9.09478190107514,
-    "4": -13.651732076307695
-   },
-   "gap_share_pooled": -1.447874910268107,
-   "gap_share_lo": -10.884110574529092,
-   "gap_share_hi": -0.0748709955836889,
-   "test": {
-    "n": 5,
-    "wins": 1,
-    "ties": 0,
-    "sign_p": 0.96875,
-    "wilcoxon_p": 0.9375
-   },
-   "cf_beats_reference": 0
-  },
-  "d_ref_maint2": {
-   "diff": {
-    "mean": -0.2795727860589387,
-    "lo": -0.40405366208890514,
-    "hi": -0.13811676135894493,
-    "n": 5,
-    "per_seed": {
-     "0": -0.4826415920887529,
-     "1": -0.3661455291533007,
-     "2": -0.20619800502496666,
-     "3": -0.3068839081677609,
-     "4": -0.035994895859912335
-    }
-   },
-   "gap_share_per_seed": {
-    "0": 1.0016344597068614,
-    "1": 0.9224310319739243,
-    "2": 6.540453788181823,
-    "3": 5.455132820712866,
-    "4": 0.6190950727187667
-   },
-   "gap_share_pooled": 1.3641514974286746,
-   "gap_share_lo": 0.9245085290394106,
-   "gap_share_hi": 4.5448452327170665,
-   "test": {
-    "n": 5,
-    "wins": 5,
-    "ties": 0,
-    "sign_p": 0.03125,
-    "wilcoxon_p": 0.03125
-   },
-   "cf_beats_reference": null
+   "d_ref_maint2": {
+    "diff": {
+     "mean": -0.2795727860589387,
+     "lo": -0.40405366208890514,
+     "hi": -0.13811676135894493,
+     "n": 5,
+     "per_seed": {
+      "0": -0.4826415920887529,
+      "1": -0.3661455291533007,
+      "2": -0.20619800502496666,
+      "3": -0.3068839081677609,
+      "4": -0.035994895859912335
+     }
+    },
+    "gap_share_per_seed": {
+     "0": 1.0016344597068614,
+     "1": 0.9224310319739243,
+     "2": 6.540453788181823,
+     "3": 5.455132820712866,
+     "4": 0.6190950727187667
+    },
+    "gap_share_pooled": 1.3641514974286746,
+    "gap_share_lo": 0.9245085290394106,
+    "gap_share_hi": 4.5448452327170665,
+    "test": {
+     "n": 5,
+     "wins": 5,
+     "ties": 0,
+     "sign_p": 0.03125,
+     "wilcoxon_p": 0.03125
+    },
+    "cf_beats_reference": null
+   }
   }
  }
 }
