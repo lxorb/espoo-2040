@@ -1,5 +1,6 @@
 import json
 import re
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -600,11 +601,28 @@ def rules_v2(d):
         M.update({f"v{t}LearnedMTwoWinsPlanner": str(paired(per(v, "learned-m2"), per(v, "planner"))[0]) for v, t in (("v1", "One"), ("v2", "Two"), ("v2e", "Twoe"))})
 
 
+def handover(d):
+    rs = d["runs"]
+    big = [r for r in rs if r["gap"] >= 0.3]
+    worse = lambda r: min(r["agent"][1:15] + r["reference"][1:15]) < min(r["reference_alone"], r["agent_alone"]) - 0.02
+    M.update(handoverRuns=str(len(rs)), handoverBigRuns=str(len(big)), handoverBreakFirst=str(min(r["break_year"] for r in big)), handoverBreakLast=str(max(r["break_year"] for r in big)),
+             handoverRecoverMin=f"{min(r['agent'][r['break_agent'] - 1] for r in big):.2f}", handoverRecoverMax=f"{max(r['agent'][r['break_agent'] - 1] for r in big):.2f}",
+             handoverAfterMin=f"{min(r['agent'][r['break_agent']] for r in big):.2f}", handoverAfterMax=f"{max(r['agent'][r['break_agent']] for r in big):.2f}",
+             handoverKOneBig=f"{np.mean([r['agent'][1] for r in big]):.2f}", handoverKThreeBig=f"{np.mean([r['agent'][3] for r in big]):.2f}",
+             handoverKFiveBig=f"{np.mean([r['agent'][5] for r in big]):.2f}", handoverRevYears=str(int(np.median([r["break_reference"] for r in rs]))),
+             handoverRevYearsRuns=str(sum(r["break_reference"] == int(np.median([x["break_reference"] for x in rs])) for r in rs)),
+             handoverMixWorse=str(sum(map(worse, rs))), handoverRefAlone=f"{np.mean([r['reference_alone'] for r in rs]):.3f}",
+             handoverAgentAlone=f"{np.mean([r['agent_alone'] for r in rs]):.3f}")
+    sys.path.insert(0, str(HERE))
+    import handover as h
+    h.plot(rs)
+
+
 def evidence():
     f = EVID / "test.json"
     if f.exists():
         test_tables(load(f))
-    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits), ("grpo", grpo_evidence), ("norms", norms_evidence)):
+    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits), ("grpo", grpo_evidence), ("norms", norms_evidence), ("handover", handover)):
         if (EVID / f"{name}.json").exists():
             fn(load(EVID / f"{name}.json"))
     if (EVID / "failures.json").exists():
