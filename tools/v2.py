@@ -23,11 +23,14 @@ WAVE = [('''        n, L = len(self.nodes), s["L"]
         self.wave = (int(w.integers(*P.WAVE_YEARS)), [(self.areas[i][1], w.uniform(*gr["areas"][i]["pop"])) for i in w.choice(rest, w.integers(1, 3), replace=False)])
         n, L = len(self.nodes), s["L"]
 '''), ('''        if y:
-            s["fp"] *= 1 + self.rp''', '''        if y == self.wave[0] and self.who != "forecast":
-            for m, r in self.wave[1]:
-                self.rp, self.rj = (np.where(np.isin(np.arange(x.size), m), r, x) for x in (self.rp, self.rj))
+            s["fp"] *= 1 + self.rp
+            s["fj"] *= 1 + self.rj''', '''        s["wave"] = s.get("wave") or y == self.wave[0] and self.who != "forecast"
+        rp, rj = self.rp, self.rj
+        for m, r in self.wave[1] if s["wave"] else []:
+            rp, rj = (np.where(np.isin(np.arange(x.size), m), r, x) for x in (rp, rj))
         if y:
-            s["fp"] *= 1 + self.rp''')]
+            s["fp"] *= 1 + rp
+            s["fj"] *= 1 + rj''')]
 TEXT = [(" gets an emergency rebuild that year, at a multiple of its resurfacing cost and with reduced capacity.",
          " gets an emergency rebuild that year, at a multiple of its resurfacing cost and with reduced capacity, if your cash covers it; otherwise the rebuild is deferred, the segment keeps decaying and keeps the reduced capacity until it is rebuilt.")]
 TEXT_WAVE = [(" It shows year by year in `areas` of `get_state` (now against the base year).",
@@ -45,8 +48,8 @@ def sub(p, pairs):
 def gen(name, wave):
     D = ROOT / name
     shutil.rmtree(D, ignore_errors=True)
-    for f in ("sim", "data/out", "data/catalogue.json", "rl/policy.py", "rl/policy.npz", "rl/places.json", "task", "tools/norms.py", "tools/v2.py",
-              *[f"evidence/gate4-s{k}" for k in range(5)]):
+    for f in ("sim", "data/out", "data/catalogue.json", "rl", "task", "tools/norms.py", "tools/v2.py", "tools/experts.py",
+              *[f"evidence/{n}-s{k}" for n in ("gate4", "a1") for k in range(5)]):
         (D / f).parent.mkdir(parents=True, exist_ok=True)
         (shutil.copytree if (ROOT / f).is_dir() else shutil.copy)(ROOT / f, D / f, **({"ignore": shutil.ignore_patterns("__pycache__")} if (ROOT / f).is_dir() else {}))
     (D / "sim/norms.json").write_text("{}")
@@ -72,16 +75,36 @@ def one(a):
     sys.path[:0] = [str(ROOT / "tools")]
     import norms as N
     f = {"nothing": (lambda c: [], None), "planner": (N.planner(False), None), "learned": (N.learned(N.Policy()), None), "reactive": (N.reactive(), 1),
-         "maintain-0": (lambda c: [], 0), "maintain-2": (lambda c: [], 2)}[who]
+         "learned-m2": (lambda c, f=N.learned(N.Policy()): [a for a in f(c) if "maintain" not in a], 2), "maintain-0": (lambda c: [], 0), "maintain-2": (lambda c: [], 2),
+         "retrained": (N.learned(N.Policy(Path(os.environ.get("RT", ROOT / "rl/policy.npz")))), None)}[who]
     loss, plan, c = N.play(seed, *f)
     cash = [r["budget"] for r in c.recs]
     return dict(seed=seed, who=who, loss=loss, plan=plan, min_cash=min(cash), first_negative=next((i for i, x in enumerate(cash) if x < 0), None),
                 deferred=sum(e.endswith("rebuild deferred") for r in c.recs for e in r["events"]), rebuilds=sum(e.endswith("emergency rebuild") for r in c.recs for e in r["events"]),
-                score=c.score())
+                score=c.score(), maint=[a["maintain"] for r in c.recs[:c.years] for a in r["actions"] if "maintain" in a and a["ok"]])
 
 
-def measure(seeds):
-    whos = ["nothing", "planner", "learned", "reactive", "maintain-0", "maintain-2"]
+def agent(f):
+    sys.path[:0] = [str(ROOT / "tools")]
+    import norms as N
+    d = json.loads(Path(f).read_text())
+    years = [[{k: v for k, v in a.items() if k in ("build", "maintain")} for a in y[1]] for y in d["plan"]]
+    loss, plan, c = N.play(d["seed"], lambda c: [dict(a) for a in years[c.s["year"]]] if c.s["year"] < len(years) else [])
+    nothing = N.play(d["seed"], lambda c: [])[0]
+    return dict(run=str(Path(f).parent.relative_to(ROOT / "evidence")), seed=d["seed"], who=d.get("who"), loss=loss, saved=1 - loss / nothing, score=c.score(), plan=plan,
+                rejected_builds=sum(not a["ok"] for r in c.recs for a in r["actions"] if "build" in a),
+                rejected_builds_original=sum(not a.get("ok", True) for y in d["plan"] for a in y[1] if "build" in a), min_cash=min(r["budget"] for r in c.recs))
+
+
+def agents():
+    fs = [f for f in sorted(map(str, ROOT.glob("evidence/*/plan.json"))) + sorted(map(str, ROOT.glob("evidence/a1-s*/*/plan.json")))
+          if json.loads(Path(f).read_text()).get("valid") is not False and "ref3" not in f]
+    with mp.get_context("spawn").Pool(16) as pool:
+        out = pool.map(agent, fs)
+    (ROOT / "runs/agents.json").write_text(json.dumps(out))
+
+
+def measure(seeds, whos, name):
     with mp.get_context("spawn").Pool(min(32, len(seeds) * len(whos))) as pool:
         res = pool.map(one, [(s, w) for s in seeds for w in whos], chunksize=1)
     out = {}
@@ -91,12 +114,25 @@ def measure(seeds):
         for v in d.values():
             v["saved"] = 1 - v["loss"] / d["nothing"]["loss"]
     (ROOT / "runs").mkdir(exist_ok=True)
-    (ROOT / "runs/v2measure.json").write_text(json.dumps(out))
+    (ROOT / f"runs/{name}.json").write_text(json.dumps(out))
     return out
 
 
 def collect(names):
     res = {n: json.loads((ROOT / ("" if n == "v1" else f"task-{n}/") / "runs/v2measure.json").read_text()) for n in names}
+    test, ag = {}, {}
+    for n in names:
+        p = ROOT / ("" if n == "v1" else f"task-{n}/") / "runs/agents.json"
+        if p.exists():
+            ag[n] = json.loads(p.read_text())
+    for n in names:
+        for f in ("v2rt", "v2test"):
+            p = ROOT / ("" if n == "v1" else f"task-{n}/") / f"runs/{f}.json"
+            for s, d in (json.loads(p.read_text()) if p.exists() else {}).items():
+                if s in res[n]:
+                    res[n][s]["learned-retrained"] = d["retrained"]
+                else:
+                    test.setdefault(n, {}).setdefault(s, {}).update(d)
     meta = dict(script="tools/v2.py", command=" ".join(["python", "tools/v2.py"] + sys.argv[1:]), seeds=sorted(map(int, res["v1"])), date=time.strftime("%Y-%m-%d"),
                 machine="Intel Xeon Platinum 8573C (espoo-vm3)", rules=dict(v2="emergency rebuild only if cash covers it, else deferred: the segment keeps decaying and keeps the 0.8 capacity cut; no debt from rebuilds",
                                                                                  v2e="v2 plus a second growth wave: in a year drawn from 6-9 one or two non-boom areas start growing at a boom rate (seed stream 2), hidden from forecasts until it starts"))
@@ -113,9 +149,9 @@ def collect(names):
                 meta[f"norms_{n}_source"] = {k: v["source"] for k, v in json.loads(ev.read_text())["seeds"].items()}
         ex = ROOT / f"task-{n}/evidence/exploits.json"
         if ex.exists():
-            meta[f"exploits_{n}"] = {k: {f: v[f] for f in ("mean", "score_mean", "wins_over_ref", "ties_with_ref", "min_cash", "replay_off")} for k, v in json.loads(ex.read_text())["strategies"].items()}
+            meta[f"exploits_{n}"] = {k: {f: v[f] for f in ("seeds", "score", "mean", "score_mean", "wins_over_ref", "ties_with_ref", "min_cash", "replay_off")} for k, v in json.loads(ex.read_text())["strategies"].items()}
     tmp = ROOT / "evidence/rules_v2.json.tmp"
-    tmp.write_text(json.dumps(dict(meta=meta, variants=res)))
+    tmp.write_text(json.dumps(dict(meta=meta, variants=res, test=test, agents=ag)))
     os.replace(tmp, ROOT / "evidence/rules_v2.json")
 
 
@@ -124,7 +160,10 @@ if __name__ == "__main__":
     if cmd == "gen":
         gen("task-v2", False)
         gen("task-v2e", True)
+    elif cmd == "agents":
+        agents()
     elif cmd == "measure":
-        measure(list(range(16)))
+        lo, hi = map(int, (sys.argv[2:3] or ["0-15"])[0].split("-"))
+        measure(list(range(lo, hi + 1)), (sys.argv[3:4] or ["nothing,planner,learned,learned-m2,reactive,maintain-0,maintain-2"])[0].split(","), (sys.argv[4:5] or ["v2measure"])[0])
     else:
         collect(["v1", "v2", "v2e"])

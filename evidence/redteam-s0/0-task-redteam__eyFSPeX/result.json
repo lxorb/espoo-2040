@@ -1,0 +1,130 @@
+{
+ "id": "2a7e2b23-4605-4f0e-b18a-ec50da497812",
+ "task_name": "espoo/planner-redteam",
+ "trial_name": "ta[redacted]",
+ "trial_uri": "jobs/redteam-s0-0/ta[redacted]",
+ "task_id": {
+  "path": "task-redteam"
+ },
+ "source": null,
+ "task_checksum": "290b1b965c21b3b997b822245a4e89cb6e93912aff70ff0762ed93c67550912d",
+ "config": {
+  "task": {
+   "path": "task-redteam",
+   "git_url": null,
+   "git_commit_id": null,
+   "name": null,
+   "ref": null,
+   "overwrite": false,
+   "download_dir": null,
+   "source": null
+  },
+  "trial_name": "ta[redacted]",
+  "trials_dir": "jobs/redteam-s0-0",
+  "install_only": false,
+  "timeout_multiplier": 1.0,
+  "agent_timeout_multiplier": null,
+  "verifier_timeout_multiplier": null,
+  "agent_setup_timeout_multiplier": null,
+  "environment_build_timeout_multiplier": null,
+  "agent": {
+   "name": "opencode",
+   "import_path": null,
+   "model_name": "openai/gpt-6.1-sol",
+   "base_url": null,
+   "model_api_key_name": null,
+   "model_api_format": null,
+   "skip_model_parsing": false,
+   "n_concurrent": null,
+   "concurrency_group": null,
+   "skills": [],
+   "override_timeout_sec": null,
+   "override_setup_timeout_sec": null,
+   "max_timeout_sec": null,
+   "resume_trajectory": false,
+   "load_trajectory": null,
+   "extra_allowed_hosts": [],
+   "kwargs": {},
+   "mcp_servers": []
+  },
+  "user_agent": null,
+  "environment": {
+   "type": "docker",
+   "import_path": null,
+   "force_build": false,
+   "delete": true,
+   "stream": false,
+   "cpu_enforcement_policy": "auto",
+   "memory_enforcement_policy": "auto",
+   "override_cpus": null,
+   "override_memory_mb": null,
+   "override_storage_mb": null,
+   "override_gpus": null,
+   "override_tpu": null,
+   "mounts": null,
+   "extra_docker_compose": [],
+   "kwargs": {},
+   "extra_allowed_hosts": []
+  },
+  "verifier": {
+   "override_timeout_sec": null,
+   "max_timeout_sec": null,
+   "disable": false
+  },
+  "artifacts": [],
+  "extra_instruction_paths": [],
+  "extra_instructions": [],
+  "job_id": "b0483c7f-5b54-4278-aa0c-ba07bce6c6be",
+  "source_trial": null
+ },
+ "agent_info": {
+  "name": "opencode",
+  "version": "1.19.5",
+  "model_info": {
+   "name": "gpt-6.1-sol",
+   "provider": "openai"
+  }
+ },
+ "agent_result": {
+  "n_input_tokens": 2237255,
+  "n_cache_tokens": 2237066,
+  "n_output_tokens": 3213,
+  "cost_usd": 0.3975871000000001,
+  "model_usage": {
+   "openai/gpt-6.1-sol": {
+    "n_input_tokens": 2237255,
+    "n_cache_tokens": 2237066,
+    "n_output_tokens": 3213,
+    "cost_usd": 0.3975871000000001
+   }
+  },
+  "rollout_details": null,
+  "metadata": null
+ },
+ "verifier_result": {
+  "rewards": {
+   "reward": 0.5476702931623446
+  }
+ },
+ "verifier_environment_mode": "separate",
+ "exception_info": null,
+ "started_at": "2026-11-15T05:21:11.118841Z",
+ "finished_at": "2026-11-15T05:28:06.969750Z",
+ "environment_setup": {
+  "started_at": "2026-11-15T05:21:11.200950Z",
+  "finished_at": "2026-11-15T05:21:29.348811Z"
+ },
+ "agent_setup": {
+  "started_at": "2026-11-15T05:21:29.348859Z",
+  "finished_at": "2026-11-15T05:23:31.247239Z"
+ },
+ "agent_execution": {
+  "started_at": "2026-11-15T05:23:31.247524Z",
+  "finished_at": "2026-11-15T05:27:32.830135Z"
+ },
+ "verifier": {
+  "started_at": "2026-11-15T05:27:45.600687Z",
+  "finished_at": "2026-11-15T05:28:06.969737Z"
+ },
+ "step_results": null
+}

@@ -21,7 +21,7 @@ set +e
 id=$(date +%m%d-%H%M)-s${SEED:-0}
 h() { harbor run -y -p task --job-name "$id-$1" "${@:2}"; }
 h reference -a oracle
-h agent -a opencode -m "$MODEL" -k 3 -n 3
+h agent -a opencode -m "$MODEL" -k 3 -n "${N:-1}"
 h nothing -a nop
 MODE=early h early -a oracle
 python3 - "$id" <<'PY'

@@ -1,5 +1,6 @@
 import json
 import re
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -32,8 +33,8 @@ load = lambda p: json.loads(Path(p).read_text())
 norms, runs, growth, booms = load(ROOT / "sim" / "norms.json"), load(DATA / "runs.json"), load(DATA / "growth.json"), load(DATA / "booms.json")
 RLD, GRD = load(DATA / "rl.json"), load(DATA / "grpo.json")
 ASEEDS = sorted(runs["agent"], key=int)
-LEVEL, M = {}, {}
-BASE_JOBS = {"gate4"}
+LEVEL, M, TLEVEL = {}, {}, {}
+BASE_JOBS, MAIN_JOB = {"gate4", "a1"}, "a1"
 key = lambda n: n.split()[0].lower().replace("ä", "a")
 tot = lambda r: sum(r["delay"])
 raw = lambda s, d: (norms[s][0] - d) / (norms[s][0] - norms[s][1])
@@ -108,7 +109,7 @@ def fig_problem():
     save(fig, "problem")
 
 
-def fig_bars(vals):
+def fig_bars(vals, lost=None, name="bars"):
     fig, ax = plt.subplots(1, 2, figsize=(5.5, 2.9), gridspec_kw=dict(width_ratios=[1, 1], wspace=0.75))
     for i, k in enumerate(KEYS):
         y, v = len(KEYS) - 1 - i, np.array(vals[k], float)
@@ -121,13 +122,13 @@ def fig_bars(vals):
     ks = ("nothing", "reactive", "agent", "planner", "rl", "best")
     w = 0.8 / len(ks)
     for j, k in enumerate(ks):
-        v = [norms[s][1] / 1e6 if k == "best" else tot(runs[k][s]) / 1e6 for s in ASEEDS]
+        v = [lost(k, s) / 1e6 if lost else norms[s][1] / 1e6 if k == "best" else tot(runs[k][s]) / 1e6 for s in ASEEDS]
         ax[1].bar(np.arange(len(ASEEDS)) + (j - (len(ks) - 1) / 2) * w, v, w * 0.92, color=COL[k], label=NAME[k], zorder=2)
     ax[1].set_xticks(range(len(ASEEDS)), ASEEDS)
     ax[1].set(xlabel="seed", ylabel="M person-hours, 2026 to 2045", title="(b) Net person-hours lost")
     ax[1].legend(loc="upper center", bbox_to_anchor=(0.45, -0.14), ncol=2, handlelength=1, columnspacing=0.8)
     ax[1].grid(axis="x", visible=False)
-    save(fig, "bars")
+    save(fig, name)
 
 
 def fig_years():
@@ -253,6 +254,31 @@ def heldout():
              hoWinPlanner=str(wins("planner")), hoWinReactive=str(wins("reactive")))
 
 
+TABLE_POL = dict(nothing=["nothing"], random=["random"], greedy1=["greedy1", "greedy1:2"], greedy5=["greedy5", "greedy5:2"], reactive=["reactive", "reactive:2"],
+                 planner=["planner"], rl=["deploy"], rlcheck=["rlcheck"])
+
+
+def table_rows():
+    V, out = load(EVID / "test.json")["validation"]["policies"], {}
+    for k, opts in TABLE_POL.items():
+        p = max((o for o in opts if o in V), key=lambda o: np.mean([x["score"] for x in V[o].values()]))
+        out[k] = {s: dict(score=x["score"], delay=x["delay"], saved=x["saved_frac"]) for s, x in V[p].items()}
+        if ":" in p or len(opts) > 1:
+            TLEVEL[k] = int(p.split(":")[1]) if ":" in p else 1
+    ag = {}
+    for p in EVID.glob(f"{MAIN_JOB}-s*/*/plan.json"):
+        r = load(p)
+        if r.get("valid", True):
+            ag[str(r["seed"])] = dict(score=r["score"], delay=r["delay"], saved=1 - r["delay"] / norms[str(r["seed"])][0])
+    out["agent"] = ag
+    g = load(EVID / "grpo.json")["methods"]["runs/grpo/ckpt-90"]["seeds"]
+    out["grpo"] = {s: dict(score=x["score"], delay=x["delay"] * 1e6, saved=x["frac"]) for s, x in g.items() if int(s) < 16}
+    se = RLD["search"]
+    out["rlsearch"] = {str(s): dict(score=x, delay=None, saved=None) for s, x in zip(se["seeds"], se["scores"])}
+    out["best"] = {s: dict(score=1.0, delay=norms[s][1], saved=1 - norms[s][1] / norms[s][0]) for s in map(str, range(16))}
+    return out
+
+
 def table(vals, search, grpo):
     rows, n3 = [], sum(norms[s][0] for s in ASEEDS)
     for k in KEYS:
@@ -271,6 +297,25 @@ def table(vals, search, grpo):
         s3 = np.mean([clip(raw(s, d)) for s, d in zip(ASEEDS, lost)])
         rows.append(f"{name} & {s16} & {s3:.2f} & {L / 1e6:.1f} & {(n3 - L) / 1e6:.1f} & {100 * (n3 - L) / n3:.1f} & {last:.1f}{ext} & {spend:.0f}{ext} \\\\")
     (HERE / "table.tex").write_text("\n".join(rows) + "\n")
+
+
+def results(T):
+    ag = T["agent"]
+    rows = []
+    for k in KEYS:
+        v = T[k]
+        seeds = sorted(v, key=int)
+        sc = [v[s]["score"] for s in seeds]
+        m, lo, hi = boot(sc)
+        name = NAME[k] + (f" ($m{{=}}{TLEVEL[k]}$)" if k in TLEVEL and k != "nothing" else "")
+        dl = [v[s]["delay"] for s in seeds]
+        dcell = f"{np.mean(dl) / 1e6:.1f}" if None not in dl else "--"
+        scell = f"{100 * np.mean([v[s]['saved'] for s in seeds]):.1f}" if None not in dl else "--"
+        beats = "--" if k == "agent" else f"{sum(v[s]['score'] > ag[s]['score'] for s in seeds if s in ag)}/{sum(s in ag for s in seeds)}"
+        rows.append(f"{name} & {len(seeds)} & {neg(m)} & [{neg(lo)}, {neg(hi)}] & {neg(min(sc))} & {dcell} & {scell} & {beats} \\\\")
+        t = k.replace("1", "One").replace("5", "Five")
+        M.update({f"tab{t[0].upper() + t[1:]}Score": neg(m), f"tab{t[0].upper() + t[1:]}Saved": scell})
+    (HERE / "results.tex").write_text("\n".join(rows) + "\n")
 
 
 def facts():
@@ -326,7 +371,7 @@ def pf(p):
     return f"${m}\\times 10^{{{int(e)}}}$"
 
 
-TESTKEY = {"deploy": "Rl", "planner": "Planner", "reactive:2": "Reactive", "reactive": "ReactiveMOne", "greedy1:2": "GreedyOne", "greedy1": "GreedyOneMOne",
+TESTKEY = {"deploy": "Rl", "rlcheck": "Rlcheck", "planner": "Planner", "reactive:2": "Reactive", "reactive": "ReactiveMOne", "greedy1:2": "GreedyOne", "greedy1": "GreedyOneMOne",
            "greedy5:2": "GreedyFive", "greedy5": "GreedyFiveMOne", "random": "Random", "nothing": "Nothing"}
 
 
@@ -355,6 +400,7 @@ def test_tables(d):
                 cells += [f"{w}/{n}", pf(sp), pf(wp)]
             rows.append(" & ".join(cells) + " \\\\")
         M.update({f"{pre}SignP": M[f"{pre}PlannerSignP"], f"{pre}WilcoxonP": M[f"{pre}PlannerWilcoxonP"]})
+        M.update({k.replace(f"{pre}Rlcheck", f"{pre}rlcheck").replace(f"{pre}RlWinsRlcheck", f"{pre}RlWinsrlcheck"): v for k, v in list(M.items()) if k.startswith((f"{pre}Rlcheck", f"{pre}RlWinsRlcheck"))})
         (HERE / f"{part}.tex").write_text("\n".join(rows) + "\n")
 
 
@@ -363,25 +409,32 @@ def neg(x, f="{:.3f}"):
 
 
 def failures(d):
-    a, r = d["summary"]["agent"], d["summary"]["reference"]
-    runs_ = [x for x in d["runs"] if x["role"] == "agent"]
-    tot5 = lambda w, k: sum(d["summary"][w][k]["per_seed"].values())
-    share = lambda w: d["summary"][w]["rebuild_spend"]["mean"] / d["summary"][w]["total_spend"]["mean"]
-    M.update(failJaccardAgent=f"{d['summary']['jaccard_pairs']['agent']['pairs']['mean']:.2f}", failJaccardRef=f"{d['summary']['jaccard_pairs']['reference']['pairs']['mean']:.2f}",
-             failMentionYear=str(int(np.median([b["first_mention_msg"] for x in runs_ for b in x["sees_acts"]]))),
-             failBoomNeverActed=str(a["never_upgraded_mentioned"]), failBoomTotal=str(a["boom_total"]), failLagYears=f"{a['lag']['mean']:.1f}",
-             failBoomAgent=f"{tot5('agent', 'boom_upgraded'):.0f}", failBoomRef=f"{tot5('reference', 'boom_upgraded'):.0f}",
-             failBoomEarlyAgent=f"{tot5('agent', 'boom_upgraded_by_2031'):.0f}", failBoomEarlyRef=f"{tot5('reference', 'boom_upgraded_by_2031'):.0f}",
-             failBlockedAgent=f"{a['boom_access_blocked_years']['mean']:.1f}", failBlockedRef=f"{r['boom_access_blocked_years']['mean']:.1f}",
-             failMaintTwoShare=f"{100 * a['maint2_share']['mean']:.1f}\\%", failRebuildShareAgent=f"{100 * share('agent'):.0f}\\%", failRebuildShareRef=f"{100 * share('reference'):.0f}\\%",
-             failForecastAccess=f"{a['forecasts_with_access']['mean']:.1f}", failForecastAccessUnbuilt=f"{a['forecasts_access_never_started']['mean']:.1f}",
-             failCallsGetState=f"{a['calls']['get_state']['mean']:.1f}", failCallsForecast=f"{a['calls']['forecast']['mean']:.1f}")
+    S = d["summary"]
+    r = S["reference"]
+    share = lambda w: S[w]["rebuild_spend"]["mean"] / S[w]["total_spend"]["mean"]
+    tot = lambda w, k: sum(S[w][k]["per_seed"].values())
+    M.update(failJaccardRef=f"{S['jaccard_pairs']['reference']['pairs']['mean']:.2f}", failBoomRef=f"{tot('reference', 'boom_upgraded'):.0f}",
+             failBoomEarlyRef=f"{tot('reference', 'boom_upgraded_by_2031'):.0f}", failBlockedRef=f"{r['boom_access_blocked_years']['mean']:.1f}",
+             failRebuildShareRef=f"{100 * share('reference'):.0f}\\%")
+    for g, sfx in (("a1", ""), ("gate4", "Gate")):
+        a = S[g]
+        runs_ = [x for x in d["runs"] if x["role"] == g]
+        M.update({f"failJaccardAgent{sfx}": f"{S['jaccard_pairs'][g]['pairs']['mean']:.2f}",
+                  f"failMentionYear{sfx}": str(int(np.median([b["first_mention_msg"] for x in runs_ for b in x["sees_acts"]]))),
+                  f"failBoomNeverActed{sfx}": str(a["never_upgraded_mentioned"]), f"failBoomTotal{sfx}": str(a["boom_total"]), f"failLagYears{sfx}": f"{a['lag']['mean']:.1f}",
+                  f"failBoomAgent{sfx}": f"{tot(g, 'boom_upgraded'):.0f}", f"failBoomEarlyAgent{sfx}": f"{tot(g, 'boom_upgraded_by_2031'):.0f}",
+                  f"failBlockedAgent{sfx}": f"{a['boom_access_blocked_years']['mean']:.1f}", f"failMaintTwoShare{sfx}": f"{100 * a['maint2_share']['mean']:.1f}\\%",
+                  f"failRebuildShareAgent{sfx}": f"{100 * share(g):.0f}\\%", f"failForecastAccess{sfx}": f"{a['forecasts_with_access']['mean']:.1f}",
+                  f"failForecastAccessUnbuilt{sfx}": f"{a['forecasts_access_never_started']['mean']:.1f}", f"failCallsGetState{sfx}": f"{a['calls']['get_state']['mean']:.1f}",
+                  f"failCallsForecast{sfx}": f"{a['calls']['forecast']['mean']:.1f}"})
+        t = S[f"reference_vs_{g}_score"]
+        M.update({f"gapIntelWins{sfx}": f"{t['wins']}/{t['n']}", f"gapIntelSignP{sfx}": pf(t["sign_p"]) if t["sign_p"] < 0.001 else f"{t['sign_p']:.3f}"})
     rows = [("Score", "score", "{:.2f}"), ("Plan overlap with other seeds (Jaccard)", "jaccard_other_seeds", "{:.2f}"),
             ("Growing areas upgraded (of 3)", "boom_upgraded", "{:.1f}"), ("of them by 2031", "boom_upgraded_by_2031", "{:.1f}"),
             ("Years a growing-area upgrade was not affordable", "boom_access_blocked_years", "{:.1f}"), ("Spend on maintenance level 2 (share)", "maint2_share", "{:.3f}"),
             ("Cash at the end (MEUR)", "cash_end", "{:.0f}")]
-    cell = lambda w, k, f: f"{neg(d['summary'][w][k]['mean'], f)} [{neg(d['summary'][w][k]['lo'], f)}, {neg(d['summary'][w][k]['hi'], f)}]"
-    (HERE / "failures.tex").write_text("".join(f"{n} & {cell('agent', k, f)} & {cell('reference', k, f)} \\\\\n" for n, k, f in rows))
+    cell = lambda w, k, f: f"{neg(S[w][k]['mean'], f)} [{neg(S[w][k]['lo'], f)}, {neg(S[w][k]['hi'], f)}]"
+    (HERE / "failures.tex").write_text("".join(f"{n} & {cell('a1', k, f)} & {cell('reference', k, f)} \\\\\n" for n, k, f in rows))
 
 
 def gshare(a):
@@ -389,20 +442,20 @@ def gshare(a):
 
 
 def counterfactual(d):
-    s_ = d["summary"]
-    g = s_["gap"]
-    M.update(gapIntelMean=f"{g['mean']:.3f}", gapIntelLo=f"{g['lo']:.3f}", gapIntelHi=f"{g['hi']:.3f}")
-    for arm, t in (("a_access", "Access"), ("b_maint1", "MaintOne"), ("c_both", "Both"), ("d_ref_maint2", "RefMaintTwo")):
-        a = s_[arm]
-        M.update({f"cf{t}Diff": neg(a["diff"]["mean"]), f"cf{t}GapShare": gshare(a)})
-    acc = [r for r in d["rows"] if r["arm"] == "a_access"]
-    M["cfAccessAccepted"] = f"{sum(r['added'] is not None for r in acc)}/{len(acc)}"
-    rows = []
     names = dict(a_access="Agent plus an early upgrade of the fastest area", b_maint1="Agent with maintenance 1", c_both="Agent with both changes", d_ref_maint2="Reference with maintenance 2")
-    for arm, a in ((k, s_[k]) for k in names):
-        t = a["test"]
-        rows.append(f"{names[arm]} & {neg(a['diff']['mean'])} [{neg(a['diff']['lo'])}, {neg(a['diff']['hi'])}] & {gshare(a)} & {t['wins']}/{t['n']} & {t['sign_p']:.2g} \\\\")
-    (HERE / "counterfactual.tex").write_text("\n".join(rows) + "\n")
+    for g, sfx in (("a1", ""), ("gate4", "Gate")):
+        S = d["summary"][g]
+        M.update({f"gapIntelMean{sfx}": f"{S['gap']['mean']:.3f}", f"gapIntelLo{sfx}": f"{S['gap']['lo']:.3f}", f"gapIntelHi{sfx}": f"{S['gap']['hi']:.3f}"})
+        for arm, t in (("a_access", "Access"), ("b_maint1", "MaintOne"), ("c_both", "Both"), ("d_ref_maint2", "RefMaintTwo")):
+            M.update({f"cf{t}Diff{sfx}": neg(S[arm]["diff"]["mean"]), f"cf{t}GapShare{sfx}": gshare(S[arm])})
+        acc = [r for r in d["rows"] if r["arm"] == "a_access" and r["job"].startswith(g + "-")]
+        M[f"cfAccessAccepted{sfx}"] = f"{sum(r['added'] is not None for r in acc)}/{len(acc)}"
+        if g == "a1":
+            rows = []
+            for arm in names:
+                a, t = S[arm], S[arm]["test"]
+                rows.append(f"{names[arm]} & {neg(a['diff']['mean'])} [{neg(a['diff']['lo'])}, {neg(a['diff']['hi'])}] & {gshare(a)} & {t['wins']}/{t['n']} & {t['sign_p']:.2g} \\\\")
+            (HERE / "counterfactual.tex").write_text("\n".join(rows) + "\n")
 
 
 def exploits(d):
@@ -496,6 +549,7 @@ def job_of(p):
 
 
 def agent_summary(runs, ref, sfx):
+    runs = sorted(runs, key=lambda r: int(r["seed"]))
     sc = [r["score"] for r in runs]
     m, lo, hi = boot(sc)
     paired_runs = [(ref[str(r["seed"])], r["score"]) for r in runs if str(r["seed"]) in ref]
@@ -511,23 +565,32 @@ def agent_summary(runs, ref, sfx):
 
 
 def agent_runs(rows):
+    cost = sum(r.get("cost_usd", 0) or 0 for r in rows if r["job"] == MAIN_JOB)
+    M.update(agentInvalidRuns=str(sum(r.get("valid") is False for r in rows)))
+    rows = [r for r in rows if r.get("valid", True)]
     if not rows:
         return
-    (HERE / "agent.tex").write_text("".join(f"{r['who']} & {r['seed']} & {r['delay'] / 1e6:.1f} & {r['score']:.3f} \\\\\n" for r in rows))
+    (HERE / "agent.tex").write_text("".join(f"{r['who']} & {r['seed']} & {r['delay'] / 1e6:.1f} & {r['score']:.3f} \\\\\n" for r in rows if r["top"]))
+    (HERE / "agent_all.tex").write_text("".join(f"{r['job']} & {r['seed']} & {r['delay'] / 1e6:.1f} & {r['score']:.3f} \\\\\n" for r in rows if r["who"] != "reference"))
     ref = {str(r["seed"]): r["score"] for r in rows if r["who"] == "reference"}
+    if (EVID / "test.json").exists():
+        ref.update({s: v["score"] for s, v in load(EVID / "test.json")["validation"]["policies"]["deploy"].items()})
     groups = {}
     for r in rows:
         if r["who"] != "reference":
-            groups.setdefault((r.get("model", r["who"]), r.get("variant", "base" if r["job"] in BASE_JOBS else r["job"])), []).append(r)
-    base = [r for (m, v), g in groups.items() if v == "base" for r in g]
+            m = r.get("model", r["who"])
+            v = r.get("variant", "base" if r["job"] in BASE_JOBS else r["job"])
+            groups.setdefault((m, v if r["job"] not in BASE_JOBS or r["job"] == MAIN_JOB else f"{v} ({r['job']})"), []).append(r)
     out = []
-    if base:
-        agent_summary(base, ref, "")
+    main = [r for (m, v), g in groups.items() if v == "base" for r in g]
+    if main:
+        agent_summary(main, ref, "")
+        M.update(agentCostUsd=f"{cost:.2f}", agentSeedsAll=f"{min(r['seed'] for r in main)} to {max(r['seed'] for r in main)}")
     for (m, v), g in sorted(groups.items()):
-        sfx = letters(m) + ("" if v == "base" else letters(v))
+        sfx = letters(m) + ("" if v.startswith("base") else letters(v))
         out.append(f"\\texttt{{{m}}} & {v} & " + agent_summary(g, ref, sfx) + " \\\\")
     (HERE / "agentruns.tex").write_text("\n".join(out) + "\n")
-    ab = [(k, g) for k, g in groups.items() if k[1] not in ("base",) and not k[1].startswith("redteam")]
+    ab = [(k, g) for k, g in groups.items() if not k[1].startswith(("base", "redteam"))]
     if ab:
         b = {}
         for (m, v), g in groups.items():
@@ -543,7 +606,9 @@ def agent_runs(rows):
     red = [r for (m, v), g in groups.items() if v.startswith("redteam") for r in g]
     if red:
         sc = [r.get("harbor_reward", r["score"]) for r in red]
-        M.update(redteamMean=f"{np.mean(sc):.3f}", redteamBest=f"{max(sc):.3f}", redteamRuns=str(len(sc)))
+        M.update(redteamMean=f"{np.mean(sc):.3f}", redteamBest=f"{max(sc):.3f}", redteamRuns=str(len(sc)),
+                 redteamBeatsRef=str(sum(r["score"] > ref[str(r["seed"])] for r in red if str(r["seed"]) in ref)),
+                 redteamCostUsd=f"{sum(r.get('cost_usd', 0) or 0 for r in red):.2f}")
         (HERE / "redteam.tex").write_text("".join(f"{r['job']} & {r['seed']} & {r['score']:.3f} & {r.get('harbor_reward', float('nan')):.3f} \\\\\n" for r in red))
 
 
@@ -551,14 +616,40 @@ def rules_v2(d):
     var, mt = d["variants"], d["meta"]
     per = lambda v, k: [var[v][s][k]["score"] for s in sorted(var[v], key=int)]
     ci = lambda x: "{} [{}, {}]".format(*(neg(v) for v in boot(x)))
+    names = {"planner": "Rule planner", "learned": "Learned policy", "learned-m2": "Learned policy, maintenance 2", "learned-retrained": "Learned policy, retrained under v2",
+             "reactive": "Reactive", "maintain-0": "Do nothing, maintenance 0", "maintain-2": "Do nothing, maintenance 2"}
+    keys = [k for k in names if k in var["v2"]["0"]] + [k for k in var["v2"]["0"] if k not in names and k != "nothing"]
+    have = lambda v, k: all(k in var[v][s] for s in var[v])
     rows = []
-    for k, name in (("planner", "Rule planner"), ("learned", "Learned policy"), ("reactive", "Reactive"), ("maintain-0", "Do nothing, maintenance 0"), ("maintain-2", "Do nothing, maintenance 2")):
-        cells = [ci(per(v, k)) for v in ("v1", "v2", "v2e")]
-        wins = [paired(per(v, k), per(v, "planner"))[0] for v in ("v2", "v2e")] if k != "planner" else ["--", "--"]
-        rows.append(f"{name} & " + " & ".join(cells) + f" & {wins[0]} & {wins[1]} \\\\")
+    for k in keys:
+        cells = [ci(per(v, k)) if have(v, k) else "--" for v in ("v1", "v2", "v2e")]
+        wins = [paired(per(v, k), per(v, "planner"))[0] if have(v, k) and k != "planner" else "--" for v in ("v2", "v2e")]
+        rows.append(f"{names.get(k, k)} & " + " & ".join(cells) + f" & {wins[0]} & {wins[1]} \\\\")
     ex1 = load(EVID / "exploits.json")["strategies"]["reference-maintain-2"]["score"] if (EVID / "exploits.json").exists() else None
-    lm2 = [mt[f"exploits_{v}"]["reference-maintain-2"]["score_mean"] for v in ("v2", "v2e")]
-    rows.insert(2, f"Learned policy, maintenance 2 & {ci(ex1) if ex1 else '--'} & {lm2[0]:.3f} & {lm2[1]:.3f} & -- & -- \\\\")
+    lm2 = [np.mean(per(v, "learned-m2")) if have(v, "learned-m2") else mt[f"exploits_{v}"]["reference-maintain-2"]["score_mean"] for v in ("v2", "v2e")]
+    if "learned-m2" not in keys:
+        rows.insert(2, f"Learned policy, maintenance 2 & {ci(ex1) if ex1 else '--'} & {lm2[0]:.3f} & {lm2[1]:.3f} & -- & -- \\\\")
+    if have("v2", "learned-retrained"):
+        for v, t in (("v1", "One"), ("v2", "Two"), ("v2e", "Twoe")):
+            if have(v, "learned-retrained"):
+                M.update({f"v{t}Retrained": f"{np.mean(per(v, 'learned-retrained')):.3f}", f"v{t}RetrainedMin": f"{min(per(v, 'learned-retrained')):.3f}",
+                          f"v{t}RetrainedWinsPlanner": str(paired(per(v, "learned-retrained"), per(v, "planner"))[0])})
+        M["vTwoRefSeedsZeroFour"] = f"{np.mean(per('v2', 'learned')[:5]):.3f}"
+    if "test" in d:
+        te = d["test"]["v2"]
+        sv = lambda k: [te[s][k]["saved"] for s in sorted(te, key=int)]
+        M.update(vTwoTestRetrainedSaved=f"{np.mean(sv('retrained')):.3f}", vTwoTestPlannerSaved=f"{np.mean(sv('planner')):.3f}",
+                 vTwoTestLearnedSaved=f"{np.mean(sv('learned')):.3f}" if all("learned" in te[s] for s in te) else "--",
+                 vTwoTestRetrainedWinsPlanner=str(paired(sv("retrained"), sv("planner"))[0]), vTwoTestN=str(len(te)))
+    if "agents" in d:
+        ag = {v: [r for r in d["agents"][v] if r.get("valid", True)] for v in d["agents"]}
+        label = lambda r: f"{r['run'].split('-s')[0]}, seed {r['seed']}"
+        by = {v: {label(r): r["score"] for r in ag[v]} for v in ag}
+        (HERE / "rules_v2_agents.tex").write_text("".join(f"{k} & " + " & ".join(neg(by[v][k]) if k in by[v] else "--" for v in ("v1", "v2", "v2e")) + " \\\\\n" for k in by["v2"]))
+        for job, t in (("gate4", "Gate"), ("a1", "Aone")):
+            sc = [r["score"] for r in ag["v2"] if r["run"].startswith(job + "-")]
+            if sc:
+                M[f"vTwoAgent{t}"] = f"{np.mean(sc):.3f}"
     (HERE / "rules_v2.tex").write_text("\n".join(rows) + "\n")
     mean = lambda v, k: np.mean(per(v, k))
     cash = lambda v: min(var[v][s]["learned"]["min_cash"] for s in var[v])
@@ -568,23 +659,64 @@ def rules_v2(d):
              vOneLearnedWins=str(paired(per("v1", "learned"), per("v1", "planner"))[0]),
              vTwoLearnedMTwo=f"{lm2[0]:.3f}", vTwoeLearnedMTwo=f"{lm2[1]:.3f}", vTwoLearnedMTwoWins=str(mt["exploits_v2"]["reference-maintain-2"]["wins_over_ref"]),
              vOneMinCash=neg(cash("v1"), "{:.0f}"), vTwoMinCash=neg(cash("v2"), "{:.1f}"), vTwoMaintZero=neg(mean("v2", "maintain-0")),
-             vTwoStopSeven=f"{mt['exploits_v2']['stop-7']['score_mean']:.3f}", vTwoStopSevenWins=str(mt["exploits_v2"]["stop-7"]["wins_over_ref"]))
+             vTwoStopSeven=f"{mt['exploits_v2']['stop-7']['score_mean']:.3f}", vTwoStopSevenWins=str(mt["exploits_v2"]["stop-7"]["wins_over_ref"]),
+             vTwoeStopSeven=f"{mt['exploits_v2e']['stop-7']['score_mean']:.3f}", vTwoeStopSevenWins=str(mt["exploits_v2e"]["stop-7"]["wins_over_ref"]))
+    if have("v2", "learned-m2"):
+        M.update({f"v{t}LearnedMTwoWinsPlanner": str(paired(per(v, "learned-m2"), per(v, "planner"))[0]) for v, t in (("v1", "One"), ("v2", "Two"), ("v2e", "Twoe"))})
+
+
+def handover(d):
+    for g, sfx in (("a1", "Aone"), ("gate4", "Gate")):
+        h = d["summary"][g]
+        vals = {"Runs": str(h["runs"]), "BigRuns": str(h["big"]), "BreakFirst": str(min(h["break_years"])), "BreakLast": str(max(h["break_years"])),
+                "RecoverMin": f"{min(h['recover']):.2f}", "RecoverMax": f"{max(h['recover']):.2f}", "AfterMin": f"{min(h['after']):.2f}", "AfterMax": f"{max(h['after']):.2f}",
+                "KOneBig": f"{h['agent_first_k1_big']:.2f}", "KThreeBig": f"{h['agent_first_k3_big']:.2f}", "KFiveBig": f"{h['agent_first_k5_big']:.2f}",
+                "RevYears": str(int(np.median(h["reverse_years"]))), "RevYearsRuns": str(sum(y == int(np.median(h["reverse_years"])) for y in h["reverse_years"])),
+                "MixWorse": str(h["mix_worse"]), "RefAlone": f"{h['reference_alone']:.3f}", "AgentAlone": f"{h['agent_alone']:.3f}"}
+        M.update({f"handover{k}{sfx}": v for k, v in vals.items()})
+        if g == "a1":
+            M.update({f"handover{k}": v for k, v in vals.items()})
+    sys.path.insert(0, str(HERE))
+    import handover as hv
+    hv.plot(d["runs"])
+
+
+def seed4(d):
+    a, bn, single = d["arms"], d["bottleneck"], d["single_2030"]
+    b = a["base"]
+    op = next(i for i, x in enumerate(b["open"]) if "otaniemi-access" in x)
+    M.update(sFourBase=f"{b['score']:.2f}", sFourSwap=f"{a['swap']['score']:.2f}", sFourDropOta=f"{a['drop']['score']:.3f}",
+             sFourLepAlone=f"{single['4']['leppavaara-access']:.3f}", sFourteenOtaAlone=f"{single['14']['otaniemi-access']:.2f}",
+             sFourBottShare=f"{100 * bn['4']['way_share']:.0f}\\%", sFourteenBottShare=f"{100 * bn['14']['way_share']:.0f}\\%",
+             sFourBottVC=f"{bn['4']['top_vc_2040']:.1f}", sFourBottRatio=f"{bn['4']['top_time_ratio_2040']:.0f}", sFourBottLen=f"{bn['4']['top_len_m']:.1f}",
+             sFourBottOsm=str(bn["4"]["top_osm"]), sFourWithOtaVCMin=f"{min(b['bott_vc'][op:]):.1f}", sFourWithOtaVCMax=f"{max(b['bott_vc'][op:]):.1f}",
+             sFourBottSeeds=str(sum(v["top_osm"] == bn["4"]["top_osm"] and v["way_share"] >= 0.1 for v in bn.values())))
+
+
+def norms_v1(d):
+    S = d["seeds"].values()
+    over = lambda key: sum((v["nothing"] - (v["nothing"] - v["score_new"][key] * (v["nothing"] - v["best"]))) / (v["nothing"] - v["frozen"][1]) > 1 + 1e-9 for v in S)
+    mean = lambda key: np.mean([v["score_new"][key] for v in S])
+    M.update(normsVoneMaxDrop=f"{max(-v['diff'] / v['frozen'][1] * 100 for v in S):.1f}", normsVoneSeedsLower=str(sum(v["diff"] < 0 for v in S)),
+             normsVoneSeedsHigher=str(sum(v["diff"] > 0 for v in S)), normsVoneLearnedMean=f"{mean('learned policy'):.3f}", normsVonePlannerMean=f"{mean('planner'):.3f}",
+             normsVoneConstMean=f"{mean('grpo constant plan'):.3f}", normsVzeroOverOneLearned=str(over("learned policy")), normsVzeroOverOneConst=str(over("grpo constant plan")))
+    fm = lambda key: np.mean([v["score_with_frozen"][key] for v in S])
+    cmp = [v["best_with_frozen"] - v["frozen"][1] for v in S]
+    M.update(normsVoneFrozenLearnedMean=f"{fm('learned policy'):.3f}", normsVoneFrozenPlannerMean=f"{fm('planner'):.3f}", normsVoneFrozenConstMean=f"{fm('grpo constant plan'):.3f}",
+             normsVoneFrozenSeedsLower=str(sum(c < 0 for c in cmp)), normsVoneFrozenSeedsEqual=str(sum(c == 0 for c in cmp)), normsVoneFrozenSeedsHigher=str(sum(c > 0 for c in cmp)))
 
 
 def evidence():
     f = EVID / "test.json"
     if f.exists():
         test_tables(load(f))
-    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits), ("grpo", grpo_evidence), ("norms", norms_evidence)):
+    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits), ("grpo", grpo_evidence), ("norms", norms_evidence), ("handover", handover), ("seed4", seed4), ("norms_v1", norms_v1)):
         if (EVID / f"{name}.json").exists():
             fn(load(EVID / f"{name}.json"))
-    if (EVID / "failures.json").exists():
-        t = load(EVID / "failures.json")["summary"]["reference_vs_agent_score"]
-        M.update(gapIntelWins=f"{t['wins']}/{t['n']}", gapIntelSignP=f"{t['sign_p']:.3f}")
     for name in ("test", "exploits", "failures", "counterfactual", "grpo", "norms"):
         if not (EVID / f"{name}.json").exists():
             print("missing", f"evidence/{name}.json")
-    agent_runs([load(p) | dict(job=job_of(p)) for p in sorted(EVID.glob("**/plan.json"))])
+    agent_runs([load(p) | dict(job=job_of(p), top=p.parent.parent == EVID) for p in sorted(EVID.glob("**/plan.json"))])
     if (EVID / "rules_v2.json").exists():
         rules_v2(load(EVID / "rules_v2.json"))
 
@@ -616,6 +748,9 @@ def main():
     table(vals, search, grpo)
     facts()
     cats()
+    T = table_rows()
+    results(T)
+    fig_bars({k: [clip(T[k][s]["score"]) for s in sorted(T[k], key=int)] for k in KEYS}, lambda k, s: T[k][s]["delay"], "bars_a1")
     evidence()
     from grpo_reason import build as grpo_reason
     grpo_reason(M)

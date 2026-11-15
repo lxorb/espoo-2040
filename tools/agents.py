@@ -19,8 +19,13 @@ def dirs(job):
     return [d for d in (ROOT / "jobs").glob(f"{job}-*") if d.name.rsplit("-", 1)[0] == job]
 
 
-def done(job):
-    return [r for d in dirs(job) for r in d.glob("*/result.json") if json.loads(r.read_text()).get("verifier_result")]
+def ok(r):
+    r = json.loads(r.read_text())
+    return r.get("verifier_result") and not r.get("exception_info")
+
+
+def done(job, all=False):
+    return [r for d in dirs(job) for r in d.glob("*/result.json") if (all and json.loads(r.read_text()).get("verifier_result")) or ok(r)]
 
 
 def run(a, seed):
@@ -28,7 +33,7 @@ def run(a, seed):
     k = a.runs - len(done(job))
     if k > 0:
         n = len(dirs(job))
-        cmd = ["harbor", "run", "-y", "-p", a.task.format(seed=seed), "--job-name", f"{job}-{n}", "-a", a.agent, "-k", str(k), "-n", str(min(k, a.concurrent))]
+        cmd = ["harbor", "run", "-y", "-p", a.task.format(seed=seed), "--job-name", f"{job}-{n}", "-a", a.agent, "-k", str(k), "-n", str(min(k, a.concurrent)), "--max-retries", str(a.retries)]
         cmd += ["-m", a.model] * bool(a.model) + [x for kv in a.ak for x in ("--ak", kv)]
         subprocess.run(cmd, cwd=ROOT, env=dict(os.environ, SEED=str(seed)), check=False)
 
@@ -41,16 +46,19 @@ def clean(s):
     return SECRET.sub("[redacted]", s)
 
 
-def collect(job):
+def collect(job, variant, model):
     sys.path.insert(0, str(ROOT))
     from sim import City
-    for r in done(job):
+    for r in done(job, True):
         t = r.parent
         out = ROOT / "evidence" / job / f"{t.parent.name.rsplit('-', 1)[1]}-{t.name}"
         if (out / "plan.json").exists():
             continue
         st = json.loads((t / "artifacts" / "var" / "lib" / "env" / "state.json").read_text())
         res = json.loads(r.read_text())
+        tr = json.loads((t / "agent" / "trajectory.json").read_text()) if (t / "agent" / "trajectory.json").exists() else {"steps": [], "final_metrics": {}}
+        fm, reason = tr.get("final_metrics") or {}, sum(((x.get("metrics") or {}).get("extra") or {}).get("reasoning_tokens") or 0 for x in tr["steps"])
+        ak = res["config"]["agent"].get("kwargs") or {}
         c = City(st["seed"], st["years"], st["runout"])
         for p in st["plan"]:
             c.step(p)
@@ -59,11 +67,18 @@ def collect(job):
             c.step()
         out.mkdir(parents=True, exist_ok=True)
         (out / "plan.json").write_text(json.dumps(dict(seed=st["seed"], who=res["config"]["agent"]["model_name"] or res["config"]["agent"]["name"],
+                                                       model=model, variant=variant, cost_usd=(res.get("agent_result") or {}).get("cost_usd"),
+                                                       years_committed=len(st["plan"]), valid=not res.get("exception_info"),
+                                                       reasoning_effort=ak.get("variant") or "default (no --variant)", prompt_tokens=fm.get("total_prompt_tokens"),
+                                                       cached_tokens=fm.get("total_cached_tokens"), output_tokens=fm.get("total_completion_tokens"), reasoning_tokens=reason,
+                                                       error=(res.get("exception_info") or {}).get("exception_type"),
                                                        delay=sum(x["delay"] for x in c.recs), score=c.score(),
                                                        harbor_reward=res["verifier_result"]["rewards"]["reward"], plan=plan)))
         if (t / "agent" / "trajectory.json").exists():
             (out / "trajectory.json").write_text(clean((t / "agent" / "trajectory.json").read_text()))
         (out / "result.json").write_text(clean(json.dumps(res, indent=1)))
+        if (t / "verifier" / "test-stdout.txt").exists():
+            (out / "test-stdout.txt").write_text(clean((t / "verifier" / "test-stdout.txt").read_text()))
         print(out, c.score())
 
 
@@ -78,13 +93,15 @@ def main():
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--concurrent", type=int, default=8)
     ap.add_argument("--ak", action="append", default=[])
+    ap.add_argument("--variant", default="base")
+    ap.add_argument("--retries", type=int, default=2)
     a = ap.parse_args()
     ss = seeds(a.seeds)
     if a.cmd == "run":
         with ThreadPoolExecutor(max(1, a.concurrent // a.runs)) as pool:
             list(pool.map(lambda s: run(a, s), ss))
     for s in ss:
-        collect(f"{a.job}-s{s}")
+        collect(f"{a.job}-s{s}", a.variant, a.model)
 
 
 if __name__ == "__main__":

@@ -1,24 +1,25 @@
 name: CI
 on:
   push:
-  pull_request:
   workflow_dispatch:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, espoo]
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uv run --with mcp==1.30.0 pytest -q tests
+      - run: uv run --group dev --with mcp==1.30.0 pytest -q tests
   harbor:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    runs-on: [self-hosted, espoo]
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uv tool install harbor==0.25.0
-      - run: SEED=0 harbor run -y -p task -a oracle --job-name ci-oracle
-      - run: SEED=0 harbor run -y -p task -a nop --job-name ci-nop
+      - run: docker ps -aq --filter label=com.docker.compose.project | xargs -r docker rm -f; docker network prune -f
+      - run: SEED=0 uvx --from harbor==0.25.0 harbor run -y -p task -a oracle --job-name ci-oracle
+      - run: SEED=0 uvx --from harbor==0.25.0 harbor run -y -p task -a nop --job-name ci-nop
       - run: |
           python3 - <<'PY'
           import json
@@ -34,3 +35,5 @@ jobs:
         with:
           name: jobs
           path: jobs/*/*/verifier/test-stdout.txt
+      - if: always()
+        run: docker system prune -af --volumes
