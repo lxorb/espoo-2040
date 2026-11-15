@@ -432,6 +432,22 @@ def failures(d):
                   f"failCallsForecast{sfx}": f"{a['calls']['forecast']['mean']:.1f}"})
         t = S[f"reference_vs_{g}_score"]
         M.update({f"gapIntelWins{sfx}": f"{t['wins']}/{t['n']}", f"gapIntelSignP{sfx}": pf(t["sign_p"]) if t["sign_p"] < 0.001 else f"{t['sign_p']:.3f}"})
+    jp = S["jaccard_pairs"]
+    five = lambda g, k: np.mean([np.mean([x[k] for x in d["runs"] if x["role"] == g and x["seed"] == sd]) for sd in range(5)])
+    M.update(aoneJaccard=f"{jp['a1']['pairs']['mean']:.2f}", refJaccard=f"{jp['reference']['pairs']['mean']:.2f}",
+             aoneNeverActed=f"{S['a1']['never_upgraded_mentioned']}/{S['a1']['boom_total']}", aoneLag=f"{S['a1']['lag']['mean']:.1f}",
+             aoneTwoBoom=f"{S['a1']['two_boom']['mean']:.2f}", refTwoBoom=f"{S['reference']['two_boom']['mean']:.2f}",
+             baseBoomFive=f"{five('a1', 'boom_upgraded'):.1f}", refBoomFive=f"{five('reference', 'boom_upgraded'):.1f}", baseGetState=f"{S['a1']['calls']['get_state']['mean']:.1f}")
+    for g, t in (("longforecast", "lf"), ("max", "max"), ("hint", "hint"), ("notes", "notes"), ("redteam", "redteam")):
+        if g in S:
+            x, c = S[g], S[f"{g}_vs_a1_score"]
+            M.update({f"{t}Boom": f"{x['boom_upgraded']['mean']:.1f}", f"{t}NeverActed": f"{x['never_upgraded_mentioned']}/{x['boom_total']}",
+                      f"{t}GetState": f"{x['calls']['get_state']['mean']:.1f}", f"{t}ListProjects": f"{x['calls']['list_projects']['mean']:.1f}",
+                      f"{t}Score": f"{c['mean']:.2f}", f"{t}WinsAone": f"{c['wins']}/{c['n']}", f"{t}WilcoxonP": f"{c['wilcoxon_p']:.3f}".rstrip("0"),
+                      f"{t}GapClosed": f"{100 * (c['mean'] - c['a1_mean']) / (c['reference_mean'] - c['a1_mean']):.0f}\\%"})
+            M.update(baseScoreFive=f"{c['a1_mean']:.2f}", refScoreFive=f"{c['reference_mean']:.3f}")
+    M["lfMaxP"] = M.get("lfWilcoxonP", "--")
+    M["aoneListProjects"] = f"{S['a1']['calls']['list_projects']['mean']:.1f}"
     rows = [("Score", "score", "{:.2f}"), ("Plan overlap with other seeds (Jaccard)", "jaccard_other_seeds", "{:.2f}"),
             ("Growing areas upgraded (of 3)", "boom_upgraded", "{:.1f}"), ("of them by 2031", "boom_upgraded_by_2031", "{:.1f}"),
             ("Years a growing-area upgrade was not affordable", "boom_access_blocked_years", "{:.1f}"), ("Spend on maintenance level 2 (share)", "maint2_share", "{:.3f}"),
@@ -453,6 +469,7 @@ def counterfactual(d):
             M.update({f"cf{t}Diff{sfx}": neg(S[arm]["diff"]["mean"]), f"cf{t}GapShare{sfx}": gshare(S[arm])})
         acc = [r for r in d["rows"] if r["arm"] == "a_access" and r["job"].startswith(g + "-")]
         M[f"cfAccessAccepted{sfx}"] = f"{sum(r['added'] is not None for r in acc)}/{len(acc)}"
+        M.update({f"cfAccessWins{sfx}": str(S["a_access"]["test"]["wins"]), f"cfAccessTies{sfx}": str(S["a_access"]["test"].get("ties", 0)), f"cfAccessP{sfx}": pf(S["a_access"]["test"]["sign_p"])})
         if g == "a1":
             rows = []
             for arm in names:
@@ -606,16 +623,17 @@ def agent_runs(rows):
         for (m, v), g in groups.items():
             if v == "base":
                 for r in sorted(g, key=lambda r: r["batch"], reverse=True):
-                    base.setdefault(m, {})[str(r["seed"])] = r["score"]
-                    base3.setdefault(m, {}).setdefault(str(r["seed"]), []).append(r["score"])
+                    base.setdefault(m, {})[str(r["seed"])] = clip(r["score"])
+                    base3.setdefault(m, {}).setdefault(str(r["seed"]), []).append(clip(r["score"]))
         lines = []
         for (m, v), g in sorted(ab, key=lambda kg: ["longforecast", "max", "hint", "notes"].index(kg[0][1]) if kg[0][1] in ("longforecast", "max", "hint", "notes") else 9):
             g = sorted(g, key=lambda r: int(r["seed"]))
             seeds = [str(r["seed"]) for r in g]
-            sc = [r["score"] for r in g]
+            sc = [clip(r["score"]) for r in g]
             mm, lo, hi = boot(sc)
-            bs = [base[m][s] for s in seeds] if m in base and all(s in base[m] for s in seeds) else None
-            rs = [ref[s] for s in seeds]
+            b1 = [base[m][s] for s in seeds] if m in base and all(s in base[m] for s in seeds) else None
+            bs = [np.mean(base3[m][s]) for s in seeds] if b1 else None
+            rs = [clip(ref[s]) for s in seeds]
             db, dr = (np.mean(sc) - np.mean(bs) if bs else None), np.mean(sc) - np.mean(rs)
             wins = sum(a > b for a, b in zip(sc, rs))
             first = [next((x["build"] for _, acts in r["plan"] for x in acts if x.get("ok") and x.get("build", "").endswith("-access")), None) for r in g]
@@ -625,9 +643,10 @@ def agent_runs(rows):
                       f"abl{t}VsBase": neg(db) if bs else "--", f"abl{t}VsRef": neg(dr), f"abl{t}WinsRef": f"{wins}/{len(g)}",
                       f"abl{t}Min": f"{min(sc):.3f}", f"abl{t}Max": f"{max(sc):.3f}", f"abl{t}CostUsd": f"{sum(r.get('cost_usd', 0) or 0 for r in g):.2f}"})
             if bs:
-                M[f"abl{t}GapShare"] = f"{(np.mean(sc) - np.mean(bs)) / (np.mean(rs) - np.mean(bs)):.2f}"
-                M["ablBaseMean"] = f"{np.mean([np.mean(base3[m][s]) for s in seeds]):.3f}"
-                M.update(ablBase=f"{np.mean(bs):.3f}", ablRef=f"{np.mean(rs):.3f}", ablSeeds=f"{min(map(int, seeds))} to {max(map(int, seeds))}")
+                gap = lambda bb: (np.mean(sc) - np.mean(bb)) / (np.mean(rs) - np.mean(bb))
+                M.update({f"abl{t}GapShare": neg(gap(bs), "{:.2f}"), f"abl{t}VsBaseFirstRun": neg(np.mean(sc) - np.mean(b1)), f"abl{t}GapShareFirstRun": neg(gap(b1), "{:.2f}"),
+                          "ablBase": f"{np.mean(bs):.3f}", "ablBaseMean": f"{np.mean(bs):.3f}", "ablBaseFirstRun": f"{np.mean(b1):.3f}",
+                          "ablRef": f"{np.mean(rs):.3f}", "ablSeeds": f"{min(map(int, seeds))} to {max(map(int, seeds))}"})
             lines.append(f"\\texttt{{{m}}} & {v} & {len(g)} & {mm:.3f} [{lo:.3f}, {hi:.3f}] & {neg(db) if bs else '--'} & {neg(dr)} & {wins}/{len(g)} \\\\")
         (HERE / "ablations.tex").write_text("\n".join(lines) + "\n")
     red = [r for (m, v), g in groups.items() if v.startswith("redteam") for r in g]
@@ -700,6 +719,7 @@ def handover(d):
                 "KOneBig": f"{h['agent_first_k1_big']:.2f}", "KThreeBig": f"{h['agent_first_k3_big']:.2f}", "KFiveBig": f"{h['agent_first_k5_big']:.2f}",
                 "RevYears": str(int(np.median(h["reverse_years"]))), "RevYearsRuns": str(sum(y == int(np.median(h["reverse_years"])) for y in h["reverse_years"])),
                 "MixWorse": str(h["mix_worse"]), "RefAlone": f"{h['reference_alone']:.3f}", "AgentAlone": f"{h['agent_alone']:.3f}"}
+        vals.update(RecoverMedian=f"{np.median(h['recover']):.2f}", BreakModal=str(max(set(h["break_years"]), key=h["break_years"].count)))
         M.update({f"handover{k}{sfx}": v for k, v in vals.items()})
         if g == "a1":
             M.update({f"handover{k}": v for k, v in vals.items()})
