@@ -1,16 +1,20 @@
 import argparse
 import json
 import os
+import platform
 import sys
+import time
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import get_context
+from pathlib import Path
 
 import numpy as np
+from scipy.stats import binomtest, wilcoxon
 from sim import City
 
 from .core import Net
 from .policy import Policy, decode, jmask, joints
-from .train import OUT, ROOT, play, score, version
+from .train import OUT, ROOT, play, version
 
 
 def rows(c, st, jam):
@@ -58,41 +62,67 @@ def baseline(name, seed, npz, maint):
             if maint is not None and name != "deploy":
                 acts = [a for a in acts if "maintain" not in a] + [{"maintain": maint}]
         c.step(acts)
-    c.log(f"rl-{name}-{seed}")
-    return score(c), sum(r["delay"] for r in c.recs)
+    return c.score(), sum(r["delay"] for r in c.recs)
 
 
-def job(name, seed, sd, npz, n, depth, maint):
-    if name == "search":
-        return play(seed, sd, "search", n, depth, f"rl-search-{seed}")[1:]
-    return baseline(name, seed, npz, maint)
+def job(spec, seed, npz, n, depth):
+    name, _, maint = spec.partition(":")
+    f = OUT / "cache" / version(False) / f"{spec}-{seed}.json"
+    if not f.exists():
+        f.parent.mkdir(parents=True, exist_ok=True)
+        r = play(seed, Net.npz(npz), "search", n, depth)[1:] if name == "search" else baseline(name, seed, npz, int(maint) if maint else None)
+        f.write_text(json.dumps(dict(delay=r[1])))
+    return json.loads(f.read_text())
+
+
+def ci(x, rng):
+    m = rng.choice(x, (10000, len(x))).mean(1)
+    return [float(np.mean(x)), float(np.percentile(m, 2.5)), float(np.percentile(m, 97.5))]
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--policies", default="nothing,random,greedy1,greedy5,reactive,planner,deploy,search")
-    ap.add_argument("--seeds", default=",".join(map(str, range(16))))
+    ap.add_argument("--policies", default="deploy,planner,reactive:2,greedy1:2,greedy5:2,random,nothing")
+    ap.add_argument("--seeds", default="0-47")
     ap.add_argument("--npz", default=str(ROOT / "rl" / "policy.npz"))
     ap.add_argument("--sims", type=int, default=16)
     ap.add_argument("--depth", type=int, default=6)
-    ap.add_argument("--maintain", type=int)
-    ap.add_argument("--out", default="eval")
+    ap.add_argument("--out", default=str(ROOT / "evidence" / "test.json"))
     ap.add_argument("--workers", type=int, default=os.cpu_count())
     a = ap.parse_args()
-    seeds, sd = [int(s) for s in a.seeds.split(",")], Net.npz(a.npz)
-    nothing = {s: sum(City(s).baseline()) for s in seeds}
+    lo, hi = map(int, a.seeds.split("-"))
+    norms = json.loads((ROOT / "sim" / "norms.json").read_text())
+    seeds, pols = list(range(lo, hi + 1)), a.policies.split(",")
     os.environ["NUMBA_NUM_THREADS"] = "1"
-    jobs = [(p, s) for p in a.policies.split(",") for s in seeds]
+    jobs = [(p, s) for p in pols + ["nothing"] * ("nothing" not in pols) for s in seeds]
     with ProcessPoolExecutor(a.workers, get_context("spawn")) as pool:
-        res = list(pool.map(job, *zip(*jobs), *([x] * len(jobs) for x in (sd, a.npz, a.sims, a.depth, a.maintain))))
-    out = {}
-    for (p, s), (sc, d) in zip(jobs, res):
-        r = out.setdefault(p, dict(seeds=[], score=[], saved_frac=[], delay=[]))
-        r["seeds"].append(s), r["score"].append(sc), r["saved_frac"].append(1 - d / nothing[s]), r["delay"].append(d / 1e6)
-    for p, r in out.items():
-        r.update(mean=float(np.mean(r["score"])), mean_saved=float(np.mean(r["saved_frac"])))
-        print(f"{p:9s} {r['mean']:+.4f} {r['mean_saved']:.4f} " + " ".join(f"{x:+.3f}" for x in r["score"]))
-    (OUT / f"{a.out}-{version()}.json").write_text(json.dumps(dict(maintain=a.maintain, policies=out)))
+        res = dict(zip(jobs, pool.map(job, *zip(*jobs), *([x] * len(jobs) for x in (a.npz, a.sims, a.depth)))))
+    out = dict(meta=dict(script="rl/eval.py", command="python -m rl.eval " + " ".join(sys.argv[1:]), seeds=a.seeds, version=version(),
+                         norms=dict(file="sim/norms.json", seeds=sorted(int(k) for k in norms)), date=time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime()), machine=platform.processor() or platform.machine(),
+                         cpu=next((l.split(":")[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name")), ""),
+                         saved_frac="1 - delay / delay of do-nothing on the same seed", ci="95% bootstrap over seeds, 10000 resamples, rng 0",
+                         tests="paired vs deploy on saved_frac: one-sided sign test and Wilcoxon signed-rank, deploy better"))
+    for part, ss in (("validation", [s for s in seeds if s < 16]), ("test", [s for s in seeds if s >= 16])):
+        if not ss:
+            continue
+        rows = {p: {s: dict(delay=res[p, s]["delay"], saved_frac=1 - res[p, s]["delay"] / res["nothing", s]["delay"],
+                            score=(norms[str(s)][0] - res[p, s]["delay"]) / (norms[str(s)][0] - norms[str(s)][1]) if str(s) in norms else None)
+                    for s in ss} for p in pols}
+        st = {}
+        for p in pols:
+            v = np.array([rows[p][s]["saved_frac"] for s in ss])
+            sc = [rows[p][s]["score"] for s in ss]
+            st[p] = dict(saved_frac=ci(v, np.random.default_rng(0)), score=ci(np.array(sc), np.random.default_rng(0)) if None not in sc else None,
+                         delay_m=float(np.mean([rows[p][s]["delay"] for s in ss]) / 1e6))
+            if p != "deploy" and "deploy" in pols:
+                d = np.array([rows["deploy"][s]["saved_frac"] for s in ss]) - v
+                w = int((d > 0).sum())
+                st[p].update(deploy_wins=w, ties=int((d == 0).sum()), sign_p=float(binomtest(w, int((d != 0).sum()), alternative="greater").pvalue) if (d != 0).any() else None,
+                             wilcoxon_p=float(wilcoxon(d, alternative="greater").pvalue) if (d != 0).any() else None)
+            print(part, f"{p:11s}", " ".join(f"{k}={v}" for k, v in st[p].items()), flush=True)
+        out[part] = dict(policies=rows, stats=st)
+    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(a.out).write_text(json.dumps(out, indent=1))
 
 
 if __name__ == "__main__":

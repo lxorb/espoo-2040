@@ -21,8 +21,8 @@ EXPERT = Path(os.environ.get("RL_EXPERT", ROOT / "runs" / "expert"))
 SEEDS = list(range(16))
 
 
-def version():
-    files = sorted(ROOT.glob("sim/*.py")) + sorted((ROOT / "data" / "out").glob("*")) + [ROOT / "data" / "catalogue.json", ROOT / "sim" / "norms.json"]
+def version(norms=True):
+    files = sorted(ROOT.glob("sim/*.py")) + sorted((ROOT / "data" / "out").glob("*")) + [ROOT / "data" / "catalogue.json"] + [ROOT / "sim" / "norms.json"] * norms
     return hashlib.sha1(b"".join(f.read_bytes() for f in files if f.is_file())).hexdigest()[:8]
 
 
@@ -62,7 +62,7 @@ def play(seed, sd, mode="net", n=16, depth=6, log=None):
     if log:
         c.log(log)
     z = np.cumsum(((np.array(base) - d) / np.mean(base))[::-1])[::-1]
-    return [(o, m, p, None) for o, m, p in pol] + [(o, None, None, float(v)) for o, v in zip(obs, z)], score(c), sum(d)
+    return [(o, m, p, None) for o, m, p in pol] + [(o, None, None, float(v)) for o, v in zip(obs, z)], c.score(), sum(d)
 
 
 def learn(net, opt, buf, steps, J, bs=128):
