@@ -255,7 +255,8 @@ def evaluate(gen, pool, infos, think, anon, maxtok, adapter, n=4, edits=True):
     g = [x[0] for x in gen(ps, 1, True, maxtok, adapter)]
     smp = gen(ps, n, False, maxtok, adapter, seed=123)
     P = [[parse(t, i, think) for t, _ in [g[k]] + smp[k]] for k, i in enumerate(infos)]
-    R = [pool.run([(i["seed"], p[0], p[1]) for p in P[k]], anon, False) for k, i in enumerate(infos)]
+    flat = pool.run([(i["seed"], p[0], p[1]) for k, i in enumerate(infos) for p in P[k]], anon, False)
+    R = [flat[k * (n + 1):(k + 1) * (n + 1)] for k in range(len(infos))]
     rows = []
     for k, i in enumerate(infos):
         ids, mt, pen, th = P[k][0]
@@ -400,9 +401,10 @@ def main():
             batch = rng.choice(train, a.prompts, replace=False)
             tried += len(batch)
             out = gen([prompt(i, a.think) for i in batch], a.g, False, maxtok, ad, seed=int(rng.integers(1 << 30)))
-            for i, o in zip(batch, out):
-                ps = [parse(t, i, a.think) for t, _ in o]
-                rs = pool.run([(i["seed"], p[0], p[1]) for p in ps], a.anon, True)
+            PS = [[parse(t, i, a.think) for t, _ in o] for i, o in zip(batch, out)]
+            RS = pool.run([(i["seed"], p[0], p[1]) for i, ps in zip(batch, PS) for p in ps], a.anon, True)
+            for k, (i, o) in enumerate(zip(batch, out)):
+                ps, rs = PS[k], RS[k * a.g:(k + 1) * a.g]
                 R = np.array([reward(r, p[2]) for r, p in zip(rs, ps)])
                 if R.std() < 1e-6:
                     skipped += 1

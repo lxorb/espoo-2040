@@ -93,3 +93,44 @@ Statistics helpers in `make.py`: `boot` (mean and 95% bootstrap CI, 10,000 resam
 15. The final GRPO model equals one constant plan on all `grpoSameAsConst` of 48 seeds, and its plans do not change when the growth numbers in the prompt are shuffled or zeroed (`grpoSensFinalShuffle`, `grpoSensFinalZero`; after warm-up `grpoSensWarmShuffle`, `grpoSensWarmZero`). It does not read growth.
 16. GRPO run A was trained without a torch seed, so it cannot be reproduced bit for bit; `grpo/train.py` now takes `--seed`, and two seeded runs are in progress. The macros `grpoWarm`, `grpoFinal` (from the training curve, clipped scores) differ from `grpoWarmVal`, `grpoFinalVal` (from `evidence/grpo.json`, raw mean): 0.19 and 0.83 against 0.186 and 0.831.
 17. Test scores (`testRlScore` and others) use the test norms. Read with item 13: they are not on the same scale as the validation scores. On the test split the learned policy's lowest seed is `testRlScoreMinSeed` (`testRlScoreMin`).
+
+## GRPO with room to reason (branch `grpo-reasoning`, 2026-11-15)
+
+Question: with (1) room to reason (`--think`) and (2) no project names to memorise (`--anon`), does GRPO teach a small Gemma to read the scenario instead of collapsing to one memorised plan (run A)? Run A and its numbers are untouched; all new code is in `grpo/reason.py`, `grpo/reason_eval.py`, `grpo/factorial.sh`, `grpo/phase2.sh`, `paper/figs/grpo_reason.py`.
+
+Machine: Verda, 1x NVIDIA RTX PRO 6000 Blackwell Server Edition (96 GB), 30 vCPU, 88 GB RAM. PyTorch 2.14.0+cu130, transformers 5.20.2, peft 0.21.3, vLLM 0.33.0 (works on Blackwell; needs `VLLM_USE_FLASHINFER_SAMPLER=0` because FlashInfer JIT needs `ninja`/`nvcc`). TRL 1.18 installed but not used: own loop (vLLM rollouts with the current LoRA, HF+PEFT gradients) because dynamic sampling and the simulator pool were simpler there.
+
+### Environment (`grpo/reason.py`)
+- Same single-turn protocol as run A: the env plays 2 years with maintenance 1, the model gets budget, growth so far, the menu (id, cost, build years, nearest area) and answers `plan: id, ...; maintain: k`; the env starts projects in order when affordable (max 2 per year).
+- `--anon`: per scenario, labels P01..P22 in random order; cost and build years scaled by U(0.8, 1.2) (rounded; years at least 1), RNG `[seed, 2040]`; applied in the prompt AND the simulator (`City.cat` of that instance; `sim/` unchanged). The do-nothing delay is unaffected, so the saved share is exact; the normalised score still uses `sim/norms.json` (best known plan of the UNperturbed catalogue), so anon scores are on a slightly different scale than named ones (compare saved shares across the two; this is a confound of the factorial: anon = new labels + perturbed costs).
+- `--think`: `<think>...</think>` then exactly one plan line; 1024 new tokens. The prompt asks for at most 12 short lines and shows the format. No-think: 96 new tokens.
+- Reward (unchanged from run A): `clip(saved_share / 0.3 - 0.05 * wrong, -0.5, 1.5)`; wrong = unknown or duplicate ids, missing/invalid `maintain`, missing `<think>` tags, more than one line after `</think>`; unreadable (no valid id) = -0.5. Nothing about the content of the reasoning enters the reward.
+- Training rewards with `fast=True`, every evaluation exact. Train seeds 1000 to 1599; validation 0 to 15 (checkpoint choice); test 16 to 47 (only final and best-validation checkpoints).
+
+### GRPO settings (all cells)
+Gemma 3 1B (`unsloth/gemma-3-1b-it`), LoRA r16 alpha 32 all linear layers, bf16 base, G=8, 8 prompts per step, temperature 1.0, beta_KL=0, AdamW lr 5e-5 (run A's value; no pilot because of the 2-hour deadline), 50 steps, token-level loss normalisation, grad clip 1.0, torch seed 0. Dynamic sampling: a group whose 8 rewards are all equal is skipped and new prompts are drawn (up to 3x8 prompts per step); `skipped` in the step log. Evaluation every 5 steps on validation seeds: greedy + 4 samples (exact simulator), plus greedy answers to three edited prompts.
+Deviation: the two no-think cells ran after the two think cells (the think cells used about 86 GB of GPU memory together); same settings and budget.
+
+### Metrics (per checkpoint, `evaluate()` in `grpo/reason.py`)
+- score: normalised score of the greedy plan (raw, unclipped); saved share; validity (parsed, no format error); 95% bootstrap CI over seeds (`boot`, 10,000 resamples, RNG 0, same as `make.py`).
+- boom-hit: share of the truly growing areas (hidden `City.rp`, 2 or 3 per seed) whose access upgrade is in the plan; boom rank: first position of such an upgrade.
+- distinct: distinct (plan, maintain) among the 16 greedy validation plans; entropy: of the 4 sampled plans per seed.
+- sensitivity: share of seeds whose greedy plan changes when the growth lines are shuffled across areas (`sens_shuffle`) or set to zero (`sens_zero`).
+- faithfulness (swap test): the growth numbers are reversed across areas (the fastest area gets the slowest numbers), so growing areas look flat and vice versa. Faithful = the plan changes AND it contains the access upgrade of at least one area that now looks growing but did not before. `swap_think_new`: the reasoning names such an area as growing.
+- reasoning (think runs; regex, descriptive only): think length (tokens); growth recall/precision = areas named in a sentence with a growth word (grow, fast, boom, increas, rapid, high, strong, rising) vs the truly growing areas; arithmetic = traces containing an equation `a op b = c` (share) and share of such equations that are correct (within 0.5); consistency `think_in_plan` = share of areas named as growing whose access upgrade is in the plan, `plan_in_think` the reverse.
+- Trace evolution: validation seeds 0 and 1 (fixed in advance), greedy, at the first, middle and last checkpoint: `evidence/grpo-reasoning/<run>/<seed>_<step>.txt`; excerpts of the main run in `grpo_trace.tex`.
+
+### Reference points (same protocol, `grpo/reason_eval.py refs`, seeds 0 to 47, named and anon catalogue)
+- growth-aware oracle list: access upgrades of the truly growing areas (hidden information), then `olari-link`, `mankkaa-link`, maintenance 1. A heuristic that uses hidden info, NOT an upper bound: it scores below run A's constant plan.
+- random valid lists: 4 per seed, first 2 to 6 of a random permutation, maintenance U{0,1,2}.
+- run A constant plan (`evidence/grpo.json` `const_plan`).
+- zero-shot base models (1B and 4B, think and no-think, named and anon; `reason_eval.py zero`): the "before training" point.
+- The rule planner as a priority list was NOT done (time).
+
+| Macro or table | Meaning | Script | Command | Seeds |
+|---|---|---|---|---|
+| `grpo_curves.pdf`, `grpo_reasoning.pdf`, `grpo_runs.tex`, `grpo_factorial.tex`, `grpo_trace.tex`; `grpo<Run>{Score,ScoreLo,ScoreHi,ScoreZero,ScoreBest,BestStep,Frac,BoomHit,BoomHitZero,Sens,SensZero,Distinct,DistinctZero,Valid,ValidZero,Faithful,FaithfulZero,Skipped,GpuHours,ThinkRecall,ThinkRecallZero,ThinkPrecision,ThinkLen,ThinkLenZero,Arith,Consist,Test,TestScore,TestBoomHit,TestBest,...}` with Run in ThinkAnon, ThinkNamed, NothinkAnon, NothinkNamed | final (last checkpoint) validation values, step-0 values (`Zero`), best-validation checkpoint; `Test*` = saved share (%) / score / boom-hit of the final (or `Best`) checkpoint on test seeds | `grpo/reason.py`, `grpo/reason_eval.py`, `paper/figs/grpo_reason.py` (called by `make.py`) | `grpo/factorial.sh`, `grpo/phase2.sh`, then `python paper/figs/grpo_reason.py` | train 1000-1599, val 0-15, test 16-47 |
+| `grpoRef{Oracle,Random,Const}{Named,Anon}{Val,Test,Score,BoomHit}` | reference lists: saved share (%) val/test, val score, val boom-hit | `grpo/reason_eval.py refs` | `python -m grpo.reason_eval refs` | 0-47 |
+| `grpoZero<Size><Think><Anon><Split>{Score,Frac,Valid,BoomHit,Recall}` | zero-shot base models | `grpo/reason_eval.py zero` | `python -m grpo.reason_eval zero --sizes 4b 1b` | 0-15, 16-47 |
+| `grpoConst`, `grpoSensWarm`, `grpoSensFinal` | aliases of the existing run A numbers `grpoConstVal`, `grpoSensWarmShuffle`, `grpoSensFinalShuffle` (run A checkpoints are not on this machine; the numbers were computed earlier from them by `grpo/rigor.py`) | `make.py` | | 0-15 |
+| `grpoReasonGpuHours`, `grpoGpuRate` | sum of per-run step time (runs shared the GPU, so this overstates exclusive GPU time); assumed price per GPU hour | `grpo_reason.py` | | |
