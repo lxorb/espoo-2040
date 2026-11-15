@@ -17,7 +17,8 @@ from policy import Policy
 from sim import City
 from sim import params as P
 
-CACHE = ROOT / "runs" / "norms"
+CACHE = ROOT / "runs" / os.environ.get("NORMS_CACHE", "norms")
+EXTRA = json.loads(Path(os.environ["NORMS_EXTRA"]).read_text()) if os.environ.get("NORMS_EXTRA") else {}
 
 
 def B(k):
@@ -157,6 +158,10 @@ def one(seed):
     r = play(seed, learned(Policy()))
     ms = [a["maintain"] for x in r[2].recs[:15] for a in x["actions"] if "maintain" in a and a.get("ok")]
     add("learned policy", r, max(set(ms), key=ms.count) if ms else 1)
+    for e in EXTRA.get(str(seed), []):
+        r = play(seed, lambda c, e=e: [dict(a) for a in e["years"][c.s["year"]]] if c.s["year"] < len(e["years"]) else [])
+        ms = [a["maintain"] for x in r[2].recs[:15] for a in x["actions"] if "maintain" in a and a.get("ok")]
+        add(e["src"], r, max(set(ms), key=ms.count) if ms else 1)
     rng = np.random.default_rng([1, seed])
     for _ in range(3):
         cur = min(cand, key=lambda c: c["loss"])
@@ -165,7 +170,7 @@ def one(seed):
             add("local search", play(seed, fixed(m if m is not None else cur["plan"]), mt), mt)
     best = min(cand, key=lambda c: c["loss"])
     res = dict(seed=seed, nothing=nothing, best=best["loss"], source=best["src"], plan=best["plan"], maint=best["maint"],
-               candidates=len(cand), seconds=round(time.time() - t))
+               candidates=len(cand), seconds=round(time.time() - t), pool={c["src"]: min(d["loss"] for d in cand if d["src"] == c["src"]) for c in cand})
     CACHE.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(f".{os.getpid()}")
     tmp.write_text(json.dumps(res))
@@ -184,13 +189,25 @@ if __name__ == "__main__":
     ap.add_argument("--seeds", default="16-47")
     ap.add_argument("--jobs", type=int, default=32)
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--out", default="")
     a = ap.parse_args()
     lo, hi = map(int, a.seeds.split("-"))
     seeds = list(range(lo, hi + 1))
     with mp.get_context("spawn").Pool(min(a.jobs, len(seeds))) as pool:
         res = {r["seed"]: r for r in pool.imap_unordered(one, seeds)}
     norms = json.loads((ROOT / "sim/norms.json").read_text())
-    if a.check:
+    if a.out:
+        seeds_out = {}
+        for s in seeds:
+            n, b, f = res[s]["nothing"], res[s]["best"], norms[str(s)]
+            sc = lambda x, d: (n - x) / (n - d)
+            seeds_out[str(s)] = dict({k: res[s][k] for k in ("nothing", "best", "source", "plan", "maint")}, frozen=f, diff=b - f[1],
+                                     score_new={k: sc(v, b) for k, v in res[s]["pool"].items()}, score_frozen={k: sc(v, f[1]) for k, v in res[s]["pool"].items()},
+                                     over1_new=sorted(k for k, v in res[s]["pool"].items() if sc(v, b) > 1 + 1e-12),
+                                     over1_frozen=sorted(k for k, v in res[s]["pool"].items() if sc(v, f[1]) > 1 + 1e-12))
+        write(ROOT / a.out, dict(meta=dict(script="tools/norms.py", command=" ".join(["NORMS_EXTRA=" + os.environ.get("NORMS_EXTRA", ""), "python", "tools/norms.py"] + sys.argv[1:]),
+                                           seeds=seeds, date=time.strftime("%Y-%m-%d"), machine=platform.processor() or platform.machine()), seeds=seeds_out))
+    elif a.check:
         for s in seeds:
             f = norms.get(str(s))
             print(s, "nothing", res[s]["nothing"], f and res[s]["nothing"] == f[0], "best", res[s]["best"], f and f[1], res[s]["source"])

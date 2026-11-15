@@ -49,7 +49,7 @@ def gen(name, wave):
     D = ROOT / name
     shutil.rmtree(D, ignore_errors=True)
     for f in ("sim", "data/out", "data/catalogue.json", "rl", "task", "tools/norms.py", "tools/v2.py", "tools/experts.py",
-              *[f"evidence/gate4-s{k}" for k in range(5)]):
+              *[f"evidence/{n}-s{k}" for n in ("gate4", "a1") for k in range(5)]):
         (D / f).parent.mkdir(parents=True, exist_ok=True)
         (shutil.copytree if (ROOT / f).is_dir() else shutil.copy)(ROOT / f, D / f, **({"ignore": shutil.ignore_patterns("__pycache__")} if (ROOT / f).is_dir() else {}))
     (D / "sim/norms.json").write_text("{}")
@@ -84,6 +84,26 @@ def one(a):
                 score=c.score(), maint=[a["maintain"] for r in c.recs[:c.years] for a in r["actions"] if "maintain" in a and a["ok"]])
 
 
+def agent(f):
+    sys.path[:0] = [str(ROOT / "tools")]
+    import norms as N
+    d = json.loads(Path(f).read_text())
+    years = [[{k: v for k, v in a.items() if k in ("build", "maintain")} for a in y[1]] for y in d["plan"]]
+    loss, plan, c = N.play(d["seed"], lambda c: [dict(a) for a in years[c.s["year"]]] if c.s["year"] < len(years) else [])
+    nothing = N.play(d["seed"], lambda c: [])[0]
+    return dict(run=str(Path(f).parent.relative_to(ROOT / "evidence")), seed=d["seed"], who=d.get("who"), loss=loss, saved=1 - loss / nothing, score=c.score(), plan=plan,
+                rejected_builds=sum(not a["ok"] for r in c.recs for a in r["actions"] if "build" in a),
+                rejected_builds_original=sum(not a.get("ok", True) for y in d["plan"] for a in y[1] if "build" in a), min_cash=min(r["budget"] for r in c.recs))
+
+
+def agents():
+    fs = [f for f in sorted(map(str, ROOT.glob("evidence/*/plan.json"))) + sorted(map(str, ROOT.glob("evidence/a1-s*/*/plan.json")))
+          if json.loads(Path(f).read_text()).get("valid") is not False and "ref3" not in f]
+    with mp.get_context("spawn").Pool(16) as pool:
+        out = pool.map(agent, fs)
+    (ROOT / "runs/agents.json").write_text(json.dumps(out))
+
+
 def measure(seeds, whos, name):
     with mp.get_context("spawn").Pool(min(32, len(seeds) * len(whos))) as pool:
         res = pool.map(one, [(s, w) for s in seeds for w in whos], chunksize=1)
@@ -100,14 +120,19 @@ def measure(seeds, whos, name):
 
 def collect(names):
     res = {n: json.loads((ROOT / ("" if n == "v1" else f"task-{n}/") / "runs/v2measure.json").read_text()) for n in names}
-    test = {}
+    test, ag = {}, {}
     for n in names:
-        p = ROOT / ("" if n == "v1" else f"task-{n}/") / "runs/v2rt.json"
-        for s, d in (json.loads(p.read_text()) if p.exists() else {}).items():
-            if s in res[n]:
-                res[n][s]["learned-retrained"] = d["retrained"]
-            else:
-                test.setdefault(n, {})[s] = d
+        p = ROOT / ("" if n == "v1" else f"task-{n}/") / "runs/agents.json"
+        if p.exists():
+            ag[n] = json.loads(p.read_text())
+    for n in names:
+        for f in ("v2rt", "v2test"):
+            p = ROOT / ("" if n == "v1" else f"task-{n}/") / f"runs/{f}.json"
+            for s, d in (json.loads(p.read_text()) if p.exists() else {}).items():
+                if s in res[n]:
+                    res[n][s]["learned-retrained"] = d["retrained"]
+                else:
+                    test.setdefault(n, {}).setdefault(s, {}).update(d)
     meta = dict(script="tools/v2.py", command=" ".join(["python", "tools/v2.py"] + sys.argv[1:]), seeds=sorted(map(int, res["v1"])), date=time.strftime("%Y-%m-%d"),
                 machine="Intel Xeon Platinum 8573C (espoo-vm3)", rules=dict(v2="emergency rebuild only if cash covers it, else deferred: the segment keeps decaying and keeps the 0.8 capacity cut; no debt from rebuilds",
                                                                                  v2e="v2 plus a second growth wave: in a year drawn from 6-9 one or two non-boom areas start growing at a boom rate (seed stream 2), hidden from forecasts until it starts"))
@@ -126,7 +151,7 @@ def collect(names):
         if ex.exists():
             meta[f"exploits_{n}"] = {k: {f: v[f] for f in ("seeds", "score", "mean", "score_mean", "wins_over_ref", "ties_with_ref", "min_cash", "replay_off")} for k, v in json.loads(ex.read_text())["strategies"].items()}
     tmp = ROOT / "evidence/rules_v2.json.tmp"
-    tmp.write_text(json.dumps(dict(meta=meta, variants=res, test=test)))
+    tmp.write_text(json.dumps(dict(meta=meta, variants=res, test=test, agents=ag)))
     os.replace(tmp, ROOT / "evidence/rules_v2.json")
 
 
@@ -135,6 +160,8 @@ if __name__ == "__main__":
     if cmd == "gen":
         gen("task-v2", False)
         gen("task-v2e", True)
+    elif cmd == "agents":
+        agents()
     elif cmd == "measure":
         lo, hi = map(int, (sys.argv[2:3] or ["0-15"])[0].split("-"))
         measure(list(range(lo, hi + 1)), (sys.argv[3:4] or ["nothing,planner,learned,learned-m2,reactive,maintain-0,maintain-2"])[0].split(","), (sys.argv[4:5] or ["v2measure"])[0])
