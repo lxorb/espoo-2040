@@ -618,11 +618,23 @@ def handover(d):
     h.plot(rs)
 
 
+def seed4(d):
+    a, bn, single = d["arms"], d["bottleneck"], d["single_2030"]
+    b = a["base"]
+    op = next(i for i, x in enumerate(b["open"]) if "otaniemi-access" in x)
+    M.update(sFourBase=f"{b['score']:.2f}", sFourSwap=f"{a['swap']['score']:.2f}", sFourDropOta=f"{a['drop']['score']:.3f}",
+             sFourLepAlone=f"{single['4']['leppavaara-access']:.3f}", sFourteenOtaAlone=f"{single['14']['otaniemi-access']:.2f}",
+             sFourBottShare=f"{100 * bn['4']['way_share']:.0f}\\%", sFourteenBottShare=f"{100 * bn['14']['way_share']:.0f}\\%",
+             sFourBottVC=f"{bn['4']['top_vc_2040']:.1f}", sFourBottRatio=f"{bn['4']['top_time_ratio_2040']:.0f}", sFourBottLen=f"{bn['4']['top_len_m']:.1f}",
+             sFourBottOsm=str(bn["4"]["top_osm"]), sFourWithOtaVCMin=f"{min(b['bott_vc'][op:]):.1f}", sFourWithOtaVCMax=f"{max(b['bott_vc'][op:]):.1f}",
+             sFourBottSeeds=str(sum(v["top_osm"] == bn["4"]["top_osm"] and v["way_share"] >= 0.1 for v in bn.values())))
+
+
 def evidence():
     f = EVID / "test.json"
     if f.exists():
         test_tables(load(f))
-    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits), ("grpo", grpo_evidence), ("norms", norms_evidence), ("handover", handover)):
+    for name, fn in (("failures", failures), ("counterfactual", counterfactual), ("exploits", exploits), ("grpo", grpo_evidence), ("norms", norms_evidence), ("handover", handover), ("seed4", seed4)):
         if (EVID / f"{name}.json").exists():
             fn(load(EVID / f"{name}.json"))
     if (EVID / "failures.json").exists():
