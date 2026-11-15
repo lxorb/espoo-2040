@@ -293,7 +293,7 @@ Method & 16 seeds & agent's & M p-h & M p-h & \% & M p-h/yr & MEUR \\
   \label{fig:bars}
 \end{figure}
 
-\textbf{Main result.} Table~\ref{tab:main} and Figure~\ref{fig:bars} show the results. Doing nothing is the worst plan. Random plans help a little. Greedy plans help in some scenarios and fail in others, because they judge each project alone and over a short time. The frontier agent scores \agentScoreMean{}. The simple rule planner scores 0.84, and the learned policy scores \rlScore{}, both without forecasts. Through Harbor, the learned policy gives the same delays as our own simulator. On the 32 test scenarios (seeds 16 to 47, never used for training or checkpoint choice), the learned policy saves \testRl{}\% of the do-nothing delay (95\% CI [\testRlLo{}, \testRlHi{}]; \valRl{}\% on the validation seeds). It beats the rule planner in \testRlWinsPlanner{} of 32 scenarios (sign test $p$ = \testPlannerSignP{}) and every other baseline in at least \testRlWinsGreedyFive{} (Table~\ref{tab:test} in the appendix).
+\textbf{Main result.} Table~\ref{tab:main} and Figure~\ref{fig:bars} show the results. Doing nothing is the worst plan. Random plans help a little. Greedy plans help in some scenarios and fail in others, because they judge each project alone and over a short time. The frontier agent scores \agentScoreMean{}. The simple rule planner scores 0.84, and the learned policy scores \rlScore{}, both without forecasts. Through Harbor, the learned policy gives the same delays as our own simulator. On the 32 test scenarios (seeds 16 to 47, never used for training or checkpoint choice), the learned policy saves \testRl{}\% of the do-nothing delay (95\% CI [\testRlLo{}, \testRlHi{}]; \valRl{}\% on the validation seeds) and reaches a normalised score of \testRlScore{} [\testRlScoreLo{}, \testRlScoreHi{}], with best known plans computed for these seeds in the same way (\normsCpuHours{} CPU hours). It beats the rule planner in \testRlWinsPlanner{} of 32 scenarios (sign test $p$ = \testPlannerSignP{}) and every other baseline in at least \testRlWinsGreedyFive{} (Table~\ref{tab:test} in the appendix).
 
 
 
@@ -355,9 +355,22 @@ Can a small language model learn this task from the environment alone? We train 
   \label{fig:curves}
 \end{figure}
 
-\textbf{It learns.} Without training, Gemma never writes a valid answer (score \grpoZero{}). After the warm-up it scores \grpoWarm{}. After \grpoSteps{} GRPO steps it scores \grpoFinal{}, with \grpoValid{} of the answers valid (Figure~\ref{fig:curves}b). This is close to the rule planner. It is also above the frontier agent, but the comparison is not fair: Gemma plays an easier single-turn version, and the first two years are played for it. It learns in a clear order: first the format, then the best maintenance level ($m=2$, from step \grpoMtwoAt{}), then a fixed set of good projects (from step \grpoKeptAt{}).
+\textbf{It learns.} Without training, Gemma never writes a valid answer (score \grpoZero{}). After the warm-up it scores \grpoWarm{}. After \grpoSteps{} GRPO steps it scores \grpoFinal{}, with \grpoValid{} of the answers valid (Figure~\ref{fig:curves}b). This is close to the rule planner. It is also above the frontier agent, but the comparison is not fair: Gemma plays an easier single-turn version, and the first two years are played for it. It beats random valid plans (\grpoRandomVal{}) on \grpoFinalWinsRandomVal{} validation seeds. It learns in a clear order: first the format, then the best maintenance level ($m=2$, from step \grpoMtwoAt{}), then a fixed set of good projects (from step \grpoKeptAt{}).
 
-\textbf{Then it takes a shortcut.} After training, Gemma writes the \emph{same} plan for all 16 test scenarios: \grpoPlan{}. It does not read the growth in the prompt. Only \grpoBoomShare{} of its access upgrades are in growing areas. The plan scores well because Otaniemi and Kiviruukki are often among the growing areas, so it works on average. This is a shortcut~\cite{geirhos2020}: the model fits the average scenario, not the one in front of it.
+\textbf{Then it takes a shortcut.} After training, Gemma writes the \emph{same} plan for every scenario: \grpoPlan{}. We test this directly (Table~\ref{tab:grpo}). Played as a fixed policy, this constant plan scores exactly as much as the trained model (\grpoConstVal{} on validation, \grpoConstTest{}\% saved on test); the model's plan equals it on all \grpoSameAsConst{} of 48 seeds. When we shuffle the growth lines in the prompt, or set them to zero, the final model changes its plan in \grpoSensFinalShuffle{} and \grpoSensFinalZero{} of the cases, against \grpoSensWarmShuffle{} and \grpoSensWarmZero{} after the warm-up. So the trained model does not read the growth at all. This is a shortcut~\cite{geirhos2020}: the model fits the average scenario, not the one in front of it.
+
+\begin{table}[t]
+\caption{GRPO on Gemma 3 270M: validation score (mean, 95\% CI) and test saved share (\%). The trained model and the constant plan give identical results.}
+\label{tab:grpo}
+\centering\small
+\begin{tabular}{@{}p{0.5\linewidth}rr@{}}
+\toprule
+ & Validation score & Test saved (\%) \\
+\midrule
+\csname @@input\endcsname figs/grpo.tex
+\bottomrule
+\end{tabular}
+\end{table}
 
 \textbf{Two separate facts.} It is important to keep two things apart. First, \emph{the model learns from the reward}: the score goes from \grpoZero{} to \grpoFinal{}, and each step of learning (format, maintenance, good projects) follows the reward. So the environment gives a useful training signal. Second, \emph{the reward is satisfied by a plan that ignores the input}. This is overfitting: the model fits the training scenarios with one answer instead of a rule that reads the city.
 
@@ -392,7 +405,7 @@ If the hypothesis holds, a small open model trained on many cities would have to
 
 \textbf{The model.} The traffic model is a static equilibrium for one peak hour, scaled to a year. It has no queues and no time of day. The car share is fixed, so better roads do not pull people out of transit. The ten access upgrades are defined by hand and have the same cost. $D^{*}$ is the best plan we know, not a proven best plan.
 
-\textbf{The experiments.} The frontier agent ran once on each of \agentN{} seeds, so its mean is uncertain. Its runs were made before we froze $D^{*}$ in \texttt{sim/norms.json}; we rescored their delays with the frozen values. We chose the policy checkpoint on the validation seeds 0 to 15; on the unseen test scenarios it saves \hoGap{} points less. Most table numbers were computed on an AMD machine; on Intel, scores differ by at most 0.008. GRPO used one small model, one setting and a CPU.
+\textbf{The experiments.} The frontier agent ran once on each of \agentN{} seeds, so its mean is uncertain. Its runs were made before we froze $D^{*}$ in \texttt{sim/norms.json}; we rescored their delays with the frozen values. We chose the policy checkpoint on the validation seeds 0 to 15; on the unseen test scenarios it saves \hoGap{} points less. Most table numbers were computed on an AMD machine; on Intel, scores differ by at most 0.008. GRPO used one small model, one setting and a CPU, and run A was trained without a fixed torch seed, so it cannot be repeated bit for bit; seeded runs are in progress. The best known plans of the test seeds come from a stronger search than those of the validation seeds, so test scores are on a slightly stricter scale.
 
 \textbf{Open reward issues.} The exploit suite (Table~\ref{tab:exploits}) found three things we have not resolved. (i) Debt has no floor: emergency rebuilds are always paid, so cash ends at \ExploitRefDebt{}\,MEUR for the reference and \ExploitNothingDebt{}\,MEUR for doing nothing. (ii) The reference has started all its projects by year \ExploitPlanDoneYear{}, and from then on its cash is negative and no new start is possible; so stopping after 7 or more years gives exactly its full score. This is not a free gain, since the plan is already played, but it shows that late years carry few decisions. (iii) The reference with maintenance 0 beats its own choice on \ExploitMaintZeroWins{} of \ExploitMaintZeroN{} seeds ($p=\ExploitMaintZeroP{}$) but is lower on average (\ExploitMaintZeroGap{}), so the maintenance rule could be tightened. None of these lets any strategy come close to the reference.
 
@@ -626,12 +639,12 @@ Folder & What it does \\
 \end{figure}
 
 \begin{table}[h]
-\caption{Share of the do-nothing delay saved (\%) on the 32 test scenarios (seeds 16 to 47): mean, 95\% bootstrap CI, worst scenario, scenarios where the learned policy is better, and one-sided sign and Wilcoxon tests against the learned policy.}
+\caption{Share of the do-nothing delay saved (\%) on the 32 test scenarios (seeds 16 to 47): mean, 95\% bootstrap CI, worst scenario, mean normalised score (with test norms), scenarios where the learned policy is better, and one-sided sign and Wilcoxon tests against the learned policy.}
 \label{tab:test}
 \centering\footnotesize
-\begin{tabular}{@{}lrrrrrr@{}}
+\begin{tabular}{@{}lrrrrrrr@{}}
 \toprule
-Method & Mean & 95\% CI & Worst & Wins & Sign $p$ & Wilcoxon $p$ \\
+Method & Mean & 95\% CI & Worst & Score & Wins & Sign $p$ & Wilcoxon $p$ \\
 \midrule
 \csname @@input\endcsname figs/test.tex
 \bottomrule
@@ -642,9 +655,9 @@ Method & Mean & 95\% CI & Worst & Wins & Sign $p$ & Wilcoxon $p$ \\
 \caption{The same on the 16 validation scenarios (seeds 0 to 15), where the checkpoint was chosen.}
 \label{tab:validation}
 \centering\footnotesize
-\begin{tabular}{@{}lrrrrrr@{}}
+\begin{tabular}{@{}lrrrrrrr@{}}
 \toprule
-Method & Mean & 95\% CI & Worst & Wins & Sign $p$ & Wilcoxon $p$ \\
+Method & Mean & 95\% CI & Worst & Score & Wins & Sign $p$ & Wilcoxon $p$ \\
 \midrule
 \csname @@input\endcsname figs/validation.tex
 \bottomrule
